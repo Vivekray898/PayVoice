@@ -37,6 +37,7 @@ fun ReliabilityScreen(viewModel: MainViewModel, onBack: () -> Unit) {
     val status by viewModel.status.collectAsStateWithLifecycle()
     val fcm by viewModel.fcm.collectAsStateWithLifecycle()
     val tts by viewModel.ttsStatus.collectAsStateWithLifecycle()
+    val runtime by viewModel.listenerRuntime.collectAsStateWithLifecycle()
 
     LazyColumn(
         Modifier
@@ -56,7 +57,30 @@ fun ReliabilityScreen(viewModel: MainViewModel, onBack: () -> Unit) {
 
         item(key = "listener") {
             SectionCard(title = "Notification Access") {
-                StatusLine(status?.listenerEnabled == true, if (status?.listenerEnabled == true) "Enabled" else "Not enabled")
+                // The grant (persisted system setting) and the live binding are
+                // different states — both are shown so the post-Clear-Data
+                // mismatch is VISIBLE instead of mysterious.
+                StatusLine(
+                    runtime.systemGrant,
+                    if (runtime.systemGrant) "Enabled in Android settings" else "Not enabled",
+                )
+                StatusLine(
+                    runtime.connected,
+                    if (runtime.connected) "Listener connected" else "Listener not connected",
+                )
+                if (runtime.mismatch) {
+                    Text(
+                        "Android has granted access but the listener service is " +
+                            "not currently bound. This happens after clearing app " +
+                            "data or force-stopping. Use Repair to ask Android to " +
+                            "rebind (no restart needed).",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                    OutlinedButton(onClick = { viewModel.repairListener(context) }) {
+                        Text("Repair connection")
+                    }
+                }
                 OutlinedButton(onClick = { viewModel.openListenerSettings(context) }) { Text("Open settings") }
             }
         }

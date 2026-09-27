@@ -1,6 +1,7 @@
 package com.vivekray898.payvoice
 
 import android.app.Application
+import android.util.Log
 import androidx.work.Configuration
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -9,10 +10,15 @@ import kotlinx.coroutines.launch
 /**
  * Minimal application class.
  *
- * Phase-1 constraint: no expensive initialization here. The notification path
- * (and the FCM path in a later phase) must never pay for UI-stack startup cost.
- * Everything is lazy: the container is only built when the UI or the listener
- * pipeline actually touches it.
+ * Phase-1 constraint: no expensive initialization on the main thread. The
+ * notification path (and the FCM path in a later phase) must never pay for
+ * UI-stack startup cost. Everything is lazy: the container is only built when
+ * the UI or the listener pipeline actually touches it.
+ *
+ * Post-Clear-Data reliability: if Notification Access is still granted but the
+ * platform has not re-bound the listener, request exactly one supported
+ * rebind ([ListenerRuntimeState.scheduleStartupRepair]) after a short grace
+ * period. TTS warms up asynchronously so the first payment speaks instantly.
  */
 class PayVoiceApp : Application(), Configuration.Provider {
 
@@ -26,6 +32,18 @@ class PayVoiceApp : Application(), Configuration.Provider {
         CoroutineScope(Dispatchers.Default).launch {
             runCatching {
                 com.vivekray898.payvoice.core.database.RetentionWorker.schedule(this@PayVoiceApp)
+            }
+            // One-shot stuck-listener repair (grant present, binding absent).
+            runCatching {
+                container.listenerRuntime.scheduleStartupRepair(this@PayVoiceApp)
+            }
+            // Async TTS engine warm-up — never blocks startup, never blocks TTS.
+            runCatching {
+                container.speaker.warmUp()
+            }.onFailure {
+                if ((applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
+                    Log.d("PayVoiceApp", "TTS warm-up failed: ${it.javaClass.simpleName}")
+                }
             }
         }
     }

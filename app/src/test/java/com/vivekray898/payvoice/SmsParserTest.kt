@@ -1,6 +1,7 @@
 package com.vivekray898.payvoice
 
 import com.vivekray898.payvoice.core.model.Direction
+import com.vivekray898.payvoice.core.model.PaymentSource
 import com.vivekray898.payvoice.core.parser.sms.SmsPaymentParserRegistry
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -49,6 +50,24 @@ class SmsParserTest {
         assertNotNull(p)
         assertEquals(Direction.RECEIVED, p!!.direction)
         assertEquals(125050L, p.amountMinor)
+    }
+
+    // ---- Spec §11 canonical Kotak format (exact wording) ----
+
+    @Test
+    fun `spec canonical kotak credit sms parses completely`() {
+        val p = SmsPaymentParserRegistry.parse(
+            "KKBK6789",
+            "Received Rs.1000.00 from Ms USHA DAS in your Kotak811 a/c XX8521 on 19-Sep-26. " +
+                "UPI ref no. 315101342750. View balance: https://kotk.in/KOTAKD/HSnXCv -Kotak",
+            now,
+        )
+        assertNotNull(p)
+        assertEquals(PaymentSource.KOTAK, p!!.source)
+        assertEquals(Direction.RECEIVED, p.direction)
+        assertEquals(100_000L, p.amountMinor)
+        assertEquals("Ms Usha Das", p.senderName)
+        assertEquals("315101342750", p.referenceId)
     }
 
     // ---- SENT / BILL / OTP / PROMO (spec cases) ----

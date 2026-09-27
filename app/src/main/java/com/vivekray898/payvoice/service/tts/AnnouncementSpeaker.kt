@@ -14,22 +14,30 @@ import com.vivekray898.payvoice.core.announce.AnnouncementLanguage
 import com.vivekray898.payvoice.core.settings.SettingsRepository
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Local Android TTS wrapper (spec §11, §12).
  *
- *  - No network, no cloud voice: works with zero connectivity.
- *  - Init is lazy — only on the announcement path or an explicit warmUp().
+ *  - Application-scoped singleton (owned by AppContainer): never recreated per
+ *    payment, never tied to an Activity/Compose lifecycle.
+ *  - Init is lazy but bounded: limited retries with backoff on failure
+ *    (engine missing/disconnected) — never an infinite loop.
  *  - Holds a PARTIAL wake lock only for the duration of an utterance (capped).
  *  - Transient may-duck audio focus on the media stream.
  *  - Engine is kept warm briefly after use, then released (no 24/7 service).
+ *  - Payment-safe: if a payment arrives before init completes, it is parked in
+ *    a single [pendingSlot] (latest wins, per spec §8) and flushed the moment
+ *    the engine becomes ready — the payment is never silently lost and the
+ *    caller never blocks the notification path.
  */
 class AnnouncementSpeaker(
     private val context: Context,
@@ -41,12 +49,25 @@ class AnnouncementSpeaker(
     private val _status = MutableStateFlow(Status.UNAVAILABLE)
     val status: StateFlow<Status> = _status
 
+    /** Timestamp (epoch ms) of the most recent TTS start, for latency math. */
+    @Volatile
+    var lastStartAtMs: Long = 0
+        private set
+
+    /** True while a payment is parked waiting for the engine to become ready. */
+    val hasPending: Boolean get() = pendingSlot.get() != null
+
     private val speakMutex = Mutex()
     private val initMutex = Mutex()
     private val mainHandler = Handler(Looper.getMainLooper())
 
+    /** Latest payment announcement waiting for engine readiness (spec: latest wins). */
+    private val pendingSlot = AtomicReference<String?>(null)
+
     private var engine: TextToSpeech? = null
+    @Volatile
     private var engineReady = false
+    private var initAttempts = 0
 
     private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     private val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
@@ -70,7 +91,10 @@ class AnnouncementSpeaker(
             val s = settings.settings.value
             val done = CompletableDeferred<Boolean>()
             current.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                override fun onStart(utteranceId: String?) = Unit
+                override fun onStart(utteranceId: String?) {
+                    lastStartAtMs = System.currentTimeMillis()
+                }
+
                 override fun onDone(id: String?) {
                     if (id == utteranceId) done.complete(true)
                 }
@@ -102,7 +126,45 @@ class AnnouncementSpeaker(
         }
     }
 
-    /** Pre-initializes the engine (settings/test screens) so first real use is instant. */
+    /**
+     * Fire-and-forget announcement for the notification/SMS critical path:
+     * if the engine is ready this speaks immediately (via [speak]); otherwise
+     * it parks the text in [pendingSlot] and kicks off init — the parked text
+     * is spoken when readiness lands. Returns immediately; never blocks the
+     * capture thread.
+     */
+    fun speakWhenReady(text: String) {
+        if (engineReady) {
+            containerLaunch { speak(text) }
+            return
+        }
+        // Latest-wins: a newer payment replaces an older parked one (spec §8
+        // caps queued announcements at the most recent). Immediate flush if
+        // init already completed in the gap.
+        pendingSlot.set(text)
+        if (engineReady) {
+            if (flushPending()) return
+        }
+        containerLaunch { ensureEngine() }
+    }
+
+    private fun containerLaunch(block: suspend () -> Unit) {
+        val app = context.applicationContext as? com.vivekray898.payvoice.PayVoiceApp
+        if (app != null) {
+            app.container.applicationScope.launch { runCatching { block() } }
+        } else {
+            // Fallback scope (should not happen in this app).
+            kotlinx.coroutines.CoroutineScope(Dispatchers.Default).launch { runCatching { block() } }
+        }
+    }
+
+    private fun flushPending(): Boolean {
+        val text = pendingSlot.getAndSet(null) ?: return false
+        containerLaunch { speak(text) }
+        return true
+    }
+
+    /** Pre-initializes the engine (app start / setup screens) so first real use is instant. */
     suspend fun warmUp() {
         ensureEngine()
         scheduleIdleRelease()
@@ -120,13 +182,30 @@ class AnnouncementSpeaker(
 
     private suspend fun ensureEngine(): TextToSpeech? = initMutex.withLock {
         engine?.takeIf { engineReady }?.let { return it }
+        // Bounded retry: engine missing/disconnected is often transient
+        // (Google TTS updating, user switching engines) but never retried
+        // forever (spec §8).
+        if (initAttempts >= MAX_INIT_ATTEMPTS) {
+            _status.value = Status.ERROR
+            return null
+        }
+        initAttempts++
         _status.value = Status.INITIALIZING
         val initStatus = CompletableDeferred<Int>()
         val candidate = TextToSpeech(context) { status -> initStatus.complete(status) }
-        val status = runCatching { initStatus.await() }.getOrDefault(TextToSpeech.ERROR)
+        val status = runCatching {
+            withTimeoutOrNull(INIT_TIMEOUT_MS) { initStatus.await() }
+        }.getOrNull() ?: TextToSpeech.ERROR
         if (status != TextToSpeech.SUCCESS) {
             runCatching { candidate.shutdown() }
-            _status.value = Status.ERROR
+            if (initAttempts >= MAX_INIT_ATTEMPTS) _status.value = Status.ERROR
+            else {
+                _status.value = Status.UNAVAILABLE
+                mainHandler.postDelayed(
+                    { containerLaunch { ensureEngine() } },
+                    INIT_RETRY_BACKOFF_MS,
+                )
+            }
             return null
         }
         val locale = Locale.forLanguageTag(currentLocaleTag())
@@ -137,7 +216,10 @@ class AnnouncementSpeaker(
         }
         engine = candidate
         engineReady = true
+        initAttempts = 0
         _status.value = Status.READY
+        // A payment may have arrived while init was in flight — speak it now.
+        flushPending()
         candidate
     }
 
@@ -171,5 +253,8 @@ class AnnouncementSpeaker(
     companion object {
         private const val WAKE_LOCK_CAP_MS = 45_000L
         private const val IDLE_RELEASE_MS = 5 * 60_000L
+        private const val MAX_INIT_ATTEMPTS = 3
+        private const val INIT_RETRY_BACKOFF_MS = 4_000L
+        private const val INIT_TIMEOUT_MS = 10_000L
     }
 }

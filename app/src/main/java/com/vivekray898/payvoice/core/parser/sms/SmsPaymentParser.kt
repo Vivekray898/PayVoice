@@ -53,7 +53,10 @@ abstract class BaseSmsParser : SmsPaymentParser {
             },
             amountMinor = result.amountMinor,
             currency = "INR",
-            senderName = result.payer,
+            // Presentation-only normalization at parse time (spec §12): the
+            // parsed event carries "Ms USHA DAS" as "Ms Usha Das" everywhere
+            // (announcement, history, diagnostics). Identity is never inferred.
+            senderName = SmsNameNormalizer.normalize(result.payer),
             referenceId = result.reference,
             rawTitle = "SMS:$sender",
             rawText = body.take(160),

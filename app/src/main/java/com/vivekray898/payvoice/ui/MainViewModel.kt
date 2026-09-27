@@ -15,6 +15,7 @@ import com.vivekray898.payvoice.core.model.PaymentPackages
 import com.vivekray898.payvoice.core.model.PaymentSource
 import com.vivekray898.payvoice.core.settings.ParentSettings
 import com.vivekray898.payvoice.service.messaging.MessagingRepository
+import com.vivekray898.payvoice.service.notification.ListenerRuntime
 import com.vivekray898.payvoice.service.setup.SetupNotifications
 import com.vivekray898.payvoice.service.status.DeviceStatusMonitor
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -54,6 +55,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     val fcm: StateFlow<MessagingRepository.FcmStatus> = container.messaging.status
 
+    /**
+     * Live listener state: system grant vs actual binding. Android is the
+     * source of truth — DataStore is never consulted for this (hard rule).
+     */
+    val listenerRuntime: StateFlow<ListenerRuntime> = container.listenerRuntime.state
+
     /** True when running a debug build (gates SMS test tool UI). */
     val isDebugBuild: Boolean
         get() = (getApplication<Application>().applicationInfo.flags and
@@ -75,6 +82,29 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Called from onResume via lifecycle observer; off-main, cheap to repeat. */
     fun refreshStatus() {
         viewModelScope.launch { _status.value = monitor.snapshot() }
+        // Re-query Android's actual Notification Access state on every resume
+        // (returning from system settings must update instantly).
+        container.listenerRuntime.refreshSystemGrant(getApplication())
+    }
+
+    /**
+     * Supported repair for the stuck-listener state (grant present, binding
+     * absent): asks NotificationManagerService to rebind. One request per
+     * user action — no loops, no foreground service.
+     */
+    fun repairListener(context: Context) {
+        val runtime = container.listenerRuntime
+        runtime.refreshSystemGrant(context)
+        val requested = runtime.requestRebind(context)
+        viewModelScope.launch {
+            container.diagnosticDaoSafe()?.insert(
+                com.vivekray898.payvoice.core.database.DiagnosticEntity(
+                    atMs = System.currentTimeMillis(),
+                    tag = "listener",
+                    message = "manual rebind requested=$requested",
+                )
+            )
+        }
     }
 
     fun completeOnboarding() {

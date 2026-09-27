@@ -47,49 +47,69 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
 
     init {
         scope.launch {
-            context.dataStore.data.collect { prefs ->
-                val kotakPackage = prefs[Keys.KOTAK_PKG].orEmpty()
-                // Apply the verified Kotak package globally, including when the
-                // process starts from the notification listener (UI never opened).
-                PaymentPackages.kotakPackageId = kotakPackage.ifBlank { null }
-                state.value = ParentSettings(
-                    onboardingComplete = prefs[Keys.ONBOARDED] ?: false,
-                    gpayEnabled = prefs[Keys.GPAY] ?: true,
-                    kotakEnabled = prefs[Keys.KOTAK] ?: false,
-                    kotakPackageId = prefs[Keys.KOTAK_PKG].orEmpty(),
-                    captureUnknownPackages = prefs[Keys.CAPTURE_UNKNOWN] ?: false,
-                    smsCaptureEnabled = prefs[Keys.SMS_CAPTURE] ?: true,
-                    announceHighConfidenceOnly = prefs[Keys.HIGH_ONLY] ?: true,
-                    style = enumOrDefault(prefs[Keys.STYLE], AnnouncementStyle.AMOUNT_SENDER),
-                    language = enumOrDefault(prefs[Keys.LANGUAGE], AnnouncementLanguage.ENGLISH),
-                    speechRate = prefs[Keys.RATE] ?: 1.0f,
-                    speechVolume = prefs[Keys.VOLUME] ?: 1.0f,
-                    dedupRetentionHours = prefs[Keys.DEDUP_HOURS] ?: 24,
-                    historyRetentionDays = prefs[Keys.HISTORY_DAYS] ?: 7,
-                )
-            }
+            // Hard requirement: DataStore corruption (or any read failure) must
+            // NEVER crash the process — an unhandled exception in this scope
+            // kills the app AND the notification listener binder mid-flight
+            // (observed as NMS DeadObjectException after Clear Data). On
+            // failure the safe defaults stay active; a later successful read
+            // still updates state.
+            context.dataStore.data
+                .runCatching { collect { prefs ->
+                    val kotakPackage = prefs[Keys.KOTAK_PKG].orEmpty()
+                    // Apply the verified Kotak package globally, including when the
+                    // process starts from the notification listener (UI never opened).
+                    PaymentPackages.kotakPackageId = kotakPackage.ifBlank { null }
+                    state.value = ParentSettings(
+                        onboardingComplete = prefs[Keys.ONBOARDED] ?: false,
+                        gpayEnabled = prefs[Keys.GPAY] ?: true,
+                        kotakEnabled = prefs[Keys.KOTAK] ?: false,
+                        kotakPackageId = kotakPackage,
+                        captureUnknownPackages = prefs[Keys.CAPTURE_UNKNOWN] ?: false,
+                        smsCaptureEnabled = prefs[Keys.SMS_CAPTURE] ?: true,
+                        announceHighConfidenceOnly = prefs[Keys.HIGH_ONLY] ?: true,
+                        style = enumOrDefault(prefs[Keys.STYLE], AnnouncementStyle.AMOUNT_SENDER),
+                        language = enumOrDefault(prefs[Keys.LANGUAGE], AnnouncementLanguage.ENGLISH),
+                        speechRate = prefs[Keys.RATE] ?: 1.0f,
+                        speechVolume = prefs[Keys.VOLUME] ?: 1.0f,
+                        dedupRetentionHours = prefs[Keys.DEDUP_HOURS] ?: 24,
+                        historyRetentionDays = prefs[Keys.HISTORY_DAYS] ?: 7,
+                    )
+                } }
+                .onFailure {
+                    android.util.Log.w(TAG, "settings read failed (defaults active): ${it.javaClass.simpleName}")
+                }
         }
     }
 
     override suspend fun update(transform: (ParentSettings) -> ParentSettings) {
         val next = transform(state.value)
-        context.dataStore.edit { prefs ->
-            prefs[Keys.ONBOARDED] = next.onboardingComplete
-            prefs[Keys.GPAY] = next.gpayEnabled
-            prefs[Keys.KOTAK] = next.kotakEnabled
-            prefs[Keys.KOTAK_PKG] = next.kotakPackageId
-            prefs[Keys.CAPTURE_UNKNOWN] = next.captureUnknownPackages
-            prefs[Keys.SMS_CAPTURE] = next.smsCaptureEnabled
-            prefs[Keys.HIGH_ONLY] = next.announceHighConfidenceOnly
-            prefs[Keys.STYLE] = next.style.name
-            prefs[Keys.LANGUAGE] = next.language.name
-            prefs[Keys.RATE] = next.speechRate
-            prefs[Keys.VOLUME] = next.speechVolume
-            prefs[Keys.DEDUP_HOURS] = next.dedupRetentionHours
-            prefs[Keys.HISTORY_DAYS] = next.historyRetentionDays
+        // Never let a failed write crash the caller (DataStore IO errors are
+        // transient; the in-memory state is already correct).
+        runCatching {
+            context.dataStore.edit { prefs ->
+                prefs[Keys.ONBOARDED] = next.onboardingComplete
+                prefs[Keys.GPAY] = next.gpayEnabled
+                prefs[Keys.KOTAK] = next.kotakEnabled
+                prefs[Keys.KOTAK_PKG] = next.kotakPackageId
+                prefs[Keys.CAPTURE_UNKNOWN] = next.captureUnknownPackages
+                prefs[Keys.SMS_CAPTURE] = next.smsCaptureEnabled
+                prefs[Keys.HIGH_ONLY] = next.announceHighConfidenceOnly
+                prefs[Keys.STYLE] = next.style.name
+                prefs[Keys.LANGUAGE] = next.language.name
+                prefs[Keys.RATE] = next.speechRate
+                prefs[Keys.VOLUME] = next.speechVolume
+                prefs[Keys.DEDUP_HOURS] = next.dedupRetentionHours
+                prefs[Keys.HISTORY_DAYS] = next.historyRetentionDays
+            }
+        }.onFailure {
+            android.util.Log.w(TAG, "settings write failed: ${it.javaClass.simpleName}")
         }
     }
 
     private inline fun <reified T : Enum<T>> enumOrDefault(name: String?, default: T): T =
         name?.let { runCatching { enumValueOf<T>(it) }.getOrNull() } ?: default
+
+    private companion object {
+        const val TAG = "SettingsRepo"
+    }
 }

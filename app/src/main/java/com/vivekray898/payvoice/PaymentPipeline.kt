@@ -15,6 +15,7 @@ import com.vivekray898.payvoice.core.model.ParsedNotification
 import com.vivekray898.payvoice.core.model.PaymentSource
 import com.vivekray898.payvoice.core.parser.Fingerprinter
 import com.vivekray898.payvoice.core.parser.PaymentParserRegistry
+import com.vivekray898.payvoice.core.parser.sms.SmsNameNormalizer
 import com.vivekray898.payvoice.core.parser.sms.SmsPaymentParserRegistry
 import com.vivekray898.payvoice.core.settings.SettingsRepository
 import com.vivekray898.payvoice.service.tts.AnnouncementSpeaker
@@ -37,6 +38,7 @@ class PaymentPipeline(
     private val parsers: PaymentParserRegistry,
     private val speaker: AnnouncementSpeaker,
     private val db: PayVoiceDatabase,
+    private val isDebugBuild: Boolean = false,
 ) {
 
     private val _lastAnnouncement = MutableStateFlow<AnnouncementEntity?>(null)
@@ -141,6 +143,8 @@ class PaymentPipeline(
             else -> parsers.parserForPackage(event.originId)?.parse(event.title, event.body)
         }
 
+        val parsedAt = System.currentTimeMillis()
+
         // 2. Local-only diagnostic capture of raw content. Never uploaded.
         runCatching {
             db.capturedNotificationDao().insert(
@@ -208,17 +212,40 @@ class PaymentPipeline(
             return
         }
         _lastDedupWasDuplicate.value = false
+        val dedupCheckedAt = System.currentTimeMillis()
 
         // 5. Announce. Text composed locally; Phase 3 sends it inside FCM.
-        val announcement = AnnouncementComposer.compose(
-            amountMinor = amount,
-            senderName = parsed.senderName,
-            source = parsed.source,
-            style = s.style,
-            language = s.language,
-        )
+        // SMS events use the deterministic SMS format (spec §11/§13); sender
+        // names are normalized for presentation only — identity is never
+        // inferred, invented, or merged across sources (spec §12).
+        val isSms = event.captureSource.name.startsWith("SMS")
+        val announcement = if (isSms) {
+            AnnouncementComposer.composeSms(
+                amountMinor = amount,
+                senderName = SmsNameNormalizer.normalize(parsed.senderName),
+            )
+        } else {
+            AnnouncementComposer.compose(
+                amountMinor = amount,
+                senderName = parsed.senderName,
+                source = parsed.source,
+                style = s.style,
+                language = s.language,
+            )
+        }
         val announcedAt = System.currentTimeMillis()
-        val spoken = speaker.speak(announcement)
+        PaymentTiming.record(
+            captureMs = event.postedAtMs,
+            parsedMs = parsedAt,
+            dedupCheckedMs = dedupCheckedAt,
+            ttsRequestedMs = announcedAt,
+            isDebug = isDebugBuild,
+        )
+        // Critical path ENDS at the TTS request: never block the capture path
+        // on utterance completion (spec §15). If the engine is still starting,
+        // the text is parked and spoken on readiness — the payment is never
+        // dropped after dedup has consumed the fingerprint.
+        speaker.speakWhenReady(announcement)
 
         val entity = AnnouncementEntity(
             eventId = fingerprint,
@@ -226,13 +253,17 @@ class PaymentPipeline(
             sourceName = parsed.sourceLabel ?: parsed.source.displayName,
             amountMinor = amount,
             currency = parsed.currency,
-            senderName = parsed.senderName,
+            // Normalized presentation for SMS senders (spec §12); identical to
+            // what was spoken. Never identity-inferred or cross-merged.
+            senderName = if (isSms) SmsNameNormalizer.normalize(parsed.senderName) else parsed.senderName,
             announcementText = announcement,
             detectedAtMs = event.postedAtMs,
             announcedAtMs = announcedAt,
             captureSource = event.captureSource.name,
             parserName = parserNameFor(event),
         )
+        // 6. Persistence AFTER the TTS request (spec §15): Room writes are
+        // never in the capture→speak critical path.
         db.announcementDao().insert(entity)
         _lastAnnouncement.value = entity
         diag(
@@ -240,9 +271,18 @@ class PaymentPipeline(
             "source=${event.captureSource} sender=${event.originId.take(12)} " +
                 "bank=${parsed.source.name} dir=${parsed.direction} amount=$amount " +
                 "ref=${parsed.referenceId?.take(8) ?: "-"} conf=${parsed.confidence} " +
-                "parser=${entity.parserName} announced=$spoken " +
+                "parser=${entity.parserName} announced=queued " +
                 "detToAnnounceMs=${announcedAt - event.postedAtMs}",
         )
+        // Complete the timing timeline in the background (diagnostics only).
+        scope.launch {
+            PaymentTiming.awaitTtsStart(
+                captureMs = event.postedAtMs,
+                ttsRequestedMs = announcedAt,
+                lastStartAtMsProvider = { speaker.lastStartAtMs },
+                isDebug = isDebugBuild,
+            )
+        }
     }
 
     private fun parserNameFor(event: CaptureEvent): String = when {

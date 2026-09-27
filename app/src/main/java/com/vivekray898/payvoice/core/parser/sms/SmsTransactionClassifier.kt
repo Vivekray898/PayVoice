@@ -166,8 +166,11 @@ object SmsTransactionClassifier {
 
     /** Payer extraction: "from Rahul", "from rahul@ybl", "by +91-…" (optional). */
     private fun extractPayer(body: String): String? {
+        // Stop-words include "in"/"to": Kotak credit SMS read
+        // "from Ms USHA DAS in your Kotak811 a/c XX8521" — without them the
+        // payer swallows the account clause and the announcement is wrong.
         val m = Regex(
-            "(?i)(?:from|by)\\s+([A-Za-z0-9][A-Za-z0-9.@ _'-]{1,39}?)(?=[.,!|/]|\\s(?:on|via|towards|ref|dated|\\d)|$)"
+            "(?i)(?:from|by)\\s+([A-Za-z0-9][A-Za-z0-9.@ _'-]{1,39}?)(?=[.,!|/]|\\s(?:on|in|to|via|towards|ref|dated|\\d)|$)"
         ).find(body) ?: return null
         return m.groupValues[1].trim()
             .trimEnd('.', ',', '-', '/', '|')

@@ -7,6 +7,12 @@ import com.vivekray898.payvoice.core.model.PaymentSource
  * settings (spec §11, §25). The composed text travels with the event —
  * Phase 3 puts it inside the FCM payload so children never need a follow-up
  * fetch before speaking.
+ *
+ * Hard rules (spec §13):
+ *  - NEVER "unknown sender/user/someone". No sender → amount-only wording.
+ *  - GPay: sender only counts when [trustedSender] is true.
+ *  - SMS: parsed sender is trusted by construction (bank-verified channel),
+ *    so SMS events route through [composeSms].
  */
 object AnnouncementComposer {
 
@@ -16,10 +22,34 @@ object AnnouncementComposer {
         source: PaymentSource,
         style: AnnouncementStyle,
         language: AnnouncementLanguage,
-    ): String = when (language) {
-        AnnouncementLanguage.ENGLISH -> english(amountMinor, senderName, source, style)
-        AnnouncementLanguage.HINDI -> hindi(amountMinor, senderName, source, style)
-        AnnouncementLanguage.HINGLISH -> hinglish(amountMinor, senderName, style)
+        trustedSender: Boolean = true,
+    ): String {
+        // GPay rule: untrusted/absent sender collapses to amount-only, which by
+        // construction also guarantees the forbidden-wording guarantee.
+        val effectiveSender = if (trustedSender) senderName?.trim()?.takeIf { it.isNotEmpty() } else null
+        return when (language) {
+            AnnouncementLanguage.ENGLISH -> english(amountMinor, effectiveSender, source, style)
+            AnnouncementLanguage.HINDI -> hindi(amountMinor, effectiveSender, source, style)
+            AnnouncementLanguage.HINGLISH -> hinglish(amountMinor, effectiveSender, style)
+        }
+    }
+
+    /**
+     * SMS announcement format (spec §11/§21): deterministic, numeric —
+     * "Received 1000 rupees from Ms Usha Das." / "Received 25.50 rupees from
+     * Ms Priya." / "Received 1000 rupees." (no sender). Never account
+     * numbers, UPI refs, URLs, dates, balances, or bank names.
+     */
+    fun composeSms(amountMinor: Long, senderName: String?): String {
+        val sender = senderName?.trim()?.takeIf { it.isNotEmpty() }
+        val major = amountMinor / 100
+        val paise = amountMinor % 100
+        val amountText = if (paise == 0L) "$major" else "$major.${paise.toString().padStart(2, '0')}"
+        return if (sender != null) {
+            "Received $amountText rupees from $sender."
+        } else {
+            "Received $amountText rupees."
+        }
     }
 
     private fun english(
@@ -36,7 +66,8 @@ object AnnouncementComposer {
                 if (senderName != null) "${cap(words)} received from $senderName."
                 else "${cap(words)} received."
             AnnouncementStyle.FULL ->
-                "Payment received. ${cap(words)} from ${senderName ?: "an unknown sender"}" +
+                "Payment received. ${cap(words)}" +
+                    (senderName?.let { " from $it" } ?: "") +
                     " through ${source.displayName}."
         }
     }
@@ -55,8 +86,9 @@ object AnnouncementComposer {
                 if (senderName != null) "$words $senderName से प्राप्त हुए।"
                 else "$words प्राप्त हुए।"
             AnnouncementStyle.FULL ->
-                "भुगतान प्राप्त हुआ। $words, ${senderName ?: "अज्ञात"} से, " +
-                    "${source.displayName} के माध्यम से।"
+                "भुगतान प्राप्त हुआ। $words" +
+                    (senderName?.let { ", $it से" } ?: "") +
+                    ", ${source.displayName} के माध्यम से।"
         }
     }
 
