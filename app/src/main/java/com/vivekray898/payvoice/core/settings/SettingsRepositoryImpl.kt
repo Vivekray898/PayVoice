@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.vivekray898.payvoice.core.announce.AnnouncementLanguage
 import com.vivekray898.payvoice.core.announce.AnnouncementStyle
+import com.vivekray898.payvoice.core.remote.DeviceRole
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,6 +36,9 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
         val VOLUME = floatPreferencesKey("speech_volume")
         val DEDUP_HOURS = intPreferencesKey("dedup_retention_hours")
         val HISTORY_DAYS = intPreferencesKey("history_retention_days")
+        val ROLE = stringPreferencesKey("device_role")
+        val DEVICE_NAME = stringPreferencesKey("device_name")
+        val REMOTE_ENABLED = booleanPreferencesKey("remote_announcements_enabled")
     }
 
     private val scope = CoroutineScope(Dispatchers.IO)
@@ -64,6 +68,9 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
                         speechVolume = prefs[Keys.VOLUME] ?: 1.0f,
                         dedupRetentionHours = prefs[Keys.DEDUP_HOURS] ?: 24,
                         historyRetentionDays = prefs[Keys.HISTORY_DAYS] ?: 7,
+                        role = enumOrDefault(prefs[Keys.ROLE], DeviceRole.UNSET),
+                        deviceName = prefs[Keys.DEVICE_NAME].orEmpty(),
+                        remoteAnnouncementsEnabled = prefs[Keys.REMOTE_ENABLED] ?: true,
                     )
                 } }
                 .onFailure {
@@ -89,6 +96,9 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
                 prefs[Keys.VOLUME] = next.speechVolume
                 prefs[Keys.DEDUP_HOURS] = next.dedupRetentionHours
                 prefs[Keys.HISTORY_DAYS] = next.historyRetentionDays
+                prefs[Keys.ROLE] = next.role.name
+                prefs[Keys.DEVICE_NAME] = next.deviceName
+                prefs[Keys.REMOTE_ENABLED] = next.remoteAnnouncementsEnabled
             }
         }.onFailure {
             android.util.Log.w(TAG, "settings write failed: ${it.javaClass.simpleName}")

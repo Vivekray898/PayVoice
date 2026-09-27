@@ -22,8 +22,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import android.os.Build
 import com.vivekray898.payvoice.core.model.PaymentSource
 import com.vivekray898.payvoice.core.parser.AmountExtractor
+import com.vivekray898.payvoice.core.remote.DeviceRole
 import com.vivekray898.payvoice.ui.MainViewModel
 import com.vivekray898.payvoice.ui.components.SectionCard
 import com.vivekray898.payvoice.ui.components.StatusLine
@@ -40,9 +42,12 @@ fun ParentHomeScreen(
     onOpenSettings: () -> Unit,
     onOpenDiagnostics: () -> Unit,
     onOpenReliability: () -> Unit,
+    onOpenOwnerRemote: () -> Unit = {},
+    onOpenEmployeeRemote: () -> Unit = {},
 ) {
     val status by viewModel.status.collectAsStateWithLifecycle()
     val history by viewModel.history.collectAsStateWithLifecycle()
+    val role by viewModel.settings.collectAsStateWithLifecycle()
 
     LazyColumn(
         Modifier
@@ -79,6 +84,48 @@ fun ParentHomeScreen(
                     OutlinedButton(onClick = onOpenSettings) { Text("Settings") }
                     TextButton(onClick = onOpenReliability) { Text("Reliability") }
                     TextButton(onClick = onOpenDiagnostics) { Text("Diagnostics") }
+                }
+            }
+        }
+
+        item(key = "remote") {
+            // Role card (spec §2/§26): the remote path is an addition — the
+            // local detection status card above stays authoritative.
+            SectionCard(title = "Payment Announcements") {
+                when (role.role) {
+                    DeviceRole.OWNER -> {
+                        val employees by viewModel.employees.collectAsStateWithLifecycle()
+                        StatusLine(true, "Your device · Receiving payments")
+                        Text(
+                            "${employees.count { it.isActive }} employee(s) connected",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        OutlinedButton(onClick = onOpenOwnerRemote) { Text("Manage Employees") }
+                    }
+                    DeviceRole.EMPLOYEE -> {
+                        val own by viewModel.ownDevice.collectAsStateWithLifecycle()
+                        StatusLine(own?.isActive == true, "Remote announcements")
+                        Text(
+                            if (own?.isActive == true) "Connected — ready to announce payments"
+                            else "Not connected — join with a pairing code",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        OutlinedButton(onClick = onOpenEmployeeRemote) { Text("Open") }
+                    }
+                    DeviceRole.UNSET -> {
+                        Text(
+                            "Choose this device's role to enable remote announcements.",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = { viewModel.setRole(DeviceRole.OWNER, Build.MODEL ?: "Owner") }) {
+                                Text("I'm the Owner")
+                            }
+                            OutlinedButton(onClick = { viewModel.setRole(DeviceRole.EMPLOYEE, Build.MODEL ?: "Employee") }) {
+                                Text("I'm an Employee")
+                            }
+                        }
+                    }
                 }
             }
         }

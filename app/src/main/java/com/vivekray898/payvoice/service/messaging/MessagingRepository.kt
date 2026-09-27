@@ -5,16 +5,27 @@ import android.content.pm.ApplicationInfo
 import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import com.google.firebase.FirebaseApp
+import com.google.firebase.FirebaseOptions
 import com.google.firebase.messaging.FirebaseMessaging
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlin.coroutines.resume
 
 /**
- * FCM registration (spec: FCM REGISTRATION). Fetches and securely stores the
- * device token. The token leaves the device only when Phase 2+ backend
- * pairing lands — until then it is registered and cached locally.
+ * FCM registration (receive-only transport). Identity and data live in
+ * Supabase — Firebase here is ONLY the push pipe the `fcm-gateway` edge
+ * function sends through. The google-services Gradle plugin was removed, so
+ * the app initializes FirebaseApp itself from the local (gitignored)
+ * `assets/google-services.json`; without that file the remote layer degrades
+ * gracefully: local announcements never depend on FCM.
  *
  * Logging rules: shortened token in debug builds ONLY; never the full token.
  */
@@ -46,8 +57,43 @@ class MessagingRepository(private val context: Context) {
     private val isDebug: Boolean
         get() = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
 
-    /** Current cached token, if any (encrypted at rest). */
-    fun cachedToken(): String? = securePrefs.getString(KEY_TOKEN, null)
+    /**
+     * Ensures a FirebaseApp exists, initializing it from the local
+     * google-services.json asset (which the removed google-services plugin
+     * would otherwise inject at build time). Idempotent; returns false when
+     * the asset is absent so callers can surface an honest status instead of
+     * crashing.
+     */
+    fun ensureFirebaseInitialized(): Boolean {
+        if (FirebaseApp.getApps(context).isNotEmpty()) {
+            _status.value = _status.value.copy(firebaseInitialized = true)
+            return true
+        }
+        return runCatching {
+            val root = context.assets.open("google-services.json").use { stream ->
+                Json.parseToJsonElement(stream.readBytes().toString(Charsets.UTF_8))
+                    as? JsonObject ?: return false
+            }
+            val projectInfo = root["project_info"] as? JsonObject ?: return false
+            val client = (root["client"] as? JsonArray)
+                ?.firstNotNullOfOrNull { it as? JsonObject } ?: return false
+            val apiKey = (client["api_key"] as? JsonArray)
+                ?.firstNotNullOfOrNull { (it as? JsonObject)?.get("current_key") }
+                ?.let { (it as? JsonPrimitive)?.content } ?: return false
+            val options = FirebaseOptions.Builder()
+                .setApplicationId((client["mobilesdk_app_id"] as? JsonPrimitive)?.content ?: return false)
+                .setApiKey(apiKey)
+                .setProjectId((projectInfo["project_id"] as? JsonPrimitive)?.content ?: return false)
+                .setGcmSenderId((projectInfo["project_number"] as? JsonPrimitive)?.content)
+                .setStorageBucket((projectInfo["storage_bucket"] as? JsonPrimitive)?.content)
+                .build()
+            FirebaseApp.initializeApp(context, options) != null
+        }.onFailure {
+            Log.w(TAG, "FirebaseApp init failed: ${it.javaClass.simpleName}")
+        }.getOrDefault(false).also { ok ->
+            if (ok) _status.value = _status.value.copy(firebaseInitialized = true)
+        }
+    }
 
     /**
      * Fetches a fresh FCM token, persists it encrypted, and updates status.
@@ -55,12 +101,19 @@ class MessagingRepository(private val context: Context) {
      * unavailable" is explicitly transient and succeeds on retry.
      */
     suspend fun refreshToken(): Result<String> {
+        if (!ensureFirebaseInitialized()) {
+            val error = "google-services.json asset missing or invalid"
+            _status.value = FcmStatus(firebaseInitialized = false, error = error)
+            return Result.failure(IllegalStateException(error))
+        }
         var lastError: Exception? = null
         val delays = longArrayOf(0, 5_000, 15_000)
         delays.forEachIndexed { attempt, delayMs ->
             if (delayMs > 0) kotlinx.coroutines.delay(delayMs)
             try {
-                val token = FirebaseMessaging.getInstance().token.await()
+                val token = withContext(Dispatchers.IO) {
+                    FirebaseMessaging.getInstance().token.await()
+                }
                 securePrefs.edit().putString(KEY_TOKEN, token).apply()
                 _status.value = FcmStatus(
                     firebaseInitialized = true,
@@ -82,6 +135,21 @@ class MessagingRepository(private val context: Context) {
             error = lastError?.javaClass?.simpleName,
         )
         return Result.failure(lastError ?: IllegalStateException("FCM registration failed"))
+    }
+
+    /** Current cached token, if any (encrypted at rest). */
+    fun cachedToken(): String? = runCatching { securePrefs.getString(KEY_TOKEN, null) }.getOrNull()
+
+    /** Persists a token (used by onNewToken rotation, spec §14). */
+    fun storeTokenSecurely(token: String) {
+        runCatching {
+            securePrefs.edit().putString(KEY_TOKEN, token).apply()
+            _status.value = FcmStatus(
+                firebaseInitialized = true,
+                tokenAvailable = true,
+                tokenPreview = if (isDebug) token.take(12) + "…" else null,
+            )
+        }
     }
 
     private companion object {

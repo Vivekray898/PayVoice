@@ -66,6 +66,32 @@ fun DiagnosticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                // Remote layer (spec §32) — identifiers masked, never tokens.
+                val role by viewModel.settings.collectAsStateWithLifecycle()
+                val authState by viewModel.authState.collectAsStateWithLifecycle()
+                val employees by viewModel.employees.collectAsStateWithLifecycle()
+                val sendState by viewModel.remoteSendState.collectAsStateWithLifecycle()
+                val dup by viewModel.lastRemoteDuplicate.collectAsStateWithLifecycle()
+                Text(
+                    "Role: ${role.role.label} · Auth: ${when (authState) {
+                        is com.vivekray898.payvoice.core.remote.PayVoiceAuth.State.READY -> "signed-in"
+                        is com.vivekray898.payvoice.core.remote.PayVoiceAuth.State.SIGNING_IN -> "signing-in"
+                        is com.vivekray898.payvoice.core.remote.PayVoiceAuth.State.FAILED -> "failed"
+                    }}}",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
+                )
+                Text(
+                    "Employees: ${employees.count { it.isActive }} active / ${employees.size} total · " +
+                        "Remote send: ${when (sendState) {
+                            is com.vivekray898.payvoice.core.remote.RemoteEventSender.SendState.SENT -> "accepted"
+                            is com.vivekray898.payvoice.core.remote.RemoteEventSender.SendState.FAILED -> "failed"
+                            else -> "idle"
+                        }}} · " +
+                        "Dup ignored: ${dup == true}",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
+                )
                 OutlinedButton(onClick = { viewModel.refreshStatus() }) { Text("Refresh") }
             }
         }

@@ -61,6 +61,18 @@
             </intent-filter>
         </service>
 
+        <!-- Owner→Employee remote delivery: FCM data messages (sent by the
+             Supabase fcm-gateway edge function) → validate → dedup →
+             existing AnnouncementSpeaker. No notification-tap dependency;
+             runs while the app is closed/backgrounded. -->
+        <service
+            android:name=".service.messaging.PayVoiceMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
         <!-- SMS backup capture: fires only while RECEIVE_SMS is granted.
              The receiver does no long-running work (goAsync + pipeline scope). -->
         <receiver

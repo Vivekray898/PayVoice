@@ -18,6 +18,9 @@ import com.vivekray898.payvoice.core.parser.Fingerprinter
 import com.vivekray898.payvoice.core.parser.PaymentParserRegistry
 import com.vivekray898.payvoice.core.parser.sms.SmsNameNormalizer
 import com.vivekray898.payvoice.core.parser.sms.SmsPaymentParserRegistry
+import com.vivekray898.payvoice.core.remote.DeviceRole
+import com.vivekray898.payvoice.core.remote.RemoteEventSender
+import com.vivekray898.payvoice.core.remote.RemoteEventType
 import com.vivekray898.payvoice.core.settings.SettingsRepository
 import com.vivekray898.payvoice.service.tts.AnnouncementSpeaker
 import kotlinx.coroutines.CoroutineScope
@@ -40,6 +43,12 @@ class PaymentPipeline(
     private val speaker: AnnouncementSpeaker,
     private val db: PayVoiceDatabase,
     private val isDebugBuild: Boolean = false,
+    /** Remote fan-out; nullable so unit contexts can omit it. */
+    private val remoteSender: RemoteEventSender? = null,
+    private val roleProvider: () -> com.vivekray898.payvoice.core.remote.DeviceRole = {
+        com.vivekray898.payvoice.core.remote.DeviceRole.UNSET
+    },
+    private val remoteEnabledProvider: () -> Boolean = { true },
 ) {
 
     private val _lastAnnouncement = MutableStateFlow<AnnouncementEntity?>(null)
@@ -245,6 +254,21 @@ class PaymentPipeline(
         // the text is parked and spoken on readiness — the payment is never
         // dropped after dedup has consumed the fingerprint.
         speaker.speakWhenReady(announcement)
+
+        // 5b. Remote fan-out (spec §8): strictly AFTER the local TTS request,
+        // fire-and-forget — remote failure can never affect the local path.
+        if (roleProvider() == DeviceRole.OWNER && remoteEnabledProvider() && remoteSender != null) {
+            remoteSender.sendAsync(
+                eventId = fingerprint,
+                type = RemoteEventType.PAYMENT_RECEIVED,
+                amountMinor = amount,
+                currency = parsed.currency,
+                senderName = parsed.senderName,
+                source = parsed.source.name,
+                timestampMs = event.postedAtMs,
+                localTtsRequestedAtMs = announcedAt,
+            )
+        }
 
         val entity = AnnouncementEntity(
             eventId = fingerprint,

@@ -21,8 +21,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import android.os.Build
 import com.vivekray898.payvoice.core.announce.AnnouncementLanguage
 import com.vivekray898.payvoice.core.announce.AnnouncementStyle
+import com.vivekray898.payvoice.core.remote.DeviceRole
 import com.vivekray898.payvoice.ui.MainViewModel
 import com.vivekray898.payvoice.ui.components.SectionCard
 import com.vivekray898.payvoice.ui.components.SwitchRow
@@ -64,6 +66,45 @@ fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+
+        SectionCard(title = "Employee announcements") {
+            // Remote delivery (spec §21): master switch + role. The local
+            // detection/announcement path is independent of all of this.
+            SwitchRow(
+                label = "Send payments to employees",
+                checked = settings.remoteAnnouncementsEnabled,
+                onCheckedChange = viewModel::setRemoteAnnouncementsEnabled,
+                supporting = if (settings.role == DeviceRole.OWNER) {
+                    "Owner mode: detected payments are forwarded to connected employees"
+                } else {
+                    "Enable after choosing the Owner role"
+                },
+            )
+            Text(
+                "Role: ${settings.role.label}" +
+                    (settings.deviceName.takeIf { it.isNotBlank() }?.let { " · $it" } ?: ""),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = settings.role == DeviceRole.OWNER,
+                    onClick = { viewModel.setRole(DeviceRole.OWNER, settings.deviceName.ifBlank { Build.MODEL ?: "Owner" }) },
+                    label = { Text("Owner") },
+                )
+                FilterChip(
+                    selected = settings.role == DeviceRole.EMPLOYEE,
+                    onClick = { viewModel.setRole(DeviceRole.EMPLOYEE, settings.deviceName.ifBlank { Build.MODEL ?: "Employee" }) },
+                    label = { Text("Employee") },
+                )
+            }
+            if (settings.role == DeviceRole.EMPLOYEE) {
+                Text(
+                    "Manage the connection from the Remote Announcements screen.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
 
         SectionCard(title = "Announcement style") {

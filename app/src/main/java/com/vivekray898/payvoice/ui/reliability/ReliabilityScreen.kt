@@ -169,8 +169,8 @@ fun ReliabilityScreen(viewModel: MainViewModel, onBack: () -> Unit) {
         }
 
         item(key = "firebase") {
-            SectionCard(title = "Firebase Cloud Messaging") {
-                StatusLine(fcm.tokenAvailable, if (fcm.tokenAvailable) "Firebase initialized · token available" else "Token unavailable")
+            SectionCard(title = "Push delivery (FCM)") {
+                StatusLine(fcm.tokenAvailable, if (fcm.tokenAvailable) "Push transport ready · token available" else "Token unavailable")
                 if (fcm.tokenAvailable) {
                     Text(
                         "Token: ${fcm.tokenPreview ?: "registered (hidden)"}",
@@ -185,9 +185,10 @@ fun ReliabilityScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                         color = MaterialTheme.colorScheme.error,
                     )
                 }
-                // Honest state: FCM registration is live, but no backend sender exists yet.
+                // Honest state: FCM registration is live; the Supabase
+                // fcm-gateway edge function is the only sender.
                 Text(
-                    "Firebase configured · backend push sender not configured yet",
+                    "Push transport only · events are sent by the Supabase fcm-gateway function",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

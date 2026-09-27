@@ -13,6 +13,11 @@ import com.vivekray898.payvoice.core.database.CapturedNotificationEntity
 import com.vivekray898.payvoice.core.database.DiagnosticEntity
 import com.vivekray898.payvoice.core.model.PaymentSource
 import com.vivekray898.payvoice.core.settings.ParentSettings
+import com.vivekray898.payvoice.core.remote.DeviceRole
+import com.vivekray898.payvoice.core.remote.EmployeeDevice
+import com.vivekray898.payvoice.core.remote.PairingCode
+import com.vivekray898.payvoice.core.remote.PayVoiceAuth
+import com.vivekray898.payvoice.core.remote.RemoteEventSender
 import com.vivekray898.payvoice.service.messaging.MessagingRepository
 import com.vivekray898.payvoice.service.notification.ListenerRuntime
 import com.vivekray898.payvoice.service.setup.SetupNotifications
@@ -64,6 +69,111 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val isDebugBuild: Boolean
         get() = (getApplication<Application>().applicationInfo.flags and
             android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+
+    // ---- Owner→Employee remote state (spec §3, §13, §32) ----
+
+    val authState: StateFlow<PayVoiceAuth.State> = container.auth.state
+
+    val employees: StateFlow<List<EmployeeDevice>> =
+        container.employees.observeEmployees()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Employee side: THIS device's registry record (null = not paired). */
+    val ownDevice: StateFlow<EmployeeDevice?> =
+        container.employees.observeOwnDevice()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    val remoteSendState: StateFlow<RemoteEventSender.SendState> =
+        container.remoteSender.lastSendState
+
+    /** Last event hit the dedup store as a duplicate (diagnostics, spec §32). */
+    val lastRemoteDuplicate: StateFlow<Boolean?> = container.pipeline.lastDedupWasDuplicate
+
+    private val _pairingCode = MutableStateFlow<PairingCode?>(null)
+    val pairingCode: StateFlow<PairingCode?> = _pairingCode
+
+    private val _joinResult = MutableStateFlow<Boolean?>(null)
+    val joinResult: StateFlow<Boolean?> = _joinResult
+
+    init {
+        // Employee heartbeat: register/refresh this device so the Owner sees
+        // a real last-seen time (spec §13). Fire-and-forget.
+        if (container.settings.settings.value.role == DeviceRole.EMPLOYEE) {
+            container.auth.onReady {
+                container.pairing.touchDevice(container.messaging.cachedToken())
+            }
+        }
+    }
+
+    /** Role selection (spec §2). Persisted; changing later is explicit. */
+    fun setRole(role: DeviceRole, deviceName: String) {
+        viewModelScope.launch {
+            container.settings.update {
+                it.copy(role = role, deviceName = deviceName.trim().take(40))
+            }
+            if (role == DeviceRole.EMPLOYEE) {
+                container.auth.onReady {
+                    container.pairing.touchDevice(container.messaging.cachedToken())
+                }
+            }
+        }
+    }
+
+    /** Owner: generate a short-lived single-use pairing code (spec §4). */
+    fun generatePairingCode() {
+        viewModelScope.launch {
+            _pairingCode.value = null
+            _pairingCode.value = container.pairing.createPairingCode()
+        }
+    }
+
+    /** Employee: claim a code and join the owner (spec §4). */
+    fun joinOwner(code: String) {
+        viewModelScope.launch {
+            _joinResult.value = null
+            val ownerUid = container.pairing.acceptCode(
+                code = code,
+                deviceName = container.settings.settings.value.deviceName
+                    .ifBlank { android.os.Build.MODEL ?: "Employee Device" },
+                fcmToken = container.messaging.cachedToken(),
+            )
+            _joinResult.value = ownerUid != null
+            if (ownerUid != null) {
+                container.pairing.touchDevice(container.messaging.cachedToken())
+            }
+        }
+    }
+
+    fun clearJoinResult() {
+        _joinResult.value = null
+    }
+
+    /** Owner: revoke an employee device (spec §16) — backend-enforced. */
+    fun revokeEmployee(employeeUid: String) {
+        viewModelScope.launch { container.employees.revoke(employeeUid) }
+    }
+
+    /** Owner: send the TEST_ANNOUNCEMENT event to all active employees. */
+    fun sendTestToEmployees() {
+        viewModelScope.launch { container.employees.sendTestAnnouncement() }
+    }
+
+    /** Employee: leave the owner's business (spec §21). */
+    fun leaveOwner() {
+        viewModelScope.launch { container.pairing.leaveOwner() }
+    }
+
+    fun setRemoteAnnouncementsEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            container.settings.update { it.copy(remoteAnnouncementsEnabled = enabled) }
+        }
+    }
+
+    fun setDeviceName(name: String) {
+        viewModelScope.launch {
+            container.settings.update { it.copy(deviceName = name.trim().take(40)) }
+        }
+    }
 
     /** TTS engine status for the setup wizard's Text-to-Speech card. */
     val ttsStatus: StateFlow<com.vivekray898.payvoice.service.tts.AnnouncementSpeaker.Status> =

@@ -18,7 +18,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.vivekray898.payvoice.ui.MainViewModel
 import com.vivekray898.payvoice.ui.diagnostics.DiagnosticsScreen
+import com.vivekray898.payvoice.ui.employee.EmployeeScreen
 import com.vivekray898.payvoice.ui.onboarding.OnboardingScreen
+import com.vivekray898.payvoice.ui.owner.OwnerRemoteScreen
 import com.vivekray898.payvoice.ui.parenthome.ParentHomeScreen
 import com.vivekray898.payvoice.ui.reliability.ReliabilityScreen
 import com.vivekray898.payvoice.ui.settings.SettingsScreen
@@ -56,6 +58,8 @@ private object Routes {
     const val SETTINGS = "settings"
     const val DIAGNOSTICS = "diagnostics"
     const val RELIABILITY = "reliability"
+    const val OWNER_REMOTE = "owner_remote"
+    const val EMPLOYEE_REMOTE = "employee_remote"
 }
 
 @Composable
@@ -84,7 +88,15 @@ private fun PayVoiceNavHost(viewModel: MainViewModel) {
                 onOpenSettings = { nav.navigate(Routes.SETTINGS) },
                 onOpenDiagnostics = { nav.navigate(Routes.DIAGNOSTICS) },
                 onOpenReliability = { nav.navigate(Routes.RELIABILITY) },
+                onOpenOwnerRemote = { nav.navigate(Routes.OWNER_REMOTE) },
+                onOpenEmployeeRemote = { nav.navigate(Routes.EMPLOYEE_REMOTE) },
             )
+        }
+        composable(Routes.OWNER_REMOTE) {
+            OwnerRemoteScreen(viewModel, onBack = { nav.popBackStack() })
+        }
+        composable(Routes.EMPLOYEE_REMOTE) {
+            EmployeeScreen(viewModel, onBack = { nav.popBackStack() })
         }
         composable(Routes.SETTINGS) {
             SettingsScreen(viewModel, onBack = { nav.popBackStack() })

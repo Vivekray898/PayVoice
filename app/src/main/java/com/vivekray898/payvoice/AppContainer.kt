@@ -5,6 +5,12 @@ import com.vivekray898.payvoice.core.announce.AnnouncementComposer
 import com.vivekray898.payvoice.core.database.PayVoiceDatabase
 import com.vivekray898.payvoice.core.database.RetentionCleaner
 import com.vivekray898.payvoice.core.parser.PaymentParserRegistry
+import com.vivekray898.payvoice.core.remote.DeviceRole
+import com.vivekray898.payvoice.core.remote.EmployeeRepository
+import com.vivekray898.payvoice.core.remote.PayVoiceAuth
+import com.vivekray898.payvoice.core.remote.PairingRepository
+import com.vivekray898.payvoice.core.remote.RemoteEventSender
+import com.vivekray898.payvoice.core.remote.SupabaseClient
 import com.vivekray898.payvoice.core.settings.SettingsRepository
 import com.vivekray898.payvoice.core.settings.SettingsRepositoryImpl
 import com.vivekray898.payvoice.service.messaging.MessagingRepository
@@ -44,6 +50,20 @@ class AppContainer(private val appContext: Context) {
 
     val messaging: MessagingRepository by lazy { MessagingRepository(appContext) }
 
+    // ---- Owner→Employee remote layer (additional path; local flow never depends on it) ----
+    // Backend is Supabase (REST + edge functions). Identity/data never touch
+    // Firebase; FCM is transport only, driven by the fcm-gateway function.
+
+    val supabase: SupabaseClient by lazy { SupabaseClient(appContext) }
+
+    val auth: PayVoiceAuth by lazy { PayVoiceAuth(supabase) }
+
+    val pairing: PairingRepository by lazy { PairingRepository(auth, supabase, applicationScope) }
+
+    val employees: EmployeeRepository by lazy { EmployeeRepository(auth, supabase) }
+
+    val remoteSender: RemoteEventSender by lazy { RemoteEventSender(auth, supabase, applicationScope) }
+
     val pipeline: PaymentPipeline by lazy {
         PaymentPipeline(
             scope = applicationScope,
@@ -53,6 +73,9 @@ class AppContainer(private val appContext: Context) {
             db = database,
             isDebugBuild = (appContext.applicationInfo.flags and
                 android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0,
+            remoteSender = remoteSender,
+            roleProvider = { settings.settings.value.role },
+            remoteEnabledProvider = { settings.settings.value.remoteAnnouncementsEnabled },
         )
     }
 }

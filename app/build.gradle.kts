@@ -1,8 +1,8 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
-    alias(libs.plugins.google.services)
 }
 
 android {
@@ -68,9 +68,13 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.work.runtime.ktx)
 
-    // Firebase: BoM + Cloud Messaging only. No other Firebase SDKs (spec).
-    implementation(platform(libs.firebase.bom))
+    // FCM RECEIVE ONLY (no google-services plugin): PayVoiceMessagingService
+    // gets token + data messages for the Supabase edge-function gateway.
+    // Identity + data live in Supabase (REST); only FCM transport remains.
     implementation(libs.firebase.messaging)
+    // Supabase: hand-rolled REST client on kotlinx-serialization (GoTrue anon
+    // auth + PostgREST + edge functions). No Supabase SDK dependency.
+    implementation(libs.kotlinx.serialization.json)
 
     implementation("androidx.security:security-crypto:1.1.0")
 

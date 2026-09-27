@@ -1,0 +1,7 @@
+project_id = "payvoice"
+
+[functions.fcm-gateway]
+verify_jwt = true
+
+[functions.claim-pairing]
+verify_jwt = true

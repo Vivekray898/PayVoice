@@ -2,6 +2,7 @@ package com.vivekray898.payvoice.core.settings
 
 import com.vivekray898.payvoice.core.announce.AnnouncementLanguage
 import com.vivekray898.payvoice.core.announce.AnnouncementStyle
+import com.vivekray898.payvoice.core.remote.DeviceRole
 
 /**
  * User-configurable settings. Defaults follow the spec: HIGH-confidence only,
@@ -21,6 +22,12 @@ data class ParentSettings(
     val speechVolume: Float = 1.0f,
     val dedupRetentionHours: Int = 24,
     val historyRetentionDays: Int = 7,
+    /** Device role (spec §1): Owner detects, Employee announces remotely. */
+    val role: DeviceRole = DeviceRole.UNSET,
+    /** This device's display name in the employee list / pairing flow. */
+    val deviceName: String = "",
+    /** Master switch for owner→employee remote delivery (spec §21). */
+    val remoteAnnouncementsEnabled: Boolean = true,
 )
 
 /** Reactive handle over the settings DataStore. */
