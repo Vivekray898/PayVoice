@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">PayVoice</string>
+    <string name="notification_listener_label">PayVoice Payment Listener</string>
 </resources>
