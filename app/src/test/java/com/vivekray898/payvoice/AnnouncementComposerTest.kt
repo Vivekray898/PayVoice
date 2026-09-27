@@ -81,7 +81,7 @@ class AnnouncementComposerTest {
     @Test
     fun `compose hinglish`() {
         val text = AnnouncementComposer.compose(
-            50000, null, PaymentSource.KOTAK,
+            50000, null, PaymentSource.GOOGLE_PAY,
             AnnouncementStyle.AMOUNT_SENDER, AnnouncementLanguage.HINGLISH,
         )
         assertEquals("Five hundred rupees mil gaye.", text)

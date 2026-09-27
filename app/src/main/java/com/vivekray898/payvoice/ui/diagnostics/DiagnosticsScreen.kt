@@ -73,9 +73,9 @@ fun DiagnosticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
         item(key = "capture-toggle") {
             SectionCard(title = "Unknown-package capture") {
                 Text(
-                    "While verifying an app, capture its notifications locally. " +
-                        "com.kotak811 is already auto-detected when installed — " +
-                        "capture is for confirming the exact package and format.",
+                    "Capture non-GPay notifications locally to identify unexpected " +
+                        "packages. Captured packages are never treated as payment " +
+                        "sources — GPay is the only notification source.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 SwitchRow(
@@ -166,14 +166,6 @@ fun DiagnosticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                                     "SubText: ${c.subText}",
                                     style = MaterialTheme.typography.bodySmall,
                                 )
-                            }
-                            // Manual promote stays for pinning an exact capture;
-                            // com.kotak811 resolves automatically when installed.
-                            Button(
-                                onClick = { viewModel.setKotakPackage(c.packageName) },
-                                enabled = c.packageName.contains("kotak", ignoreCase = true),
-                            ) {
-                                Text("Set as Kotak")
                             }
                         }
                     }

@@ -71,11 +71,12 @@ fun OnboardingScreen(viewModel: MainViewModel) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
-        // ---- Card 1: Notification Listener access (READ GPay/Kotak) ----
+        // ---- Card 1: Notification Listener access (READ GPay only) ----
         SectionCard(title = "1. Payment notification access") {
             Text(
-                "Lets PayVoice read payment notifications from Google Pay and " +
-                    "Kotak. This is separate from normal notification permission.",
+                "Lets PayVoice read payment notifications from Google Pay. Bank " +
+                    "payments (Kotak and others) arrive via bank SMS instead — this " +
+                    "is separate from normal notification permission.",
                 style = MaterialTheme.typography.bodyMedium,
             )
             StatusLine(listenerOk, if (listenerOk) "Notification access enabled" else "Not configured")

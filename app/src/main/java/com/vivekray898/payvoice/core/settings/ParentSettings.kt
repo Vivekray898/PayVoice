@@ -10,9 +10,6 @@ import com.vivekray898.payvoice.core.announce.AnnouncementStyle
 data class ParentSettings(
     val onboardingComplete: Boolean = false,
     val gpayEnabled: Boolean = true,
-    val kotakEnabled: Boolean = false,
-    /** Verified Kotak package id, captured on-device. Empty until confirmed. */
-    val kotakPackageId: String = "",
     /** Diagnostic capture of unknown-package notifications (local only, opt-in). */
     val captureUnknownPackages: Boolean = false,
     /** SMS backup capture of bank payment SMS (processed locally only). */

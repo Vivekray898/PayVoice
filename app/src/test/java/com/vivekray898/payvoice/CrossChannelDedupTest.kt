@@ -1,14 +1,16 @@
 package com.vivekray898.payvoice
 
+import com.vivekray898.payvoice.core.model.KnownPackages
 import com.vivekray898.payvoice.core.parser.Fingerprinter
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Test
 
 /**
- * Phase 12/20: cross-channel deduplication. The SAME payment arriving as a
- * Kotak notification AND a Kotak SMS must produce ONE fingerprint (one
- * announcement, one Room row). Two separate payments must never merge.
+ * Phase 12/20: cross-channel deduplication. The SAME payment arriving via two
+ * channels (e.g. a GPay notification and a bank SMS for the same UTR) must
+ * produce ONE fingerprint (one announcement, one Room row). Two separate
+ * payments must never merge.
  */
 class CrossChannelDedupTest {
 
@@ -17,13 +19,13 @@ class CrossChannelDedupTest {
     @Test
     fun `same UTR via notification and SMS collides`() {
         val notif = Fingerprinter.captureFingerprint(
-            packageId = "com.kotak811",
+            packageId = KnownPackages.GOOGLE_PAY,
             amountMinor = 50000,
             timestampMs = now,
-            title = "Kotak",
+            title = "Payment received",
             text = "Rs 500 credited UPI Ref 432198765432",
             referenceId = "432198765432",
-            captureSource = "KOTAK_NOTIFICATION",
+            captureSource = "GPAY_NOTIFICATION",
         )
         val sms = Fingerprinter.captureFingerprint(
             packageId = "KKBK6789",
@@ -55,7 +57,7 @@ class CrossChannelDedupTest {
         val a = Fingerprinter.captureFingerprint(
             packageId = "KKBK6789", amountMinor = 50000, timestampMs = now,
             title = null, text = "credited", senderName = "Rahul Sharma",
-            captureSource = "KOTAK_NOTIFICATION",
+            captureSource = "GPAY_NOTIFICATION",
         )
         val b = Fingerprinter.captureFingerprint(
             packageId = "KKBK6789", amountMinor = 50000, timestampMs = now + 40_000,

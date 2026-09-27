@@ -1,5 +1,6 @@
 package com.vivekray898.payvoice
 
+import com.vivekray898.payvoice.core.model.CaptureSource
 import com.vivekray898.payvoice.core.model.Direction
 import com.vivekray898.payvoice.core.model.PaymentSource
 import com.vivekray898.payvoice.core.parser.sms.SmsPaymentParserRegistry
@@ -63,7 +64,10 @@ class SmsParserTest {
             now,
         )
         assertNotNull(p)
-        assertEquals(PaymentSource.KOTAK, p!!.source)
+        // SMS channel maps to the GOOGLE_PAY announcement family; the bank
+        // (Kotak) remains visible via the parser's source label.
+        assertEquals("Kotak", p!!.sourceLabel)
+        assertEquals(PaymentSource.GOOGLE_PAY, p.source)
         assertEquals(Direction.RECEIVED, p.direction)
         assertEquals(100_000L, p.amountMinor)
         assertEquals("Ms Usha Das", p.senderName)

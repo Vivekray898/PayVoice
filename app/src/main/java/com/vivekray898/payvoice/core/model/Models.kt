@@ -1,55 +1,34 @@
 package com.vivekray898.payvoice.core.model
 
 /**
- * Package IDs for payment apps. Google Pay's package is stable and verified on
- * device before use; Kotak's candidate (com.kotak811) comes from the user's
- * installed app and is confirmed via PackageManager + capture flow.
+ * Package IDs for payment apps. GPay's package is stable and verified on
+ * device. No bank-app packages exist here by design: bank payments (Kotak and
+ * others) arrive exclusively via bank SMS, never via app notifications.
  */
 object KnownPackages {
     const val GOOGLE_PAY = "com.google.android.apps.nbu.paisa.user"
-
-    /** User-identified candidate for the installed Kotak app (v5.4.7). */
-    const val KOTAK_CANDIDATE = "com.kotak811"
-
-    /** Legacy placeholder kept only for settings migration of old captures. */
-    const val KOTAK_PLACEHOLDER = "com.kotak.app.unverified.placeholder"
 }
 
-/** Runtime holder for the verified Kotak package id (set from diagnostics capture). */
-object PaymentPackages {
-    @Volatile
-    var kotakPackageId: String? = null
-
-    /**
-     * Resolves the active Kotak package: a user-verified capture wins; else the
-     * installed com.kotak811 candidate; else null (Kotak not detectable yet).
-     */
-    fun resolveKotakPackage(isPackageInstalled: (String) -> Boolean): String? {
-        kotakPackageId?.let { return it }
-        return if (isPackageInstalled(KnownPackages.KOTAK_CANDIDATE)) {
-            KnownPackages.KOTAK_CANDIDATE
-        } else {
-            null
-        }
-    }
-}
-
-/** Where a payment notification came from. */
+/**
+ * Human-readable label for where a payment came from.
+ *
+ * Architecture (post-cleanup): GPay is the ONLY UPI-app notification source.
+ * Bank payments — including Kotak — arrive exclusively via bank SMS
+ * ([CaptureSource.SMS_KOTAK] / [CaptureSource.SMS_BANK]). There is no Kotak
+ * app-notification source and no bank-app package matcher anywhere in the
+ * notification path.
+ */
 enum class PaymentSource(val packageId: String, val displayName: String) {
-    GOOGLE_PAY(KnownPackages.GOOGLE_PAY, "Google Pay"),
-    KOTAK(KnownPackages.KOTAK_PLACEHOLDER, "Kotak");
-
-    val isVerified: Boolean
-        get() = packageId != KnownPackages.KOTAK_PLACEHOLDER
+    GOOGLE_PAY(KnownPackages.GOOGLE_PAY, "Google Pay");
 
     companion object {
-        fun fromPackage(pkg: String): PaymentSource? = when {
-            pkg == KnownPackages.GOOGLE_PAY -> GOOGLE_PAY
-            // Verified capture wins; otherwise the installed com.kotak811
-            // candidate is accepted (it can only fire if actually installed).
-            pkg == PaymentPackages.kotakPackageId || pkg == KnownPackages.KOTAK_CANDIDATE -> KOTAK
-            else -> null
-        }
+        /**
+         * Notification packages route by exact match. Deliberately contains no
+         * bank packages: a com.kotak811 (or any other bank app) notification
+         * must never become a payment event — only SMS carries bank payments.
+         */
+        fun fromPackage(pkg: String): PaymentSource? =
+            entries.firstOrNull { it.packageId == pkg }
     }
 }
 
@@ -57,13 +36,13 @@ enum class PaymentSource(val packageId: String, val displayName: String) {
 enum class Direction { RECEIVED, SENT, UNKNOWN }
 
 /**
- * Which capture channel produced an event. Notifications and SMS converge in
- * the same pipeline; the channel participates in deduplication so a Kotak
- * notification + Kotak SMS for one payment announce only once.
+ * Which capture channel produced an event. Notifications (GPay only) and bank
+ * SMS converge in the same pipeline; the channel participates in
+ * deduplication so a bank SMS and any co-arriving evidence for one payment
+ * announce only once.
  */
 enum class CaptureSource {
     GPAY_NOTIFICATION,
-    KOTAK_NOTIFICATION,
     SMS_KOTAK,
     SMS_BANK,
     OTHER_NOTIFICATION,

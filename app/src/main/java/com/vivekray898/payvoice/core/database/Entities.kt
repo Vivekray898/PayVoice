@@ -36,7 +36,7 @@ data class AnnouncementEntity(
     val announcementText: String,
     val detectedAtMs: Long,
     val announcedAtMs: Long,
-    /** Which channel captured it (GPAY_NOTIFICATION / KOTAK_NOTIFICATION / SMS_*). */
+    /** Which channel captured it (GPAY_NOTIFICATION / SMS_KOTAK / SMS_BANK). */
     val captureSource: String = "UNKNOWN",
     /** Human-readable parser id for diagnostics. */
     val parserName: String = "unknown",

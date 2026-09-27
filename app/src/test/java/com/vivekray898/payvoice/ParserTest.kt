@@ -1,10 +1,11 @@
 package com.vivekray898.payvoice
 
+import com.vivekray898.payvoice.core.model.CaptureSource
 import com.vivekray898.payvoice.core.model.Confidence
 import com.vivekray898.payvoice.core.model.Direction
 import com.vivekray898.payvoice.core.model.PaymentSource
 import com.vivekray898.payvoice.core.parser.GooglePayParser
-import com.vivekray898.payvoice.core.parser.KotakParser
+import com.vivekray898.payvoice.core.parser.PaymentParserRegistry
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -14,7 +15,6 @@ import org.junit.Test
 class ParserTest {
 
     private val gpay = GooglePayParser()
-    private val kotak = KotakParser()
 
     // ---- Google Pay ----
 
@@ -78,39 +78,41 @@ class ParserTest {
         assertEquals(false, p.isAnnounceable)
     }
 
-    // ---- Kotak (provisional templates) ----
+    // ---- Source architecture guards (Kotak app-notification cleanup) ----
 
     @Test
-    fun `kotak credit is announceable`() {
-        val p = kotak.parse("Kotak Bank", "Rs. 1200 credited to your account from RAMESH K Ref no 880123456")
-        assertNotNull(p)
-        assertEquals(Direction.RECEIVED, p!!.direction)
-        assertEquals(120000L, p.amountMinor)
-        assertEquals("RAMESH K", p.senderName)
-        assertNotNull(p.referenceId)
-        assertTrue(p.isAnnounceable)
-    }
-
-    @Test
-    fun `kotak debit is not announceable`() {
-        val p = kotak.parse("Kotak Bank", "Rs. 300 debited from your account towards ATM withdrawal")
-        assertNotNull(p)
-        assertEquals(Direction.SENT, p!!.direction)
-        assertEquals(false, p.isAnnounceable)
-    }
-
-    @Test
-    fun `kotak OTP is rejected`() {
-        assertNull(kotak.parse("Kotak", "Your OTP is 123456. Do not share"))
-    }
-
-    @Test
-    fun `sources route by verified package`() {
+    fun `gpay package routes to source`() {
         assertEquals(
             PaymentSource.GOOGLE_PAY,
             PaymentSource.fromPackage("com.google.android.apps.nbu.paisa.user"),
         )
-        // Placeholder must not match anything at runtime.
-        assertNull(PaymentSource.fromPackage("com.kotak.app.unverified.placeholder"))
+    }
+
+    @Test
+    fun `kotak app package is NEVER a payment notification source`() {
+        // Bank payments arrive via SMS only. A Kotak banking-app notification
+        // must match no source, no parser, and therefore create no event.
+        assertNull(PaymentSource.fromPackage("com.kotak811"))
+        assertNull(
+            PaymentParserRegistry.withDefaults().parserForPackage("com.kotak811"),
+        )
+    }
+
+    @Test
+    fun `arbitrary bank app packages are never sources`() {
+        assertNull(PaymentSource.fromPackage("com.hdfcbank.app"))
+        assertNull(PaymentSource.fromPackage("net.one97.paytm"))
+        assertNull(PaymentSource.fromPackage("com.phonepe.app"))
+    }
+
+    @Test
+    fun `capture sources are exactly the three supported channels`() {
+        // GPAY_NOTIFICATION + SMS_KOTAK + SMS_BANK are the payment channels;
+        // OTHER_NOTIFICATION exists only as a local diagnostics catch-all.
+        assertEquals(
+            setOf("GPAY_NOTIFICATION", "SMS_KOTAK", "SMS_BANK", "OTHER_NOTIFICATION"),
+            CaptureSource.entries.map { it.name }.toSet(),
+        )
+        assertTrue(!CaptureSource.entries.any { it.name == "KOTAK_NOTIFICATION" })
     }
 }

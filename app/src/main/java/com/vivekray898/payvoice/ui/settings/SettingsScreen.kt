@@ -53,20 +53,16 @@ fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
 
         SectionCard(title = "Payment sources") {
             SwitchRow(
-                label = "Google Pay",
+                label = "Google Pay notifications",
                 checked = settings.gpayEnabled,
                 onCheckedChange = viewModel::setGpayEnabled,
                 supporting = com.vivekray898.payvoice.core.model.KnownPackages.GOOGLE_PAY,
             )
-            SwitchRow(
-                label = "Kotak",
-                checked = settings.kotakEnabled,
-                onCheckedChange = viewModel::setKotakEnabled,
-                supporting = if (settings.kotakPackageId.isNotBlank()) {
-                    settings.kotakPackageId
-                } else {
-                    "com.kotak811 (auto-detected when installed)"
-                },
+            Text(
+                "Bank payments (Kotak and others) arrive automatically via bank " +
+                    "SMS — no bank app notification access is used.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
 

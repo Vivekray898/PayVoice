@@ -6,7 +6,6 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
 import com.vivekray898.payvoice.PayVoiceApp
-import com.vivekray898.payvoice.core.model.PaymentPackages
 import com.vivekray898.payvoice.core.model.PaymentSource
 import kotlinx.coroutines.launch
 
@@ -79,16 +78,12 @@ class PayVoiceNotificationListener : NotificationListenerService() {
     private fun dispatchIfWhitelisted(sbn: StatusBarNotification) {
         val pkg = sbn.packageName ?: return
         runtime.onNotificationPosted(pkg, sbn.postTime)
+        // Generic package diagnostic only — never a bank-app payment source.
+        // A com.kotak811 (or any bank app) notification fails this lookup and
+        // is ignored (or locally captured in diagnostics mode).
         log("onNotificationPosted package=$pkg")
         val settings = container.settings.settings.value
-        val source = PaymentSource.fromPackage(pkg) ?: run {
-            // Kotak candidate not yet pinned: accept the verified capture or the
-            // installed com.kotak811 candidate (verified against PackageManager).
-            val kotak = PaymentPackages.resolveKotakPackage { candidate ->
-                runCatching { packageManager.getPackageInfo(candidate, 0) }.isSuccess
-            }
-            if (kotak != null && pkg == kotak) PaymentSource.KOTAK else null
-        }
+        val source = PaymentSource.fromPackage(pkg)
 
         val extras = sbn.notification.extras
         val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString()
@@ -114,11 +109,8 @@ class PayVoiceNotificationListener : NotificationListenerService() {
             return
         }
 
-        val enabled = when (source) {
-            PaymentSource.GOOGLE_PAY -> settings.gpayEnabled
-            PaymentSource.KOTAK -> settings.kotakEnabled
-        }
-        if (!enabled) return
+        // GPay is the only notification source; there is no bank-app toggle.
+        if (!settings.gpayEnabled) return
 
         container.pipeline.handleNotification(
             packageName = pkg,

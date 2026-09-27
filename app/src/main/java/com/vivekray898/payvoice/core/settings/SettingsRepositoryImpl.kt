@@ -9,7 +9,6 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.vivekray898.payvoice.core.announce.AnnouncementLanguage
 import com.vivekray898.payvoice.core.announce.AnnouncementStyle
-import com.vivekray898.payvoice.core.model.PaymentPackages
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,8 +26,6 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
     private object Keys {
         val ONBOARDED = booleanPreferencesKey("onboarding_complete")
         val GPAY = booleanPreferencesKey("gpay_enabled")
-        val KOTAK = booleanPreferencesKey("kotak_enabled")
-        val KOTAK_PKG = stringPreferencesKey("kotak_package_id")
         val CAPTURE_UNKNOWN = booleanPreferencesKey("capture_unknown_packages")
         val SMS_CAPTURE = booleanPreferencesKey("sms_capture_enabled")
         val HIGH_ONLY = booleanPreferencesKey("announce_high_only")
@@ -55,15 +52,9 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
             // still updates state.
             context.dataStore.data
                 .runCatching { collect { prefs ->
-                    val kotakPackage = prefs[Keys.KOTAK_PKG].orEmpty()
-                    // Apply the verified Kotak package globally, including when the
-                    // process starts from the notification listener (UI never opened).
-                    PaymentPackages.kotakPackageId = kotakPackage.ifBlank { null }
                     state.value = ParentSettings(
                         onboardingComplete = prefs[Keys.ONBOARDED] ?: false,
                         gpayEnabled = prefs[Keys.GPAY] ?: true,
-                        kotakEnabled = prefs[Keys.KOTAK] ?: false,
-                        kotakPackageId = kotakPackage,
                         captureUnknownPackages = prefs[Keys.CAPTURE_UNKNOWN] ?: false,
                         smsCaptureEnabled = prefs[Keys.SMS_CAPTURE] ?: true,
                         announceHighConfidenceOnly = prefs[Keys.HIGH_ONLY] ?: true,
@@ -89,8 +80,6 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
             context.dataStore.edit { prefs ->
                 prefs[Keys.ONBOARDED] = next.onboardingComplete
                 prefs[Keys.GPAY] = next.gpayEnabled
-                prefs[Keys.KOTAK] = next.kotakEnabled
-                prefs[Keys.KOTAK_PKG] = next.kotakPackageId
                 prefs[Keys.CAPTURE_UNKNOWN] = next.captureUnknownPackages
                 prefs[Keys.SMS_CAPTURE] = next.smsCaptureEnabled
                 prefs[Keys.HIGH_ONLY] = next.announceHighConfidenceOnly

@@ -11,6 +11,7 @@ import com.vivekray898.payvoice.core.model.CaptureEvent
 import com.vivekray898.payvoice.core.model.CaptureSource
 import com.vivekray898.payvoice.core.model.Confidence
 import com.vivekray898.payvoice.core.model.Direction
+import com.vivekray898.payvoice.core.model.KnownPackages
 import com.vivekray898.payvoice.core.model.ParsedNotification
 import com.vivekray898.payvoice.core.model.PaymentSource
 import com.vivekray898.payvoice.core.parser.Fingerprinter
@@ -49,7 +50,7 @@ class PaymentPipeline(
 
     // ---- Entry points ----
 
-    /** NotificationListenerService entry (existing behavior preserved). */
+    /** NotificationListenerService entry (GPay is the only notification source). */
     fun handleNotification(
         packageName: String,
         title: String?,
@@ -60,16 +61,14 @@ class PaymentPipeline(
         postedAtMs: Long,
         extrasSummary: String?,
     ) {
-        val source = PaymentSource.fromPackage(packageName) ?: return
-        val captureSource = when (source) {
-            PaymentSource.GOOGLE_PAY -> CaptureSource.GPAY_NOTIFICATION
-            PaymentSource.KOTAK -> CaptureSource.KOTAK_NOTIFICATION
-        }
+        // Single notification gate: a bank app package (e.g. com.kotak811) can
+        // never reach the pipeline as a payment — bank payments arrive via SMS.
+        if (packageName != KnownPackages.GOOGLE_PAY) return
         scope.launch {
             runCatching {
                 handleCapture(
                     CaptureEvent(
-                        captureSource = captureSource,
+                        captureSource = CaptureSource.GPAY_NOTIFICATION,
                         originId = packageName,
                         title = title,
                         body = text.orEmpty(),
@@ -290,8 +289,7 @@ class PaymentPipeline(
             CaptureSource.SMS_KOTAK -> "KotakSmsParser"
             else -> "BankSmsParser"
         }
-        event.captureSource == CaptureSource.GPAY_NOTIFICATION -> "GooglePayParser"
-        else -> "KotakParser"
+        else -> "GooglePayParser"
     }
 
     /**
@@ -312,15 +310,11 @@ class PaymentPipeline(
 
     /** Debug simulator: canned notification through the real pipeline. */
     fun simulate(source: PaymentSource, title: String, text: String) {
-        val captureSource = when (source) {
-            PaymentSource.GOOGLE_PAY -> CaptureSource.GPAY_NOTIFICATION
-            PaymentSource.KOTAK -> CaptureSource.KOTAK_NOTIFICATION
-        }
         scope.launch {
             runCatching {
                 handleCapture(
                     CaptureEvent(
-                        captureSource = captureSource,
+                        captureSource = CaptureSource.GPAY_NOTIFICATION,
                         originId = source.packageId,
                         title = title,
                         body = text,

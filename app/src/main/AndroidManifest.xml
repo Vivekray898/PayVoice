@@ -9,7 +9,8 @@
     <!-- Lets the reliability screen offer a direct battery-optimization exemption dialog. -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- PayVoice's OWN status/service notifications only (API 33+). NOT related
-         to reading GPay/Kotak notifications — that is Notification Listener access. -->
+         to reading GPay payment notifications — that is Notification Listener
+         access, and GPay is the only notification source. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- SMS backup capture path: react to newly arrived bank SMS only.
          READ_SMS is intentionally NOT requested — PayVoice never reads the
@@ -21,11 +22,11 @@
          receiver only re-primes pipeline state. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
-    <!-- Package visibility (API 30+): detect installed payment apps for the
-         diagnostics/reliability screens without broad QUERY_ALL_PACKAGES. -->
+    <!-- Package visibility (API 30+): detect the installed payment app for the
+         diagnostics/reliability screens without broad QUERY_ALL_PACKAGES.
+         No bank-app entries by design: bank payments arrive via SMS only. -->
     <queries>
         <package android:name="com.google.android.apps.nbu.paisa.user" />
-        <package android:name="com.kotak811" />
     </queries>
 
     <application

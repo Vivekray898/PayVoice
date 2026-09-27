@@ -9,7 +9,6 @@ import android.provider.Settings
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.vivekray898.payvoice.core.model.KnownPackages
-import com.vivekray898.payvoice.core.model.PaymentPackages
 import com.vivekray898.payvoice.service.setup.SetupNotifications
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -20,7 +19,8 @@ import kotlinx.coroutines.withContext
  * jank came from running these synchronously during composition).
  *
  * The three permissions are deliberately separate (spec):
- *  A. Notification Listener access — READ GPay/Kotak notifications
+ *  A. Notification Listener access — READ GPay payment notifications (the
+ *     only notification source; bank payments arrive via SMS)
  *  B. POST_NOTIFICATIONS          — PayVoice's own notifications
  *  C. Battery optimization        — background reliability
  */
@@ -34,8 +34,6 @@ class DeviceStatusMonitor(private val context: Context) {
         val batteryExempt: Boolean,
         val smsPermissionGranted: Boolean,
         val gpay: InstalledApp,
-        val kotak: InstalledApp,
-        val resolvedKotakPackage: String?,
         val manufacturer: String,
         val model: String,
         val androidVersion: String,
@@ -68,7 +66,6 @@ class DeviceStatusMonitor(private val context: Context) {
     suspend fun snapshot(): Snapshot = withContext(Dispatchers.Default) {
         val info = DeviceSettingsHelper.detect(context)
         val gpay = inspect(KnownPackages.GOOGLE_PAY, "Google Pay")
-        val kotak = inspect(KnownPackages.KOTAK_CANDIDATE, "Kotak")
         Snapshot(
             listenerEnabled = isListenerEnabled(),
             notificationsEnabled = SetupNotifications.canPostNotifications(context),
@@ -77,10 +74,6 @@ class DeviceStatusMonitor(private val context: Context) {
                 context, android.Manifest.permission.RECEIVE_SMS
             ) == PackageManager.PERMISSION_GRANTED,
             gpay = gpay,
-            kotak = kotak,
-            resolvedKotakPackage = PaymentPackages.resolveKotakPackage { pkg ->
-                runCatching { context.packageManager.getPackageInfo(pkg, 0) }.isSuccess
-            },
             manufacturer = info.manufacturer,
             model = info.model,
             androidVersion = info.androidVersion,

@@ -87,8 +87,8 @@ fun ParentHomeScreen(
             SectionCard(title = "Recent payments") {
                 if (history.isEmpty()) {
                     Text(
-                        "No payments announced yet. When Google Pay or Kotak " +
-                            "credit you, the announcement appears here.",
+                        "No payments announced yet. When Google Pay or a bank SMS " +
+                            "credit arrives, the announcement appears here.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -134,9 +134,6 @@ fun ParentHomeScreen(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = { viewModel.simulate(PaymentSource.GOOGLE_PAY) }) {
                         Text("Simulate GPay ₹500")
-                    }
-                    OutlinedButton(onClick = { viewModel.simulate(PaymentSource.KOTAK) }) {
-                        Text("Simulate Kotak ₹1,200")
                     }
                 }
             }

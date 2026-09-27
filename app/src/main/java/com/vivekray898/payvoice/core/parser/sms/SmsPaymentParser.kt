@@ -67,11 +67,17 @@ abstract class BaseSmsParser : SmsPaymentParser {
 /** Kotak bank SMS (KKBK…, KOTAK…, 811 wording). */
 class KotakSmsParser : BaseSmsParser() {
     override val captureSource = CaptureSource.SMS_KOTAK
-    override val paymentSource = PaymentSource.KOTAK
+
+    // SMS channel has no app-notification source; GOOGLE_PAY is the
+    // announcement source family and the bank stays visible via sourceLabel.
+    override val paymentSource = PaymentSource.GOOGLE_PAY
     override val priority = 30
 
     override fun matches(sender: String, body: String, bank: String?): Boolean =
         bank == "Kotak"
+
+    // History/diagnostics show the actual bank, not the generic source family.
+    override fun displayLabel(bank: String?): String = bank ?: "Kotak"
 }
 
 /** Google Pay / UPI-flow SMS forwarded by PSP/bank senders. */

@@ -11,7 +11,6 @@ import com.vivekray898.payvoice.core.announce.AnnouncementStyle
 import com.vivekray898.payvoice.core.database.AnnouncementEntity
 import com.vivekray898.payvoice.core.database.CapturedNotificationEntity
 import com.vivekray898.payvoice.core.database.DiagnosticEntity
-import com.vivekray898.payvoice.core.model.PaymentPackages
 import com.vivekray898.payvoice.core.model.PaymentSource
 import com.vivekray898.payvoice.core.settings.ParentSettings
 import com.vivekray898.payvoice.service.messaging.MessagingRepository
@@ -153,15 +152,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { container.settings.update { it.copy(gpayEnabled = enabled) } }
     }
 
-    fun setKotakEnabled(enabled: Boolean) {
-        viewModelScope.launch { container.settings.update { it.copy(kotakEnabled = enabled) } }
-    }
-
-    fun setKotakPackage(pkg: String) {
-        PaymentPackages.kotakPackageId = pkg.ifBlank { null }
-        viewModelScope.launch { container.settings.update { it.copy(kotakPackageId = pkg) } }
-    }
-
     fun setStyle(style: AnnouncementStyle) {
         viewModelScope.launch { container.settings.update { it.copy(style = style) } }
     }
@@ -232,14 +222,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Pushes a canned payment notification through the real pipeline. */
+    /** Pushes a canned GPay notification through the real pipeline (only notification source). */
     fun simulate(source: PaymentSource) {
-        val (title, text) = when (source) {
-            PaymentSource.GOOGLE_PAY ->
-                "Payment received" to "₹500 received from Rahul Sharma. Upi Ref 512345678901"
-            PaymentSource.KOTAK ->
-                "Kotak Bank" to "Rs. 1200 credited to your account from RAMESH K Ref no 880123456"
-        }
+        val (title, text) =
+            "Payment received" to "₹500 received from Rahul Sharma. Upi Ref 512345678901"
         container.pipeline.simulate(source, title, text)
     }
 

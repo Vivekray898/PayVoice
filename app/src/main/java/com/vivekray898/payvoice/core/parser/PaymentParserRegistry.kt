@@ -7,6 +7,9 @@ import com.vivekray898.payvoice.core.model.PaymentSource
  * A per-provider notification parser. One implementation per payment app —
  * never one giant regex file (spec §5). Implementations must be pure and
  * side-effect free so they are trivially unit-testable.
+ *
+ * GPay is the ONLY notification source: bank payments (Kotak and others)
+ * arrive exclusively via bank SMS, handled by `SmsPaymentParserRegistry`.
  */
 interface PaymentParser {
     val source: PaymentSource
@@ -25,19 +28,10 @@ class PaymentParserRegistry(parsers: List<PaymentParser>) {
     private val byPackage: Map<String, PaymentParser> =
         parsers.associateBy { it.source.packageId }
 
-    private val bySource: Map<PaymentSource, PaymentParser> =
-        parsers.associateBy { it.source }
-
-    fun parserForPackage(packageId: String): PaymentParser? {
-        byPackage[packageId]?.let { return it }
-        // Kotak's runtime package (verified capture or installed candidate)
-        // differs from the compile-time enum constant — resolve by source.
-        val source = PaymentSource.fromPackage(packageId) ?: return null
-        return bySource[source]
-    }
+    fun parserForPackage(packageId: String): PaymentParser? = byPackage[packageId]
 
     companion object {
         fun withDefaults(): PaymentParserRegistry =
-            PaymentParserRegistry(listOf(GooglePayParser(), KotakParser()))
+            PaymentParserRegistry(listOf(GooglePayParser()))
     }
 }

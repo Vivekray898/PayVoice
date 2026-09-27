@@ -85,29 +85,25 @@ fun ReliabilityScreen(viewModel: MainViewModel, onBack: () -> Unit) {
             }
         }
 
-        item(key = "apps") {
-            SectionCard(title = "Payment apps") {
-                Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                    StatusLine(status?.gpay?.installed == true, "Google Pay")
-                }
+        item(key = "capture-channels") {
+            SectionCard(title = "Capture channels") {
+                // Two-channel architecture: GPay is the only app-notification
+                // source; bank payments (Kotak and others) arrive via bank SMS.
+                StatusLine(status?.gpay?.installed == true, "GPay Notification Access")
                 Text(
                     "Package: ${status?.gpay?.packageName ?: "…"} · " +
                         "Installed: ${if (status?.gpay?.installed == true) "YES" else "NO"}",
                     style = MaterialTheme.typography.bodySmall,
                 )
-                Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                    StatusLine(
-                        (status?.kotak?.installed == true) || status?.resolvedKotakPackage != null,
-                        "Kotak",
-                    )
-                }
+                StatusLine(
+                    status?.smsPermissionGranted == true,
+                    if (status?.smsPermissionGranted == true) "SMS Backup — available" else "SMS Backup — permission required",
+                )
                 Text(
-                    buildString {
-                        append("Package: ${status?.kotak?.packageName ?: "com.kotak811"} · ")
-                        append("Installed: ${if (status?.kotak?.installed == true) "YES" else "NO"}")
-                        status?.kotak?.versionName?.let { append(" · v$it") }
-                    },
+                    "Bank payments (Kotak and others) arrive via bank SMS. " +
+                        "No bank app notification access is used.",
                     style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 if (status?.isXiaomiFamily == true) {
                     Text(
@@ -138,7 +134,7 @@ fun ReliabilityScreen(viewModel: MainViewModel, onBack: () -> Unit) {
         }
 
         item(key = "sms") {
-            SectionCard(title = "SMS Access") {
+            SectionCard(title = "SMS Backup") {
                 StatusLine(
                     status?.smsPermissionGranted == true,
                     if (status?.smsPermissionGranted == true) "Enabled" else "Not granted",
