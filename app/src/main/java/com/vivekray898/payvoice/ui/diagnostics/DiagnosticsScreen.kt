@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -23,13 +22,15 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vivekray898.payvoice.ui.MainViewModel
 import com.vivekray898.payvoice.ui.components.SectionCard
+import com.vivekray898.payvoice.ui.components.StatusLine
 import com.vivekray898.payvoice.ui.components.SwitchRow
 import com.vivekray898.payvoice.ui.components.timeAgo
 
 /**
- * Hidden-ish diagnostics screen (spec §32, Phase-1 subset). Includes the
- * on-device Kotak package verification flow: capture an unknown-package
- * notification locally, promote it, and the listener whitelist updates live.
+ * Local diagnostics (spec: PAYMENT NOTIFICATION DIAGNOSTICS). Shows the exact
+ * notification fields (title/text/bigText/subText/id/posted time) for captured
+ * payment-app notifications so parsers can be refined per app version/language.
+ * This data is LOCAL ONLY — never uploaded.
  */
 @Composable
 fun DiagnosticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
@@ -44,7 +45,7 @@ fun DiagnosticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
             .padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        item {
+        item(key = "header") {
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -54,19 +55,14 @@ fun DiagnosticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
             }
         }
 
-        item {
+        item(key = "status") {
             SectionCard(title = "Live status") {
-                com.vivekray898.payvoice.ui.components.StatusLine(
-                    status.listenerEnabled, "Notification listener"
-                )
-                com.vivekray898.payvoice.ui.components.StatusLine(
-                    status.notificationsEnabled, "App notifications"
-                )
-                com.vivekray898.payvoice.ui.components.StatusLine(
-                    status.batteryExempt, "Battery optimization exempt"
-                )
+                StatusLine(status?.listenerEnabled == true, "Notification listener")
+                StatusLine(status?.notificationsEnabled == true, "App notifications")
+                StatusLine(status?.batteryExempt == true, "Battery optimization exempt")
                 Text(
-                    "${status.manufacturer} ${status.model} · Android ${status.androidVersion}",
+                    "${status?.manufacturer ?: "?"} ${status?.model ?: "?"} · " +
+                        "Android ${status?.androidVersion ?: "?"}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -74,14 +70,12 @@ fun DiagnosticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
             }
         }
 
-        item {
-            SectionCard(title = "Kotak package verification") {
+        item(key = "capture-toggle") {
+            SectionCard(title = "Unknown-package capture") {
                 Text(
-                    if (settings.kotakPackageId.isBlank())
-                        "Not verified yet. Enable capture, then open Kotak and trigger any "
-                            + "notification (a balance refresh works)."
-                    else
-                        "Verified: " + settings.kotakPackageId,
+                    "While verifying an app, capture its notifications locally. " +
+                        "com.kotak811 is already auto-detected when installed — " +
+                        "capture is for confirming the exact package and format.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 SwitchRow(
@@ -90,36 +84,104 @@ fun DiagnosticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                     onCheckedChange = viewModel::setCaptureUnknownPackages,
                     supporting = "Stores raw text of non-payment app notifications in the local database",
                 )
-                if (captured.isNotEmpty()) {
+                OutlinedButton(onClick = { viewModel.clearCaptures() }) { Text("Clear captures") }
+            }
+        }
+
+        if (viewModel.isDebugBuild) {
+            item(key = "sms-test") {
+                SectionCard(title = "SMS parser test (debug)") {
                     Text(
-                        "Captured notifications (newest first):",
-                        style = MaterialTheme.typography.bodyMedium,
+                        "Pushes a sample SMS through the real pipeline " +
+                            "(parse → dedup → announce if received).",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    captured.take(10).forEach { c ->
-                        Column(Modifier.padding(vertical = 4.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Button(onClick = {
+                            viewModel.simulateSms(
+                                "KKBK6789",
+                                "Your A/c XX1234 is credited with Rs 500 via UPI Ref 432198765432",
+                            )
+                        }) { Text("Kotak credit ₹500 (UTR)") }
+                        OutlinedButton(onClick = {
+                            viewModel.simulateSms(
+                                "KKBK6789",
+                                "Rs 500 debited from your account for UPI transfer",
+                            )
+                        }) { Text("Kotak debit (silent)") }
+                        OutlinedButton(onClick = {
+                            viewModel.simulateSms(
+                                "KKBK6789",
+                                "Your bill of Rs 500 is due tomorrow",
+                            )
+                        }) { Text("Bill reminder (silent)") }
+                        OutlinedButton(onClick = {
+                            viewModel.simulateSms(
+                                "KKBK6789",
+                                "Your OTP for transaction is 123456",
+                            )
+                        }) { Text("OTP (silent)") }
+                    }
+                }
+            }
+        }
+
+        item(key = "captures") {
+            SectionCard(title = "Captured notifications (newest first)") {
+                if (captured.isEmpty()) {
+                    Text("None yet.", style = MaterialTheme.typography.bodySmall)
+                } else {
+                    captured.take(15).forEach { c ->
+                        Column(Modifier.padding(vertical = 6.dp)) {
                             Text(
                                 "${c.packageName} · ${timeAgo(c.capturedAtMs)}",
                                 style = MaterialTheme.typography.labelMedium,
                             )
                             Text(
-                                (c.title.orEmpty() + " — " + c.text.orEmpty())
-                                    .take(120),
+                                "Source: ${c.packageName}",
                                 style = MaterialTheme.typography.bodySmall,
                             )
-                        }
-                        Button(
-                            onClick = { viewModel.setKotakPackage(c.packageName) },
-                            enabled = c.packageName.contains("kotak", ignoreCase = true),
-                        ) {
-                            Text("Set as Kotak")
+                            Text(
+                                "Notification ID: ${c.notificationId} · Posted: ${c.postedTimeMs}",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontFamily = FontFamily.Monospace,
+                            )
+                            Text(
+                                "Title: ${c.title.orEmpty()}",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                            Text(
+                                "Text: ${c.text.orEmpty()}",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                            if (!c.bigText.isNullOrBlank()) {
+                                Text(
+                                    "BigText: ${c.bigText}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
+                            if (!c.subText.isNullOrBlank()) {
+                                Text(
+                                    "SubText: ${c.subText}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
+                            // Manual promote stays for pinning an exact capture;
+                            // com.kotak811 resolves automatically when installed.
+                            Button(
+                                onClick = { viewModel.setKotakPackage(c.packageName) },
+                                enabled = c.packageName.contains("kotak", ignoreCase = true),
+                            ) {
+                                Text("Set as Kotak")
+                            }
                         }
                     }
                 }
-                OutlinedButton(onClick = { viewModel.clearCaptures() }) { Text("Clear captures") }
             }
         }
 
-        item {
+        item(key = "logs") {
             SectionCard(title = "System log (last 200)") {
                 if (logs.isEmpty()) {
                     Text("No events yet.", style = MaterialTheme.typography.bodySmall)
@@ -135,6 +197,6 @@ fun DiagnosticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
             }
         }
 
-        item { Spacer(Modifier.height(24.dp)) }
+        item(key = "footer") { Spacer(Modifier.height(24.dp)) }
     }
 }

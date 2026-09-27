@@ -25,7 +25,16 @@ class PaymentParserRegistry(parsers: List<PaymentParser>) {
     private val byPackage: Map<String, PaymentParser> =
         parsers.associateBy { it.source.packageId }
 
-    fun parserForPackage(packageId: String): PaymentParser? = byPackage[packageId]
+    private val bySource: Map<PaymentSource, PaymentParser> =
+        parsers.associateBy { it.source }
+
+    fun parserForPackage(packageId: String): PaymentParser? {
+        byPackage[packageId]?.let { return it }
+        // Kotak's runtime package (verified capture or installed candidate)
+        // differs from the compile-time enum constant — resolve by source.
+        val source = PaymentSource.fromPackage(packageId) ?: return null
+        return bySource[source]
+    }
 
     companion object {
         fun withDefaults(): PaymentParserRegistry =

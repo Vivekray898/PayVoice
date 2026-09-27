@@ -6,7 +6,6 @@ import android.content.Intent
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.vivekray898.payvoice.AppContainer
-import com.vivekray898.payvoice.PaymentPipeline
 import com.vivekray898.payvoice.core.announce.AnnouncementLanguage
 import com.vivekray898.payvoice.core.announce.AnnouncementStyle
 import com.vivekray898.payvoice.core.database.AnnouncementEntity
@@ -15,6 +14,8 @@ import com.vivekray898.payvoice.core.database.DiagnosticEntity
 import com.vivekray898.payvoice.core.model.PaymentPackages
 import com.vivekray898.payvoice.core.model.PaymentSource
 import com.vivekray898.payvoice.core.settings.ParentSettings
+import com.vivekray898.payvoice.service.messaging.MessagingRepository
+import com.vivekray898.payvoice.service.setup.SetupNotifications
 import com.vivekray898.payvoice.service.status.DeviceStatusMonitor
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -26,8 +27,8 @@ private fun Application.container(): AppContainer =
     (this as com.vivekray898.payvoice.PayVoiceApp).container
 
 /**
- * Single shared Phase-1 ViewModel: the parent app is deliberately small, so
- * one state holder per screen concern beats premature splitting.
+ * Shared Phase-1 ViewModel. All status inspection is async and cached —
+ * never executed during composition (fixes the 91-skipped-frames jank).
  */
 class MainViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -40,8 +41,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         container.database.announcementDao().recent(20)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    private val _status = MutableStateFlow(monitor.snapshot())
-    val status: StateFlow<DeviceStatusMonitor.Snapshot> = _status
+    private val _status = MutableStateFlow<DeviceStatusMonitor.Snapshot?>(null)
+    val status: StateFlow<DeviceStatusMonitor.Snapshot?> = _status
 
     val captured: StateFlow<List<CapturedNotificationEntity>> =
         container.database.capturedNotificationDao().recent(50)
@@ -51,16 +52,72 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         container.database.diagnosticDao().recent(200)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    val fcm: StateFlow<MessagingRepository.FcmStatus> = container.messaging.status
+
+    /** True when running a debug build (gates SMS test tool UI). */
+    val isDebugBuild: Boolean
+        get() = (getApplication<Application>().applicationInfo.flags and
+            android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+
+    /** TTS engine status for the setup wizard's Text-to-Speech card. */
+    val ttsStatus: StateFlow<com.vivekray898.payvoice.service.tts.AnnouncementSpeaker.Status> =
+        container.speaker.status
+
     private val _testSpeaking = MutableStateFlow(false)
     val testSpeaking: StateFlow<Boolean> = _testSpeaking
 
+    init {
+        refreshStatus()
+        // FCM registration in the background — never on the UI path.
+        viewModelScope.launch { container.messaging.refreshToken() }
+    }
+
+    /** Called from onResume via lifecycle observer; off-main, cheap to repeat. */
     fun refreshStatus() {
-        _status.value = monitor.snapshot()
+        viewModelScope.launch { _status.value = monitor.snapshot() }
     }
 
     fun completeOnboarding() {
         viewModelScope.launch { container.settings.update { it.copy(onboardingComplete = true) } }
     }
+
+    // ---- Setup actions (three separate permission mechanisms) ----
+
+    /** B: POST_NOTIFICATIONS runtime permission is requested from the UI; this
+     *  posts the legitimate setup notification once granted. */
+    fun postSetupNotification(context: Context): Boolean =
+        SetupNotifications.postSetupConfirmation(context)
+
+    /** C: tiered battery fix; never a dead button. */
+    fun fixBattery(context: Context): String = monitor.launchBatteryFix().also {
+        viewModelScope.launch {
+            container.diagnosticDaoSafe()?.insert(
+                com.vivekray898.payvoice.core.database.DiagnosticEntity(
+                    atMs = System.currentTimeMillis(),
+                    tag = "battery",
+                    message = "opened tier: $it",
+                )
+            )
+        }
+    }
+
+    fun openListenerSettings(context: Context) =
+        launch(context, monitor.notificationListenerSettingsIntent())
+
+    fun openAppNotificationSettings(context: Context) =
+        launch(context, monitor.appNotificationSettingsIntent())
+
+    /** SMS permission lives in app details on modern Android (dangerous permission). */
+    fun openAppDetailsSettings(context: Context) =
+        launch(context, monitor.appDetailsIntent())
+
+    fun launchIntent(context: Context, intent: Intent) = launch(context, intent)
+
+    private fun launch(context: Context, intent: Intent) {
+        runCatching { context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+    }
+
+    // ---- Source toggles ----
 
     fun setGpayEnabled(enabled: Boolean) {
         viewModelScope.launch { container.settings.update { it.copy(gpayEnabled = enabled) } }
@@ -111,16 +168,28 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun setSmsCaptureEnabled(enabled: Boolean) {
+        viewModelScope.launch { container.settings.update { it.copy(smsCaptureEnabled = enabled) } }
+    }
+
+    /** Phase 19 tool: push a sample SMS through the real pipeline (debug only). */
+    fun simulateSms(sender: String, body: String) {
+        container.pipeline.simulateSms(sender, body)
+    }
+
+    /** Phase 19 tool: run a canned SMS through parser classification only (no TTS). */
+    fun classifySmsSample(sender: String, body: String): com.vivekray898.payvoice.core.parser.sms.SmsTransactionClassifier.Result {
+        val bank = com.vivekray898.payvoice.core.parser.sms.SmsSenderHints.resolveBank(sender, body)
+        return com.vivekray898.payvoice.core.parser.sms.SmsTransactionClassifier.classify(sender, body, bank)
+    }
+
     fun clearCaptures() {
         viewModelScope.launch { container.database.capturedNotificationDao().clear() }
     }
 
-    /** Safe startActivity for system-settings deep links; no-ops if absent. */
-    fun launchIntent(context: Context, intent: Intent) {
-        runCatching { context.startActivity(intent) }
-    }
+    // ---- Test actions ----
 
-    /** Speak the current settings' test announcement (spec §27). */
+    /** Speak "PayVoice test announcement." — works without Firebase. */
     fun speakTest() {
         if (_testSpeaking.value) return
         _testSpeaking.value = true
@@ -133,7 +202,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Debug-only canned notification pushed through the real pipeline. */
+    /** Pushes a canned payment notification through the real pipeline. */
     fun simulate(source: PaymentSource) {
         val (title, text) = when (source) {
             PaymentSource.GOOGLE_PAY ->
@@ -144,7 +213,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         container.pipeline.simulate(source, title, text)
     }
 
-    fun listenerSettingsIntent() = monitor.notificationListenerSettingsIntent()
-    fun batteryIntent() = monitor.batteryOptimizationIntent()
-    fun appNotificationIntent() = monitor.appNotificationSettingsIntent()
+    /** FCM: refresh registration token (also used by the Reliability screen). */
+    fun refreshFcmToken() {
+        viewModelScope.launch { container.messaging.refreshToken() }
+    }
 }
+
+/** Null-safe access for diagnostics logging from the VM. */
+private fun AppContainer.diagnosticDaoSafe() =
+    runCatching { database.diagnosticDao() }.getOrNull()

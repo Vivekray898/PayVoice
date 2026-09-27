@@ -61,12 +61,15 @@ class GooglePayParser : PaymentParser {
     )
 
     /**
-     * Sender extraction for phrases like "received from Rahul Sharma." —
-     * captures up to the next sentence delimiter, bullet, digit or keyword.
+     * Sender extraction for phrases like "received from Rahul Sharma." and
+     * GPay's real format "BINAY PAL paid you ₹1.00" — captures up to the next
+     * sentence delimiter, bullet, digit or keyword.
      */
     private fun extractSender(text: String): String? {
-        val m = SENDER_REGEX.find(text) ?: return null
-        return m.groupValues[1]
+        val m = PAID_YOU_REGEX.find(text)?.let { it.groupValues[1] }
+            ?: SENDER_REGEX.find(text)?.groupValues?.get(1)
+            ?: return null
+        return m
             .trim()
             .trimEnd('.', ',', '-', '–', '!', '|', '•')
             .takeIf { it.length in 2..40 }
@@ -81,6 +84,11 @@ class GooglePayParser : PaymentParser {
 
         private val SENDER_REGEX = Regex(
             "(?i)(?:from|by)\\s+([A-Za-z][A-Za-z .'-]{1,39}?)(?=[.,!|•]|\\s(?:on|via|for|using|at|\\d)|$)"
+        )
+
+        // Real GPay credit format: "BINAY PAL paid you ₹1.00".
+        private val PAID_YOU_REGEX = Regex(
+            "(?i)^\\s*([A-Za-z][A-Za-z .'-]{1,39}?)\\s+(?:paid|sent)\\s+you\\b"
         )
 
         private val REFERENCE_REGEX = Regex(

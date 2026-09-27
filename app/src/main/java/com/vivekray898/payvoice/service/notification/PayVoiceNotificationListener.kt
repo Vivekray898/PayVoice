@@ -5,6 +5,7 @@ import android.os.Bundle
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import com.vivekray898.payvoice.PayVoiceApp
+import com.vivekray898.payvoice.core.model.PaymentPackages
 import com.vivekray898.payvoice.core.model.PaymentSource
 
 /**
@@ -35,18 +36,35 @@ class PayVoiceNotificationListener : NotificationListenerService() {
     private fun dispatchIfWhitelisted(sbn: StatusBarNotification) {
         val pkg = sbn.packageName ?: return
         val settings = container.settings.settings.value
-        val source = PaymentSource.fromPackage(pkg)
+        val source = PaymentSource.fromPackage(pkg) ?: run {
+            // Kotak candidate not yet pinned: accept the verified capture or the
+            // installed com.kotak811 candidate (verified against PackageManager).
+            val kotak = PaymentPackages.resolveKotakPackage { candidate ->
+                runCatching { packageManager.getPackageInfo(candidate, 0) }.isSuccess
+            }
+            if (kotak != null && pkg == kotak) PaymentSource.KOTAK else null
+        }
 
         val extras = sbn.notification.extras
         val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString()
-        val text = (extras.getCharSequence(Notification.EXTRA_BIG_TEXT)
-            ?: extras.getCharSequence(Notification.EXTRA_TEXT))?.toString()
+        val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString()
+        val bigText = extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString()
+        val subText = extras.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString()
         val summary = buildExtrasSummary(extras)
 
         if (source == null) {
-            // Opt-in local capture used to verify the Kotak package id. Off by default.
+            // Opt-in local capture used to verify unknown packages. Off by default.
             if (settings.captureUnknownPackages) {
-                container.pipeline.captureOnly(pkg, title, text, summary, sbn.postTime)
+                container.pipeline.captureOnly(
+                    packageName = pkg,
+                    title = title,
+                    text = text,
+                    bigText = bigText,
+                    subText = subText,
+                    notificationId = sbn.id,
+                    postedAtMs = sbn.postTime,
+                    extrasSummary = summary,
+                )
             }
             return
         }
@@ -61,8 +79,11 @@ class PayVoiceNotificationListener : NotificationListenerService() {
             packageName = pkg,
             title = title,
             text = text,
-            extrasSummary = summary,
+            bigText = bigText,
+            subText = subText,
+            notificationId = sbn.id,
             postedAtMs = sbn.postTime,
+            extrasSummary = summary,
         )
     }
 

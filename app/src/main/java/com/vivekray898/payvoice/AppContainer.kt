@@ -7,6 +7,7 @@ import com.vivekray898.payvoice.core.database.RetentionCleaner
 import com.vivekray898.payvoice.core.parser.PaymentParserRegistry
 import com.vivekray898.payvoice.core.settings.SettingsRepository
 import com.vivekray898.payvoice.core.settings.SettingsRepositoryImpl
+import com.vivekray898.payvoice.service.messaging.MessagingRepository
 import com.vivekray898.payvoice.service.tts.AnnouncementSpeaker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -30,6 +31,8 @@ class AppContainer(private val appContext: Context) {
     val parserRegistry: PaymentParserRegistry by lazy { PaymentParserRegistry.withDefaults() }
 
     val speaker: AnnouncementSpeaker by lazy { AnnouncementSpeaker(appContext, settings) }
+
+    val messaging: MessagingRepository by lazy { MessagingRepository(appContext) }
 
     val pipeline: PaymentPipeline by lazy {
         PaymentPipeline(

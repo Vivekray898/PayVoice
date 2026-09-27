@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.vivekray898.payvoice.core.model.PaymentSource
 import com.vivekray898.payvoice.core.parser.AmountExtractor
 import com.vivekray898.payvoice.ui.MainViewModel
 import com.vivekray898.payvoice.ui.components.SectionCard
@@ -30,15 +31,15 @@ import com.vivekray898.payvoice.ui.components.timeAgo
 import java.util.Calendar
 
 /**
- * Parent home (spec §22 Phase-1 subset): reliability status, recent payments,
- * test announcement, debug simulator, entry points to settings & diagnostics.
- * Device cards / pairing arrive with Phase 2-3.
+ * Parent home (spec §22 Phase-1 subset). Device cards / pairing arrive with
+ * Phase 2-3.
  */
 @Composable
 fun ParentHomeScreen(
     viewModel: MainViewModel,
     onOpenSettings: () -> Unit,
     onOpenDiagnostics: () -> Unit,
+    onOpenReliability: () -> Unit,
 ) {
     val status by viewModel.status.collectAsStateWithLifecycle()
     val history by viewModel.history.collectAsStateWithLifecycle()
@@ -49,9 +50,9 @@ fun ParentHomeScreen(
             .padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        item { Spacer(Modifier.height(8.dp)) }
+        item(key = "header") { Spacer(Modifier.height(8.dp)) }
 
-        item {
+        item(key = "title") {
             Column {
                 Text("PayVoice", style = MaterialTheme.typography.headlineMedium)
                 Text(
@@ -62,27 +63,27 @@ fun ParentHomeScreen(
             }
         }
 
-        item {
+        item(key = "status") {
             SectionCard(title = "Detection status") {
-                StatusLine(status.listenerEnabled, "Notification listener")
-                StatusLine(status.notificationsEnabled, "App notifications")
-                StatusLine(status.batteryExempt, "Unrestricted battery")
-                if (status.isXiaomi) {
+                StatusLine(status?.listenerEnabled == true, "Notification listener")
+                StatusLine(status?.notificationsEnabled == true, "App notifications")
+                StatusLine(status?.batteryExempt == true, "Unrestricted battery")
+                status?.romHint?.takeIf { it.isNotBlank() }?.let {
                     Text(
-                        "Xiaomi device: also enable Autostart in security settings " +
-                            "(full HyperOS guidance arrives in Phase 4).",
+                        "ROM: $it",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = onOpenSettings) { Text("Settings") }
+                    TextButton(onClick = onOpenReliability) { Text("Reliability") }
                     TextButton(onClick = onOpenDiagnostics) { Text("Diagnostics") }
                 }
             }
         }
 
-        item {
+        item(key = "history-title") {
             SectionCard(title = "Recent payments") {
                 if (history.isEmpty()) {
                     Text(
@@ -94,29 +95,24 @@ fun ParentHomeScreen(
                 } else {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         history.take(5).forEach { entry ->
-                            Row(
-                                Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(
-                                        AmountExtractor.formatMinor(entry.amountMinor, entry.currency),
-                                        style = MaterialTheme.typography.titleLarge,
-                                        fontWeight = FontWeight.SemiBold,
-                                    )
-                                    Text(
-                                        buildString {
-                                            append("Received")
-                                            append(entry.senderName?.let { " from $it" } ?: "")
-                                        },
-                                        style = MaterialTheme.typography.bodyMedium,
-                                    )
-                                    Text(
-                                        "${entry.sourceName} · ${timeAgo(entry.announcedAtMs)}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
+                            Column(Modifier.fillMaxWidth()) {
+                                Text(
+                                    AmountExtractor.formatMinor(entry.amountMinor, entry.currency),
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                Text(
+                                    buildString {
+                                        append("Received")
+                                        append(entry.senderName?.let { " from $it" } ?: "")
+                                    },
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                                Text(
+                                    "${entry.sourceName} · ${timeAgo(entry.announcedAtMs)}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
                             }
                         }
                     }
@@ -124,7 +120,7 @@ fun ParentHomeScreen(
             }
         }
 
-        item {
+        item(key = "test") {
             SectionCard(title = "Test") {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = { viewModel.speakTest() }) { Text("🔊 Test announcement") }
@@ -136,17 +132,17 @@ fun ParentHomeScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { viewModel.simulate(com.vivekray898.payvoice.core.model.PaymentSource.GOOGLE_PAY) }) {
+                    OutlinedButton(onClick = { viewModel.simulate(PaymentSource.GOOGLE_PAY) }) {
                         Text("Simulate GPay ₹500")
                     }
-                    OutlinedButton(onClick = { viewModel.simulate(com.vivekray898.payvoice.core.model.PaymentSource.KOTAK) }) {
+                    OutlinedButton(onClick = { viewModel.simulate(PaymentSource.KOTAK) }) {
                         Text("Simulate Kotak ₹1,200")
                     }
                 }
             }
         }
 
-        item { Spacer(Modifier.height(24.dp)) }
+        item(key = "footer") { Spacer(Modifier.height(24.dp)) }
     }
 }
 

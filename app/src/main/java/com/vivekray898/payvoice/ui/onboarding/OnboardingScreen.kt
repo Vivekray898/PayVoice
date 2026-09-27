@@ -8,38 +8,48 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.vivekray898.payvoice.R
+import com.vivekray898.payvoice.core.model.PaymentSource
+import com.vivekray898.payvoice.service.setup.SetupNotifications
+import com.vivekray898.payvoice.service.tts.AnnouncementSpeaker
 import com.vivekray898.payvoice.ui.MainViewModel
 import com.vivekray898.payvoice.ui.components.SectionCard
 import com.vivekray898.payvoice.ui.components.StatusLine
 
 /**
- * Parent installation wizard (spec §35). Progress-gated, honest copy, no
- * fake completions: each step reflects real system state.
+ * Parent setup wizard (spec: CURRENT APP FLOW). Four separate cards for four
+ * separate mechanisms — Notification Listener access, POST_NOTIFICATIONS,
+ * battery optimization, TTS — plus an X/4 progress summary. Statuses refresh
+ * automatically when returning from system settings (Activity.onResume).
  */
 @Composable
 fun OnboardingScreen(viewModel: MainViewModel) {
     val context = LocalContext.current
     val status by viewModel.status.collectAsStateWithLifecycle()
-    val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val tts by viewModel.ttsStatus.collectAsStateWithLifecycle()
 
-    val allGranted = status.listenerEnabled && status.notificationsEnabled && status.batteryExempt
+    val listenerOk = status?.listenerEnabled == true
+    val notifOk = status?.notificationsEnabled == true
+    val batteryOk = status?.batteryExempt == true
+    val ttsOk = tts == AnnouncementSpeaker.Status.READY || tts == AnnouncementSpeaker.Status.SPEAKING
+    val done = listOf(listenerOk, notifOk, batteryOk, ttsOk).count { it }
 
     Column(
         Modifier
@@ -49,74 +59,119 @@ fun OnboardingScreen(viewModel: MainViewModel) {
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Spacer(Modifier.height(8.dp))
-        Text("Welcome to PayVoice", style = MaterialTheme.typography.headlineMedium)
+        Text("PayVoice", style = MaterialTheme.typography.headlineLarge)
         Text(
-            "This phone will listen for payment notifications and announce them.",
+            "Payment Announcer",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        Text(
+            "Let's make your phone ready.",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
-        SectionCard(title = "Step 1 · Notification access") {
+        // ---- Card 1: Notification Listener access (READ GPay/Kotak) ----
+        SectionCard(title = "1. Payment notification access") {
             Text(
-                "Android requires explicit permission to read payment app " +
-                    "notifications. PayVoice reads only Google Pay and Kotak, " +
-                    "and keeps everything on this phone.",
+                "Lets PayVoice read payment notifications from Google Pay and " +
+                    "Kotak. This is separate from normal notification permission.",
                 style = MaterialTheme.typography.bodyMedium,
             )
-            StatusLine(status.listenerEnabled, "Listener access granted")
-            Button(onClick = { viewModel.launchIntent(context, viewModel.listenerSettingsIntent()) }) {
-                Text(if (status.listenerEnabled) "Open settings again" else "Open Settings")
+            StatusLine(listenerOk, if (listenerOk) "Notification access enabled" else "Not configured")
+            Button(onClick = { viewModel.openListenerSettings(context) }) {
+                Text(if (listenerOk) "Open settings again" else "Enable")
             }
         }
 
-        SectionCard(title = "Step 2 · App notifications") {
-            StatusLine(status.notificationsEnabled, "PayVoice can post notifications")
-            OutlinedButton(
-                onClick = { viewModel.launchIntent(context, viewModel.appNotificationIntent()) }
-            ) { Text("Check") }
-        }
+        // ---- Card 2: PayVoice's own notifications (POST_NOTIFICATIONS) ----
+        // Channels are created BEFORE the permission request (spec requirement).
+        val notifPermissionLauncher = rememberLauncherForActivityResult(
+            ActivityResultContracts.RequestPermission()
+        ) { _ -> viewModel.refreshStatus() }
 
-        SectionCard(title = "Step 3 · Unrestricted battery") {
+        SectionCard(title = "2. PayVoice notifications") {
             Text(
-                "So announcements are never delayed, allow PayVoice to run " +
-                    "without battery optimization.",
+                "Allows PayVoice to show device status and service notifications. " +
+                    "This does not control reading payment apps.",
                 style = MaterialTheme.typography.bodyMedium,
             )
-            StatusLine(status.batteryExempt, "Battery optimization disabled")
-            OutlinedButton(
-                onClick = { viewModel.launchIntent(context, viewModel.batteryIntent()) }
-            ) { Text("Allow") }
-        }
-
-        SectionCard(title = "Step 4 · Payment sources") {
-            Text(
-                "Google Pay is detected automatically. Kotak is verified later " +
-                    "with a real notification (Diagnostics → Capture).",
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            Text(
-                if (settings.gpayEnabled) "Google Pay · enabled" else "Google Pay · off",
-                style = MaterialTheme.typography.bodyMedium,
-            )
-        }
-
-        SectionCard(title = "Step 5 · Test announcement") {
-            Text(
-                "Play a sample announcement to confirm sound works on this phone.",
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            OutlinedButton(onClick = { viewModel.speakTest() }) {
-                Text("🔊 Play test announcement")
+            StatusLine(notifOk, if (notifOk) "Notifications enabled" else "Not configured")
+            Button(onClick = {
+                SetupNotifications.ensureChannels(context)
+                if (Build.VERSION.SDK_INT >= 33 &&
+                    ContextCompat.checkSelfPermission(
+                        context, Manifest.permission.POST_NOTIFICATIONS
+                    ) != PackageManager.PERMISSION_GRANTED
+                ) {
+                    notifPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                } else {
+                    viewModel.openAppNotificationSettings(context)
+                }
+            }) { Text(if (notifOk) "Open settings again" else "Enable") }
+            if (notifOk) {
+                OutlinedButton(onClick = { viewModel.postSetupNotification(context) }) {
+                    Text("Send setup notification")
+                }
             }
         }
 
-        val ready = allGranted
-        Button(
+        // ---- Card 3: Battery optimization (background reliability) ----
+        SectionCard(title = "3. Background reliability") {
+            Text(
+                "Allows PayVoice to continue working reliably when the screen " +
+                    "is off. Opens Android battery settings with safe fallbacks.",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            StatusLine(batteryOk, if (batteryOk) "Unrestricted" else "Restricted")
+            Button(onClick = { viewModel.fixBattery(context) }) {
+                Text(if (batteryOk) "Open battery settings" else "Fix")
+            }
+            if (status?.isXiaomiFamily == true) {
+                Text(
+                    "Xiaomi device: after the battery step, also allow Autostart " +
+                        "and Background activity in Security app settings.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
+        // ---- Card 4: Text-to-Speech ----
+        SectionCard(title = "4. Text to speech") {
+            val label = when (tts) {
+                AnnouncementSpeaker.Status.READY, AnnouncementSpeaker.Status.SPEAKING -> "Google TTS"
+                AnnouncementSpeaker.Status.INITIALIZING -> "Initializing…"
+                AnnouncementSpeaker.Status.ERROR, AnnouncementSpeaker.Status.UNAVAILABLE -> "Not available"
+            }
+            Text("Engine: $label")
+            StatusLine(ttsOk, if (ttsOk) "Ready" else "Waiting")
+            OutlinedButton(onClick = { viewModel.speakTest() }) { Text("Test") }
+        }
+
+        SectionCard(title = "Setup status") {
+            Text(
+                "$done / 4 complete",
+                style = MaterialTheme.typography.titleLarge,
+            )
+            if (done == 4) {
+                Text(
+                    "Everything is ready.",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Button(onClick = { viewModel.simulate(PaymentSource.GOOGLE_PAY) }) {
+                    Text("Test Payment Detection")
+                }
+            }
+        }
+
+        OutlinedButton(
             onClick = { viewModel.completeOnboarding() },
-            enabled = ready,
+            enabled = done >= 3,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text(if (ready) "Finish setup" else "Grant the steps above to continue")
+            Text(if (done == 4) "Finish setup" else "Continue anyway (can finish later)")
         }
         Spacer(Modifier.height(24.dp))
     }

@@ -2,10 +2,31 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- FCM token fetch + future backend event upload. -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <!-- Held only for the short window around a local announcement (45s cap). -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Lets the reliability screen offer a direct battery-optimization exemption dialog. -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- PayVoice's OWN status/service notifications only (API 33+). NOT related
+         to reading GPay/Kotak notifications — that is Notification Listener access. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- SMS backup capture path: react to newly arrived bank SMS only.
+         READ_SMS is intentionally NOT requested — PayVoice never reads the
+         inbox; it only receives broadcast delivery of new messages and
+         processes them locally (minimum permission necessary). -->
+    <uses-permission android:name="android.permission.RECEIVE_SMS" />
+    <!-- Restore the daily retention job after reboot (smallest supported
+         mechanism). NotificationListenerService re-binds via the OS; the boot
+         receiver only re-primes pipeline state. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- Package visibility (API 30+): detect installed payment apps for the
+         diagnostics/reliability screens without broad QUERY_ALL_PACKAGES. -->
+    <queries>
+        <package android:name="com.google.android.apps.nbu.paisa.user" />
+        <package android:name="com.kotak811" />
+    </queries>
 
     <application
         android:name=".PayVoiceApp"
@@ -38,6 +59,39 @@
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
+
+        <!-- SMS backup capture: fires only while RECEIVE_SMS is granted.
+             The receiver does no long-running work (goAsync + pipeline scope). -->
+        <receiver
+            android:name=".service.sms.PayVoiceSmsReceiver"
+            android:exported="false"
+            android:label="PayVoice bank SMS receiver">
+            <intent-filter android:priority="0">
+                <action android:name="android.provider.Telephony.SMS_RECEIVED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Boot: re-prime pipeline state + re-schedule retention. The
+             notification listener re-binds via the OS without this. -->
+        <receiver
+            android:name=".service.sms.PayVoiceBootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Startup perf: WorkManager is initialized on demand via
+             Configuration.Provider; drop the eager main-thread initializer. -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+        </provider>
     </application>
 
 </manifest>

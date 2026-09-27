@@ -20,6 +20,7 @@ import com.vivekray898.payvoice.ui.MainViewModel
 import com.vivekray898.payvoice.ui.diagnostics.DiagnosticsScreen
 import com.vivekray898.payvoice.ui.onboarding.OnboardingScreen
 import com.vivekray898.payvoice.ui.parenthome.ParentHomeScreen
+import com.vivekray898.payvoice.ui.reliability.ReliabilityScreen
 import com.vivekray898.payvoice.ui.settings.SettingsScreen
 import com.vivekray898.payvoice.ui.theme.PayVoiceTheme
 
@@ -38,6 +39,15 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    /**
+     * Spec: permission statuses must refresh when the user returns from
+     * system settings. Cheap + off-main (DeviceStatusMonitor.snapshot).
+     */
+    override fun onResume() {
+        super.onResume()
+        viewModel.refreshStatus()
+    }
 }
 
 private object Routes {
@@ -45,6 +55,7 @@ private object Routes {
     const val HOME = "home"
     const val SETTINGS = "settings"
     const val DIAGNOSTICS = "diagnostics"
+    const val RELIABILITY = "reliability"
 }
 
 @Composable
@@ -52,7 +63,12 @@ private fun PayVoiceNavHost(viewModel: MainViewModel) {
     val nav = rememberNavController()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
 
-    NavHost(nav, startDestination = Routes.HOME) {
+    // Start at ONBOARDING until DataStore confirms setup is complete. Composing
+    // only ONE screen eliminates the HOME→ONBOARDING double composition that
+    // caused the first-frame frame skips (jank fix, spec: PERFORMANCE ISSUE).
+    val startRoute = if (settings.onboardingComplete) Routes.HOME else Routes.ONBOARDING
+
+    NavHost(nav, startDestination = startRoute) {
         composable(Routes.ONBOARDING) {
             // Single completion path: the VM flips the flag, the effect navigates.
             LaunchedEffect(settings.onboardingComplete) {
@@ -63,16 +79,11 @@ private fun PayVoiceNavHost(viewModel: MainViewModel) {
             OnboardingScreen(viewModel)
         }
         composable(Routes.HOME) {
-            // Converge late-loaded onboarding state (DataStore arrives async).
-            LaunchedEffect(settings.onboardingComplete) {
-                if (!settings.onboardingComplete) {
-                    nav.navigate(Routes.ONBOARDING) { popUpTo(0) { inclusive = true } }
-                }
-            }
             ParentHomeScreen(
                 viewModel = viewModel,
                 onOpenSettings = { nav.navigate(Routes.SETTINGS) },
                 onOpenDiagnostics = { nav.navigate(Routes.DIAGNOSTICS) },
+                onOpenReliability = { nav.navigate(Routes.RELIABILITY) },
             )
         }
         composable(Routes.SETTINGS) {
@@ -80,6 +91,9 @@ private fun PayVoiceNavHost(viewModel: MainViewModel) {
         }
         composable(Routes.DIAGNOSTICS) {
             DiagnosticsScreen(viewModel, onBack = { nav.popBackStack() })
+        }
+        composable(Routes.RELIABILITY) {
+            ReliabilityScreen(viewModel, onBack = { nav.popBackStack() })
         }
     }
 }

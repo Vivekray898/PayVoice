@@ -15,6 +15,8 @@ data class ParentSettings(
     val kotakPackageId: String = "",
     /** Diagnostic capture of unknown-package notifications (local only, opt-in). */
     val captureUnknownPackages: Boolean = false,
+    /** SMS backup capture of bank payment SMS (processed locally only). */
+    val smsCaptureEnabled: Boolean = true,
     val announceHighConfidenceOnly: Boolean = true,
     val style: AnnouncementStyle = AnnouncementStyle.AMOUNT_SENDER,
     val language: AnnouncementLanguage = AnnouncementLanguage.ENGLISH,

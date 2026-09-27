@@ -82,6 +82,6 @@ object AnnouncementComposer {
         s.replaceFirstChar { if (it.isLowerCase()) it.uppercase() else it.toString() }
 
     /** Fixed text spoken for owner-triggered test announcements (spec §27). */
-    const val TEST_ANNOUNCEMENT_EN = "This is a test announcement."
-    const val TEST_ANNOUNCEMENT_HI = "यह एक टेस्ट घोषणा है।"
+    const val TEST_ANNOUNCEMENT_EN = "PayVoice test announcement."
+    const val TEST_ANNOUNCEMENT_HI = "PayVoice टेस्ट घोषणा।"
 }

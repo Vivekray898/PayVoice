@@ -36,11 +36,16 @@ data class AnnouncementEntity(
     val announcementText: String,
     val detectedAtMs: Long,
     val announcedAtMs: Long,
+    /** Which channel captured it (GPAY_NOTIFICATION / KOTAK_NOTIFICATION / SMS_*). */
+    val captureSource: String = "UNKNOWN",
+    /** Human-readable parser id for diagnostics. */
+    val parserName: String = "unknown",
 )
 
 /**
  * Local-only diagnostic capture of raw notification contents (spec §4).
- * Never uploaded; capped at [CAP_MAX] rows.
+ * Never uploaded; capped at 50 rows. Captures the standard extras needed to
+ * refine parsers on-device (bigText/subText often carry the payment line).
  */
 @Entity(tableName = "captured_notifications")
 data class CapturedNotificationEntity(
@@ -48,7 +53,11 @@ data class CapturedNotificationEntity(
     val packageName: String,
     val title: String?,
     val text: String?,
-    val extrasSummary: String?,
+    val bigText: String? = null,
+    val subText: String? = null,
+    val notificationId: Int = 0,
+    val postedTimeMs: Long = 0,
+    val extrasSummary: String? = null,
     val capturedAtMs: Long,
 ) {
     companion object {

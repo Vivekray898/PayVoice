@@ -63,7 +63,12 @@ object DirectionClassifier {
      *  - confidence scales with absolute score and absence of competing family
      */
     fun classify(text: String): Pair<Direction, Confidence> {
+        // GPay inbound wording: "Rahul paid you ₹500" / "Rahul sent you ₹500"
+        // mean RECEIVED even though they contain paid/sent. Neutralize these
+        // two-person constructs BEFORE the keyword families run.
         val t = normalize(text)
+            .replace("paid you", "received")
+            .replace("sent you", "received")
         if (t.isBlank()) return Direction.UNKNOWN to Confidence.LOW
 
         val negScore = NEGATIVE.sumOf { if (t.contains(it.phrase)) it.weight else 0 }

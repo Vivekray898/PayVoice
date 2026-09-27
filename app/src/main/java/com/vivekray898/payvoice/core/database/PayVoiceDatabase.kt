@@ -12,7 +12,7 @@ import androidx.room.RoomDatabase
         CapturedNotificationEntity::class,
         DiagnosticEntity::class,
     ],
-    version = 1,
+    version = 3,
     exportSchema = true,
 )
 abstract class PayVoiceDatabase : RoomDatabase() {

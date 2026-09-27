@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.google.services)
 }
 
 android {
@@ -27,6 +28,9 @@ android {
             optimization {
                 enable = false
             }
+            // Phase-1 perf verification only: lets us install a locally AOT-compiled
+            // release build with the debug key to measure real startup cost.
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
     compileOptions {
@@ -63,6 +67,12 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.work.runtime.ktx)
+
+    // Firebase: BoM + Cloud Messaging only. No other Firebase SDKs (spec).
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.messaging)
+
+    implementation("androidx.security:security-crypto:1.1.0")
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

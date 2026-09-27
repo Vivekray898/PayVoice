@@ -11,9 +11,10 @@ object AmountExtractor {
     private const val RUPEE_FALLBACK = '\u20A8' // ₨, seen on some engines
 
     // Prefixes: ₹ / Rs / Rs. / INR, optional space, then a number with optional
-    // Indian-style comma grouping and optional decimal part.
+    // Indian-style comma grouping and optional decimal part. INR/Rs accept a
+    // digit directly after (INR500) via optional whitespace.
     private val AMOUNT_REGEX = Regex(
-        "(?i)(?:[$RUPEE$RUPEE_FALLBACK]|\\brs\\.?|\\binr\\b)\\s*([0-9](?:[0-9,]*[0-9])?(?:\\.[0-9]{1,2})?)"
+        "(?i)(?:[$RUPEE$RUPEE_FALLBACK]|\\brs\\.?|\\binr)\\s*([0-9](?:[0-9,]*[0-9])?(?:\\.[0-9]{1,2})?)"
     )
 
     /** Parsed result in minor units (paise) for INR. */

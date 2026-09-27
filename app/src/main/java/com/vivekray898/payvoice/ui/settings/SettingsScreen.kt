@@ -62,11 +62,10 @@ fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                 label = "Kotak",
                 checked = settings.kotakEnabled,
                 onCheckedChange = viewModel::setKotakEnabled,
-                enabled = settings.kotakPackageId.isNotBlank(),
-                supporting = if (settings.kotakPackageId.isBlank()) {
-                    "Verify the package first: Diagnostics → Capture"
-                } else {
+                supporting = if (settings.kotakPackageId.isNotBlank()) {
                     settings.kotakPackageId
+                } else {
+                    "com.kotak811 (auto-detected when installed)"
                 },
             )
         }
