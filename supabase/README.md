@@ -57,7 +57,7 @@ Supabase and are not used anywhere in this project.
 7. **Deploy:**
 
    ```bash
-   supabase functions deploy fcm-gateway --project-ref <project-ref>
+   npx supabase functions deploy fcm-gateway --project-ref <project-ref>
    ```
 
 ## How delivery works
