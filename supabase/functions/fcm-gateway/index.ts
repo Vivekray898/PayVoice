@@ -199,9 +199,12 @@ export default {
     // announcement-required sender name, no raw SMS/notification content.
     // Keys MUST match the Android RemotePaymentEvent canonical key set
     // (RemoteEventValidator rejects e.g. `timestamp` vs `timestampMs`).
+    // ownerUid rides along so the EMPLOYEE can authorize the event against
+    // its own paired owner before announcing (spec §5, RemoteAuthorization).
     const data: Record<string, string> = {
       type: event.type,
       eventId: event.eventId,
+      ownerUid: event.ownerUid,
     };
     if (event.type === "PAYMENT_RECEIVED") {
       data.amountMinor = String(event.amountMinor);
@@ -220,6 +223,16 @@ export default {
       console.error("fcm oauth failure");
       return Response.json({ error: "fcm auth failure" }, { status: 502 });
     }
+
+    // Structured fan-out diagnostics (spec §8). Tokens are NEVER logged —
+    // only counts and the (already non-secret) event id.
+    const logStage = (stage: string, extra: Record<string, unknown> = {}) =>
+      console.log(
+        `RemoteDelivery event=${event.eventId.slice(0, 12)} stage=${stage}` +
+          Object.entries(extra).map(([k, v]) => ` ${k}=${v}`).join(""),
+      );
+
+    logStage("fanout_started", { employees: employeeIds.length, tokens: deviceList.length });
 
     const deliveredTo: Record<string, boolean> = {};
     let delivered = 0;
@@ -241,8 +254,10 @@ export default {
           }),
         });
         if (res.ok) {
+          const body = await res.json().catch(() => null) as { name?: string } | null;
           delivered += 1;
           deliveredTo[device.user_id] = true;
+          logStage("fcm_accepted", { status: res.status, messageId: body?.name?.slice(0, 24) });
           return;
         }
         const errText = await res.text();
@@ -252,11 +267,12 @@ export default {
           await ctx.supabaseAdmin.from("devices")
             .update({ is_active: false })
             .eq("id", device.id);
+          logStage("fcm_send_failed", { status: res.status, reason: "unregistered-token-deactivated" });
         } else {
-          console.error(`fcm send failed status=${res.status}`);
+          logStage("fcm_send_failed", { status: res.status });
         }
       } catch (_e) {
-        console.error("fcm send error");
+        logStage("fcm_send_failed", { reason: "network-error" });
       }
     }));
 
@@ -279,7 +295,7 @@ export default {
           .eq("id", d.user_id)));
     }
 
-    console.log(`event ${event.eventId.slice(0, 12)} fanout=${deviceList.length} delivered=${delivered}`);
+    logStage("fanout_finished", { delivered });
     return Response.json({ fanout: deviceList.length, delivered });
   }),
 };

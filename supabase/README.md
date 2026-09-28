@@ -28,12 +28,17 @@ Supabase and are not used anywhere in this project.
    identity).
 3. **SQL Editor** — run `supabase/migrations/0001_init.sql`, then
    `supabase/migrations/0002_devices_and_realtime.sql`, then
-   `supabase/migrations/0003_pairing_fixes.sql`.
+   `supabase/migrations/0003_pairing_fixes.sql`, then
+   `supabase/migrations/0004_revoke_rpc.sql`.
    (0002 also retires the old `app.settings.service_jwt` trigger — no
    credential is stored in Postgres settings anywhere in this schema.
    0003 adds the missing owner SELECT policy on `employees`, keeps
    `owner_uid` client-immutable, and returns granular `claim_pairing`
-   errors.)
+   errors. 0004 adds the atomic security-definer `revoke_employee(p_employee_id)`
+   RPC — ownership verified server-side, `status=REVOKED` + `revoked_at`/
+   `revoked_by` stamped from the server clock/identity, token column cleared;
+   the Android client falls back to the counted RLS-filtered UPDATE until it
+   is applied.)
 4. **Database → Webhooks → Create**:
    - Table `payment_events`, event `INSERT`
    - URL `https://<project>.supabase.co/functions/v1/fcm-gateway`

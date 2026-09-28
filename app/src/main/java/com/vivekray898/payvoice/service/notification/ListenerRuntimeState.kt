@@ -34,6 +34,8 @@ data class ListenerRuntime(
     val lastPostedAtMs: Long = 0,
     val lastPostedPackage: String? = null,
     val rebindRequestedAtMs: Long = 0,
+    /** Instance identity of the service instance that owns the live binding. */
+    val connectedInstanceId: String? = null,
 ) {
     /** System says enabled but no live binding — the Clear Data regression. */
     val mismatch: Boolean get() = systemGrant && !connected
@@ -48,8 +50,26 @@ class ListenerRuntimeState(
 
     // ---- Service lifecycle hooks (called from the service callbacks) ----
 
-    fun onConnected() = _state.update {
-        it.copy(connected = true, lastConnectedAtMs = System.currentTimeMillis())
+    /**
+     * Records a live binding for [instanceId]. Returns the identity of a
+     * DIFFERENT instance that previously owned the binding (a system rebind
+     * superseding it) or null when this is the same/first connection. The
+     * service logs it so "duplicate onListenerConnected" logs tell us WHICH
+     * duplicate happened without guesswork.
+     */
+    fun onConnected(instanceId: String): String? {
+        var superseded: String? = null
+        _state.update {
+            if (it.connectedInstanceId != null && it.connectedInstanceId != instanceId) {
+                superseded = it.connectedInstanceId
+            }
+            it.copy(
+                connected = true,
+                lastConnectedAtMs = System.currentTimeMillis(),
+                connectedInstanceId = instanceId,
+            )
+        }
+        return superseded
     }
 
     fun onDisconnected() = _state.update {

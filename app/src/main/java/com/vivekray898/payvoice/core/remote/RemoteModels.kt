@@ -77,10 +77,14 @@ data class RemotePaymentEvent(
     val senderName: String?,
     val source: String,
     val timestampMs: Long,
+    /** Owning business's uid — carried on FCM data for employee-side auth. */
+    val ownerUid: String? = null,
 ) {
     companion object {
         const val KEY_TYPE = "type"
         const val KEY_EVENT_ID = "eventId"
+        // FCM data key for the owning business (employee-side authorization,
+        // spec §5). The fcm-gateway stamps it from the payment_events row.
         // Canonical FCM data keys — MUST match the fcm-gateway payload
         // (amountMinor/timestampMs, per RemoteConfig.FCM_KEY_* and the spec
         // payload). The old "amount"/"timestamp" names made the employee
@@ -90,11 +94,13 @@ data class RemotePaymentEvent(
         const val KEY_SENDER = "senderName"
         const val KEY_SOURCE = "source"
         const val KEY_TIMESTAMP = "timestampMs"
+        const val KEY_OWNER = "ownerUid"
 
         /** Builds the canonical FCM/Firestore data map. Compact by design. */
         fun toDataMap(event: RemotePaymentEvent): Map<String, String> = buildMap {
             put(KEY_TYPE, event.type.name)
             put(KEY_EVENT_ID, event.eventId)
+            event.ownerUid?.takeIf { it.isNotBlank() }?.let { put(KEY_OWNER, it) }
             if (event.type == RemoteEventType.PAYMENT_RECEIVED) {
                 put(KEY_AMOUNT, event.amountMinor.toString())
                 put(KEY_CURRENCY, event.currency)
@@ -137,6 +143,7 @@ object RemoteEventValidator {
                 RemotePaymentEvent(
                     eventId = id, type = type, amountMinor = 0, currency = "INR",
                     senderName = null, source = "TEST", timestampMs = nowMs,
+                    ownerUid = data[RemotePaymentEvent.KEY_OWNER],
                 )
             }
         }
@@ -154,13 +161,55 @@ object RemoteEventValidator {
             senderName = null, source = data[RemotePaymentEvent.KEY_SOURCE]
                 ?.takeIf { s -> s.isNotEmpty() }?.take(24) ?: KnownPackages.GOOGLE_PAY,
             timestampMs = timestamp,
+            ownerUid = data[RemotePaymentEvent.KEY_OWNER],
         )
         return RemotePaymentEvent(
             eventId = id, type = type, amountMinor = amount, currency = currency,
             senderName = sender, source = data[RemotePaymentEvent.KEY_SOURCE]
                 ?.takeIf { s -> s.isNotEmpty() }?.take(24) ?: KnownPackages.GOOGLE_PAY,
             timestampMs = timestamp,
+            ownerUid = data[RemotePaymentEvent.KEY_OWNER],
         )
+    }
+}
+
+/**
+ * Employee-side remote-event authorization (spec §5) — pure and unit-tested.
+ *
+ * BEFORE any remote announcement the incoming event's owner must match the
+ * employee's paired owner AND the pairing must still be ACTIVE. The backend
+ * (ACTIVE-only fan-out in fcm-gateway) remains the primary enforcement;
+ * this client-side check is the second safety layer for messages that slip
+ * through (stale token, revoked-after-send race).
+ */
+object RemoteAuthorization {
+
+    sealed class Verdict {
+        /** Pairing intact, owner matches: announce. */
+        object Allow : Verdict()
+
+        /** Refuse to announce. Reason is a stable token for diagnostics. */
+        data class Deny(val reason: String) : Verdict()
+    }
+
+    const val DENY_NOT_PAIRED = "not-paired"
+    const val DENY_NOT_ACTIVE = "not-active"
+    const val DENY_REVOKED = "revoked"
+    const val DENY_NO_OWNER = "no-owner-in-event"
+    const val DENY_OWNER_MISMATCH = "owner-mismatch"
+
+    /**
+     * Decide. `eventOwnerUid` null means the FCM payload carried no owner id
+     * at all — deny (fail-closed: an unattributable event is unauthorizable).
+     */
+    fun decide(eventOwnerUid: String?, pairedOwnerUid: String?, status: String?): Verdict = when {
+        pairedOwnerUid == null -> Verdict.Deny(DENY_NOT_PAIRED)
+        status == null -> Verdict.Deny(DENY_NOT_PAIRED)
+        status == "REVOKED" -> Verdict.Deny(DENY_REVOKED)
+        status != "ACTIVE" -> Verdict.Deny(DENY_NOT_ACTIVE)
+        eventOwnerUid == null -> Verdict.Deny(DENY_NO_OWNER)
+        eventOwnerUid != pairedOwnerUid -> Verdict.Deny(DENY_OWNER_MISMATCH)
+        else -> Verdict.Allow
     }
 }
 

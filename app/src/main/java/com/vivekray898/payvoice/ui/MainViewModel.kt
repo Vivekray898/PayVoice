@@ -223,10 +223,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val revokeState: StateFlow<RevokeState> = _revokeState
 
     /**
-     * Owner: revoke an employee device (spec §16) — backend-enforced. The
-     * counted update result decides the message; RLS denials show up as
-     * "nothing was updated", not as success. The live employees flow
-     * (Realtime/poll) refreshes the list automatically once the row flips.
+     * Owner: revoke an employee device (spec §16) — backend-enforced via the
+     * atomic `revoke_employee` RPC (migration 0004) with a counted RLS-
+     * filtered UPDATE fallback. "Nothing was updated" surfaces as a failure,
+     * never as success. The live employees flow (Realtime/poll) refreshes
+     * the list automatically once the row flips.
      */
     fun revokeEmployee(employeeUid: String) {
         viewModelScope.launch {
@@ -309,15 +310,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     init {
         refreshStatus()
         // FCM registration in the background — never on the UI path. The
-        // token is associated with the authenticated user's `devices` row
-        // (spec §15: obtain → associate → upsert → last-seen).
-        viewModelScope.launch {
-            val token = container.messaging.refreshToken().getOrNull() ?: return@launch
-            container.devices.registerDevice(
-                fcmToken = token,
-                deviceName = container.settings.settings.value.deviceName
-                    .ifBlank { android.os.Build.MODEL ?: "Device" },
-            )
+        // whole block (Firebase init reads the google-services.json ASSET,
+        // i.e. disk I/O) runs on IO so startup never pays for it (the
+        // "Skipped 365 frames" jank signature).
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching {
+                val token = container.messaging.refreshToken().getOrNull() ?: return@launch
+                container.devices.registerDevice(
+                    fcmToken = token,
+                    deviceName = container.settings.settings.value.deviceName
+                        .ifBlank { android.os.Build.MODEL ?: "Device" },
+                )
+            }
         }
     }
 

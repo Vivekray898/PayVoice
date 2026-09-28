@@ -2,6 +2,7 @@ package com.vivekray898.payvoice
 
 import com.vivekray898.payvoice.core.remote.PairingCode
 import com.vivekray898.payvoice.core.remote.PairingCodeGenerator
+import com.vivekray898.payvoice.core.remote.RemoteAuthorization
 import com.vivekray898.payvoice.core.remote.RemoteCollections
 import com.vivekray898.payvoice.core.remote.RemoteEventValidator
 import com.vivekray898.payvoice.core.remote.RemoteEventType
@@ -226,6 +227,8 @@ class RemoteLayerTest {
         assertEquals("senderName", RemotePaymentEvent.KEY_SENDER)
         assertEquals("source", RemotePaymentEvent.KEY_SOURCE)
         assertEquals("timestampMs", RemotePaymentEvent.KEY_TIMESTAMP)
+        // Employee-side authorization rides on the payload (spec §5).
+        assertEquals("ownerUid", RemotePaymentEvent.KEY_OWNER)
     }
 
     @Test
@@ -235,6 +238,7 @@ class RemoteLayerTest {
         val gatewayData = mapOf(
             "type" to "PAYMENT_RECEIVED",
             "eventId" to "evt_abc123def456",
+            "ownerUid" to "owner-uid-1",
             "amountMinor" to "100000",
             "currency" to "INR",
             "senderName" to "",
@@ -245,6 +249,49 @@ class RemoteLayerTest {
         assertNotNull(e)
         assertEquals(100_000L, e!!.amountMinor)
         assertNull(e.senderName) // empty senderName → amount-only wording
+        assertEquals("owner-uid-1", e.ownerUid) // authorization field survives
+    }
+
+    // ---- Employee-side authorization matrix (spec §5) ----
+
+    private fun verdictReason(
+        eventOwner: String?,
+        pairedOwner: String?,
+        status: String?,
+    ): String? {
+        val v = RemoteAuthorization.decide(eventOwner, pairedOwner, status)
+        return (v as? RemoteAuthorization.Verdict.Deny)?.reason
+    }
+
+    @Test
+    fun `authorization allows active employee with matching owner`() {
+        val v = RemoteAuthorization.decide("owner-1", "owner-1", "ACTIVE")
+        assertTrue(v is RemoteAuthorization.Verdict.Allow)
+    }
+
+    @Test
+    fun `authorization denies revoked device even with matching owner`() {
+        assertEquals(
+            RemoteAuthorization.DENY_REVOKED,
+            verdictReason("owner-1", "owner-1", "REVOKED"),
+        )
+    }
+
+    @Test
+    fun `authorization denies owner mismatch and cross-owner events`() {
+        assertEquals(
+            RemoteAuthorization.DENY_OWNER_MISMATCH,
+            verdictReason("owner-2", "owner-1", "ACTIVE"),
+        )
+    }
+
+    @Test
+    fun `authorization fails closed when pairing is unknown or event has no owner`() {
+        assertEquals(RemoteAuthorization.DENY_NOT_PAIRED, verdictReason("owner-1", null, "ACTIVE"))
+        assertEquals(RemoteAuthorization.DENY_NOT_PAIRED, verdictReason("owner-1", "owner-1", null))
+        assertEquals(RemoteAuthorization.DENY_NO_OWNER, verdictReason(null, "owner-1", "ACTIVE"))
+        // LEFT status (employee left voluntarily) is also not announceable.
+        assertEquals(RemoteAuthorization.DENY_NOT_ACTIVE, verdictReason("owner-1", "owner-1", "LEFT"))
     }
 
     // ---- Supabase wire format (payment_events insert payload) ----

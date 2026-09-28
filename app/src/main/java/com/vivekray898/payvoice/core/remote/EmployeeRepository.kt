@@ -5,11 +5,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
@@ -25,6 +30,15 @@ import kotlinx.serialization.json.put
  * on top of a REST snapshot prime, with a bounded fallback poll that keeps
  * the UI fresh while the socket is not LIVE. FCM remains the payment-
  * delivery channel — Realtime never carries announcements.
+ *
+ * Concurrency note (the "Flow invariant is violated" crash): both observe
+ * flows emit from TWO coroutines — the fallback-poll child and the Realtime
+ * collector — inside one flow. A `flow { }` builder forbids emissions from
+ * any coroutine other than the one running the builder, so the poll child
+ * crashed the app with `IllegalStateException: Flow invariant is violated`.
+ * `channelFlow { }` is the sanctioned multi-producer builder: its channel
+ * serializes [send]s from any child, and a mutex keeps the change-detection
+ * state (`latest`) check-then-send atomic.
  */
 class EmployeeRepository(
     private val auth: PayVoiceAuth,
@@ -33,10 +47,22 @@ class EmployeeRepository(
 ) {
 
     /** Live employee list for the Owner home card (spec §3). */
-    fun observeEmployees(): Flow<List<EmployeeDevice>> = flow {
+    fun observeEmployees(): Flow<List<EmployeeDevice>> = channelFlow {
         val uid = auth.ensureSignedIn()
         var latest = runCatching { fetchEmployees() }.getOrNull() ?: emptyList()
-        emit(latest)
+        send(latest)
+
+        // One emission at a time: poll child + Realtime collector both fetch
+        // fresh state and publish here. The mutex makes check-then-send
+        // atomic; duplicate/equal values are filtered so the downstream
+        // StateFlow only sees real changes.
+        val emitMutex = Mutex()
+        suspend fun publish(fresh: List<EmployeeDevice>) = emitMutex.withLock {
+            if (fresh != latest) {
+                latest = fresh
+                send(fresh)
+            }
+        }
 
         coroutineScope {
             val poll = launch {
@@ -50,10 +76,7 @@ class EmployeeRepository(
                     delay(if (live) POLL_IDLE_WHEN_LIVE_MS else POLL_INTERVAL_MS)
                     if (live) continue
                     val fresh = runCatching { fetchEmployees() }.getOrNull() ?: continue
-                    if (fresh != latest) {
-                        latest = fresh
-                        emit(fresh)
-                    }
+                    publish(fresh)
                 }
             }
             if (uid != null) {
@@ -69,10 +92,7 @@ class EmployeeRepository(
                     if (change.table != RemoteCollections.EMPLOYEES) return@collect
                     val fresh = runCatching { fetchEmployees() }.getOrNull()
                         ?: return@collect
-                    if (fresh != latest) {
-                        latest = fresh
-                        emit(fresh)
-                    }
+                    publish(fresh)
                 }
             }
             poll.join()
@@ -83,10 +103,18 @@ class EmployeeRepository(
      * Employee side: observe THIS device's registry record (own row only —
      * RLS never allows reading other employees). Null = not paired.
      */
-    fun observeOwnDevice(): Flow<EmployeeDevice?> = flow {
+    fun observeOwnDevice(): Flow<EmployeeDevice?> = channelFlow {
         val uid = auth.ensureSignedIn()
         var latest = runCatching { fetchOwnDevice() }.getOrNull()
-        emit(latest)
+        send(latest)
+
+        val emitMutex = Mutex()
+        suspend fun publish(fresh: EmployeeDevice?) = emitMutex.withLock {
+            if (fresh != latest) {
+                latest = fresh
+                send(fresh)
+            }
+        }
 
         coroutineScope {
             val poll = launch {
@@ -97,10 +125,7 @@ class EmployeeRepository(
                     delay(if (live) POLL_IDLE_WHEN_LIVE_MS else OWN_POLL_INTERVAL_MS)
                     if (live) continue
                     val fresh = runCatching { fetchOwnDevice() }.getOrNull() ?: continue
-                    if (fresh != latest) {
-                        latest = fresh
-                        emit(fresh)
-                    }
+                    publish(fresh)
                 }
             }
             if (uid != null) {
@@ -120,17 +145,77 @@ class EmployeeRepository(
                         ?: change.old?.let { RestJson.str(it, "id") }
                     if (rowId != null && rowId != uid) return@collect
                     val fresh = runCatching { fetchOwnDevice() }.getOrNull() ?: return@collect
-                    if (fresh != latest) {
-                        latest = fresh
-                        emit(fresh)
-                    }
+                    publish(fresh)
                 }
             }
             poll.join()
         }
     }.flowOn(Dispatchers.IO)
 
+    // ---- Employee-side remote-event authorization (spec §5) ----
+
+    /**
+     * Last known pairing state of THIS device, with the time it was read.
+     * Kept fresh by every own-row fetch (observe flow AND the FCM delivery
+     * path) so an announcement usually needs NO network call at all.
+     */
+    data class PairedSnapshot(
+        val ownerUid: String?,
+        val status: String?,
+        val fetchedAtMs: Long,
+    )
+
+    @Volatile
+    private var cachedPairing: PairedSnapshot? = null
+
+    /**
+     * Authorize an incoming remote event BEFORE the announcement pipeline
+     * (spec §5): own row must exist, be ACTIVE, and its `owner_uid` must
+     * match the event's owner. Cache-first with a short TTL; on cache miss a
+     * bounded fetch runs (the FCM path must not hang the announcement for
+     * more than [AUTH_FETCH_TIMEOUT_MS]). If the fetch fails/times out, the
+     * last known snapshot decides — the backend's ACTIVE-only fan-out stays
+     * the PRIMARY enforcement, this is the client safety layer.
+     */
+    suspend fun authorizeRemoteEvent(eventOwnerUid: String?): RemoteAuthorization.Verdict {
+        val cached = cachedPairing
+        if (cached != null &&
+            System.currentTimeMillis() - cached.fetchedAtMs < AUTH_CACHE_TTL_MS
+        ) {
+            return RemoteAuthorization.decide(eventOwnerUid, cached.ownerUid, cached.status)
+        }
+        val fresh = withTimeoutOrNull(AUTH_FETCH_TIMEOUT_MS) {
+            runCatching { fetchOwnPairing() }.getOrNull()
+        }
+        return when {
+            fresh != null ->
+                RemoteAuthorization.decide(eventOwnerUid, fresh.ownerUid, fresh.status)
+            cached != null ->
+                RemoteAuthorization.decide(eventOwnerUid, cached.ownerUid, cached.status)
+            else -> RemoteAuthorization.Verdict.Deny("pairing-unknown")
+        }
+    }
+
     // ---- Supabase REST (PostgREST) queries ----
+
+    private fun employeeFrom(row: JsonObject): EmployeeDevice? {
+        val status = RestJson.str(row, "status") ?: return null
+        // Keep the authorization cache fresh with every read (owner_uid is
+        // selected alongside the display fields for exactly this purpose).
+        cachedPairing = PairedSnapshot(
+            ownerUid = RestJson.str(row, "owner_uid"),
+            status = status,
+            fetchedAtMs = System.currentTimeMillis(),
+        )
+        return EmployeeDevice(
+            uid = RestJson.str(row, "id") ?: return null,
+            name = RestJson.str(row, "name") ?: "Employee Device",
+            status = status,
+            pairedAtMs = RestJson.long(row, "paired_at") ?: 0L,
+            lastSeenAtMs = RestJson.long(row, "last_seen_at") ?: 0L,
+            lastEventDeliveredAtMs = RestJson.long(row, "last_event_delivered_at"),
+        )
+    }
 
     private suspend fun fetchEmployees(): List<EmployeeDevice>? {
         val uid = auth.ensureSignedIn() ?: return null
@@ -159,21 +244,38 @@ class EmployeeRepository(
         val body = withContext(Dispatchers.IO) {
             client.selectRows(
                 table = RemoteCollections.EMPLOYEES,
-                query = "id=eq.$uid&select=id,name,status,paired_at,last_seen_at,last_event_delivered_at",
+                query = "id=eq.$uid&select=id,owner_uid,name,status,paired_at,last_seen_at,last_event_delivered_at",
                 bearer = null,
             )
         } ?: return null
-        return RestJson.parseArray(body).firstOrNull()?.let { row ->
-            val status = RestJson.str(row, "status") ?: return null
-            EmployeeDevice(
-                uid = RestJson.str(row, "id") ?: uid,
-                name = RestJson.str(row, "name") ?: "Employee Device",
-                status = status,
-                pairedAtMs = RestJson.long(row, "paired_at") ?: 0L,
-                lastSeenAtMs = RestJson.long(row, "last_seen_at") ?: 0L,
-                lastEventDeliveredAtMs = RestJson.long(row, "last_event_delivered_at"),
-            )
+        // An EMPTY array means "no row for this uid" = not paired (a real
+        // state worth caching); a null body was a network failure.
+        val row = RestJson.parseArray(body).firstOrNull() ?: run {
+            cachedPairing = PairedSnapshot(null, null, System.currentTimeMillis())
+            return null
         }
+        return employeeFrom(row)
+    }
+
+    /** Lightweight authoritative read of THIS device's pairing state. */
+    private suspend fun fetchOwnPairing(): PairedSnapshot? {
+        val uid = auth.ensureSignedIn() ?: return null
+        val body = withContext(Dispatchers.IO) {
+            client.selectRows(
+                table = RemoteCollections.EMPLOYEES,
+                query = "id=eq.$uid&select=id,owner_uid,status",
+                bearer = null,
+            )
+        } ?: return null
+        val row = RestJson.parseArray(body).firstOrNull() ?: run {
+            cachedPairing = PairedSnapshot(null, null, System.currentTimeMillis())
+            return null
+        }
+        return PairedSnapshot(
+            ownerUid = RestJson.str(row, "owner_uid"),
+            status = RestJson.str(row, "status"),
+            fetchedAtMs = System.currentTimeMillis(),
+        ).also { cachedPairing = it }
     }
 
     /**
@@ -198,10 +300,19 @@ class EmployeeRepository(
      * fcm-gateway (ACTIVE-only query) stops delivering to this device, and
      * the employee's own-row read sees the status change. No row is deleted
      * (audit/history preserved; re-pairing flips it back to ACTIVE).
+     *
+     * Preferred path: the atomic security-definer `revoke_employee` RPC
+     * (migration 0004) — ownership is verified server-side in ONE statement,
+     * so no client-supplied owner id is ever trusted. Fallback: the counted
+     * RLS-filtered UPDATE (works before migration 0004 is applied).
      */
     suspend fun revoke(employeeUid: String): RevokeResult {
-        val uid = auth.ensureSignedIn()
-            ?: return RevokeResult.Failed("no-auth")
+        auth.ensureSignedIn() ?: return RevokeResult.Failed("no-auth")
+        when (val viaRpc = revokeViaRpc(employeeUid)) {
+            null -> Unit // RPC unavailable (not deployed yet) → counted-update fallback
+            else -> return viaRpc
+        }
+        val uid = auth.currentUser() ?: return RevokeResult.Failed("no-auth")
         val result = withContext(Dispatchers.IO) {
             client.updateRow(
                 table = RemoteCollections.EMPLOYEES,
@@ -218,6 +329,38 @@ class EmployeeRepository(
             result.error != null -> RevokeResult.Failed(result.error)
             result.rows > 0 -> RevokeResult.Success(result.rows)
             else -> RevokeResult.NotFound
+        }
+    }
+
+    /**
+     * Atomic RPC attempt. Returns null ONLY when the RPC is unavailable or
+     * its answer is inconclusive (so the caller can fall back); a real
+     * verdict (success / not-found / rejection) is returned decisively.
+     */
+    private suspend fun revokeViaRpc(employeeUid: String): RevokeResult? {
+        val body = withContext(Dispatchers.IO) {
+            runCatching {
+                client.rpc(
+                    function = "revoke_employee",
+                    args = buildJsonObject { put("p_employee_id", employeeUid) },
+                )
+            }.getOrNull()
+        } ?: return null
+        val obj = runCatching {
+            RemoteConfig.json.parseToJsonElement(body) as? JsonObject
+        }.getOrNull() ?: return null
+        val ok = (obj["ok"] as? JsonPrimitive)?.content == "true"
+        return if (ok) {
+            RevokeResult.Success(
+                (obj["rows"] as? JsonPrimitive)?.content?.toIntOrNull() ?: 1,
+            )
+        } else {
+            when ((obj["error"] as? JsonPrimitive)?.content) {
+                "not-found" -> RevokeResult.NotFound
+                "unauthenticated" -> RevokeResult.Failed("no-auth")
+                // Unknown rejection: inconclusive → let the fallback decide.
+                else -> null
+            }
         }
     }
 
@@ -251,5 +394,7 @@ class EmployeeRepository(
         const val POLL_INTERVAL_MS = 15_000L
         const val OWN_POLL_INTERVAL_MS = 10_000L
         const val POLL_IDLE_WHEN_LIVE_MS = 60_000L
+        const val AUTH_CACHE_TTL_MS = 30_000L
+        const val AUTH_FETCH_TIMEOUT_MS = 5_000L
     }
 }
