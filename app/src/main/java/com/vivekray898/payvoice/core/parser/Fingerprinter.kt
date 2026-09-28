@@ -93,8 +93,16 @@ object Fingerprinter {
         }
     }
 
+    /**
+     * 60 hex chars → 64-char total id. The id must fit EVERY layer's cap:
+     * `payment_events` RLS insert policy (`length(id) between 8 and 64`),
+     * the fcm-gateway `parseEvent` check, and the employee-side
+     * RemoteEventValidator. The full 64-hex digest (68 with prefix) was
+     * rejected by RLS — silently killing EVERY real payment fan-out while
+     * short test-event ids kept passing.
+     */
     private fun sha256Fingerprint(payload: String): String =
-        "evt_" + sha256Hex(payload)
+        "evt_" + sha256Hex(payload).take(60)
 
     fun sha256Hex(input: String): String {
         val digest = MessageDigest.getInstance("SHA-256")

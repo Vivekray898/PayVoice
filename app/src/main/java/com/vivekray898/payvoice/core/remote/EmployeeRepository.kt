@@ -176,13 +176,36 @@ class EmployeeRepository(
         }
     }
 
-    /** Owner revokes an employee: backend status flips, FCM fan-out stops. */
-    suspend fun revoke(employeeUid: String): Boolean {
-        val uid = auth.ensureSignedIn() ?: return false
-        return withContext(Dispatchers.IO) {
+    /**
+     * Outcome of an owner-side revoke. RLS rejections surface as HTTP 404
+     * with ZERO rows affected from PostgREST (never a 403) — the counted
+     * result makes "nothing was updated" visible instead of silently
+     * "succeeding".
+     */
+    sealed class RevokeResult {
+        /** Row flipped to REVOKED; fan-out stops at the database. */
+        data class Success(val rows: Int) : RevokeResult()
+
+        /** Filter matched nothing: wrong uid, not the owner, or RLS denied. */
+        object NotFound : RevokeResult()
+
+        /** Transport/session failure — retry is meaningful. */
+        data class Failed(val reason: String) : RevokeResult()
+    }
+
+    /**
+     * Owner revokes an employee: backend status flips to REVOKED, the
+     * fcm-gateway (ACTIVE-only query) stops delivering to this device, and
+     * the employee's own-row read sees the status change. No row is deleted
+     * (audit/history preserved; re-pairing flips it back to ACTIVE).
+     */
+    suspend fun revoke(employeeUid: String): RevokeResult {
+        val uid = auth.ensureSignedIn()
+            ?: return RevokeResult.Failed("no-auth")
+        val result = withContext(Dispatchers.IO) {
             client.updateRow(
                 table = RemoteCollections.EMPLOYEES,
-                filter = "id=eq.$employeeUid&owner_uid=eq.$uid",
+                filter = "id=eq.$employeeUid&owner_uid=eq.$uid&status=neq.REVOKED",
                 body = buildJsonObject {
                     put("status", "REVOKED")
                     put("revoked_at", System.currentTimeMillis())
@@ -190,6 +213,11 @@ class EmployeeRepository(
                 },
                 bearer = null,
             )
+        }
+        return when {
+            result.error != null -> RevokeResult.Failed(result.error)
+            result.rows > 0 -> RevokeResult.Success(result.rows)
+            else -> RevokeResult.NotFound
         }
     }
 

@@ -120,7 +120,7 @@ class DeviceRepository(
                 filter = "user_id=eq.$uid",
                 body = buildJsonObject { put("is_active", false) },
                 bearer = null,
-            )
+            ).ok
         }
     }
 

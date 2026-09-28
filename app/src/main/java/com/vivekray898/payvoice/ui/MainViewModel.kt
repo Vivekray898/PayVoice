@@ -15,6 +15,7 @@ import com.vivekray898.payvoice.core.model.PaymentSource
 import com.vivekray898.payvoice.core.settings.ParentSettings
 import com.vivekray898.payvoice.core.remote.DeviceRole
 import com.vivekray898.payvoice.core.remote.EmployeeDevice
+import com.vivekray898.payvoice.core.remote.EmployeeRepository
 import com.vivekray898.payvoice.core.remote.PairingCode
 import com.vivekray898.payvoice.core.remote.PairingRepository
 import com.vivekray898.payvoice.core.remote.PayVoiceAuth
@@ -211,9 +212,41 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _joinResultAlias.value = null
     }
 
-    /** Owner: revoke an employee device (spec §16) — backend-enforced. */
+    /** Owner revoke states — the UI never reports silent success. */
+    sealed class RevokeState {
+        object Idle : RevokeState()
+        data class Success(val employeeUid: String) : RevokeState()
+        data class Failed(val message: String) : RevokeState()
+    }
+
+    private val _revokeState = MutableStateFlow<RevokeState>(RevokeState.Idle)
+    val revokeState: StateFlow<RevokeState> = _revokeState
+
+    /**
+     * Owner: revoke an employee device (spec §16) — backend-enforced. The
+     * counted update result decides the message; RLS denials show up as
+     * "nothing was updated", not as success. The live employees flow
+     * (Realtime/poll) refreshes the list automatically once the row flips.
+     */
     fun revokeEmployee(employeeUid: String) {
-        viewModelScope.launch { container.employees.revoke(employeeUid) }
+        viewModelScope.launch {
+            when (val r = container.employees.revoke(employeeUid)) {
+                is EmployeeRepository.RevokeResult.Success ->
+                    _revokeState.value = RevokeState.Success(employeeUid)
+                EmployeeRepository.RevokeResult.NotFound ->
+                    _revokeState.value = RevokeState.Failed(
+                        "Device not removed — it may already be removed, or you no longer own it.",
+                    )
+                is EmployeeRepository.RevokeResult.Failed ->
+                    _revokeState.value = RevokeState.Failed(
+                        "Remove failed (${r.reason}) — check connection and try again.",
+                    )
+            }
+        }
+    }
+
+    fun clearRevokeState() {
+        _revokeState.value = RevokeState.Idle
     }
 
     /**

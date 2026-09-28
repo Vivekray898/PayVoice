@@ -268,41 +268,72 @@ class SupabaseClient(private val context: Context) {
     }
 
     /**
-     * Authenticated PostgREST UPDATE (filtered). Returns true on 2xx/204.
+     * Authenticated PostgREST UPDATE (filtered). Returns the number of rows
+     * the server reports as affected (`Content-Range: 0-N` from
+     * `Prefer: return=representation` with HEAD-style ranges). Zero means
+     * the filter matched nothing — under RLS a forbidden row comes back as
+     * HTTP 404 with 0 rows, NOT a 403. Callers must distinguish "0 rows"/
+     * failure from success instead of assuming the update landed.
      */
     suspend fun updateRow(
         table: String,
         filter: String,
         body: JsonObject,
         bearer: String?,
-    ): Boolean {
+    ): UpdateResult {
         val session = bearer?.let { return@let Session(it, "", "", Long.MAX_VALUE) }
-            ?: ensureSignedIn() ?: return false
-        val headers = baseHeaders(session.accessToken).toMutableMap()
-        headers["Prefer"] = "return=minimal"
+            ?: return UpdateResult.Failed("no-auth")
+        val prefer = "return=representation"
         val response = runCatching {
             patch(
                 RemoteConfig.url() + RemoteConfig.REST_PATH + "/" + table +
                     "?" + filter,
-                headers,
+                baseHeaders(session.accessToken) + ("Prefer" to prefer),
                 body.toString(),
             )
-        }.getOrNull() ?: return false
+        }.getOrElse {
+            Log.w(TAG, "update $table network failure: ${it.javaClass.simpleName}")
+            return UpdateResult.Failed("network")
+        }
         if (response.code == 401) {
-            val refreshed = runCatching { refreshSession() }.getOrNull() ?: return false
-            val retryHeaders = baseHeaders(refreshed.accessToken).toMutableMap()
-            retryHeaders["Prefer"] = "return=minimal"
+            val refreshed = runCatching { refreshSession() }.getOrNull()
+                ?: return UpdateResult.Failed("auth-expired")
             val retry = runCatching {
                 patch(
                     RemoteConfig.url() + RemoteConfig.REST_PATH + "/" + table +
                         "?" + filter,
-                    retryHeaders,
+                    baseHeaders(refreshed.accessToken) + ("Prefer" to prefer),
                     body.toString(),
                 )
-            }.getOrNull() ?: return false
-            return retry.code in 200..299
+            }.getOrNull() ?: return UpdateResult.Failed("network")
+            return updateResultOf(retry.code, retry.body, "update $table")
         }
-        return response.code in 200..299
+        return updateResultOf(response.code, response.body, "update $table")
+    }
+
+    /** Turn an HTTP response into a counted/failing [UpdateResult]. */
+    private fun updateResultOf(code: Int, body: String, what: String): UpdateResult =
+        when {
+            code in 200..299 -> UpdateResult.Updated(countRows(body))
+            else -> {
+                Log.w(TAG, "$what failed: http=$code ${body.take(120)}")
+                UpdateResult.Failed("http-$code")
+            }
+        }
+
+    /** PostgREST `return=representation` replies with a JSON array of updated rows. */
+    private fun countRows(body: String): Int = runCatching {
+        (json.parseToJsonElement(body) as? kotlinx.serialization.json.JsonArray)?.size ?: 0
+    }.getOrDefault(0)
+
+    /** Outcome of a filtered UPDATE: rows actually changed, or why not. */
+    data class UpdateResult(val rows: Int, val error: String? = null) {
+        val ok: Boolean get() = error == null && rows > 0
+
+        companion object {
+            fun Updated(rows: Int) = UpdateResult(rows)
+            fun Failed(reason: String) = UpdateResult(rows = 0, error = reason)
+        }
     }
 
     /**

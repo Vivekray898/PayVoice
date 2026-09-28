@@ -197,6 +197,8 @@ export default {
 
     // Minimal data payload (spec §16): no credentials, no PII beyond the
     // announcement-required sender name, no raw SMS/notification content.
+    // Keys MUST match the Android RemotePaymentEvent canonical key set
+    // (RemoteEventValidator rejects e.g. `timestamp` vs `timestampMs`).
     const data: Record<string, string> = {
       type: event.type,
       eventId: event.eventId,

@@ -213,6 +213,40 @@ class RemoteLayerTest {
         ids.forEach { assertTrue(it.startsWith("evt_")) }
     }
 
+    @Test
+    fun `fcm data keys match the fcm-gateway payload contract`() {
+        // The Supabase fcm-gateway builds its FCM data payload with EXACTLY
+        // these key names (supabase/functions/fcm-gateway/index.ts). A
+        // rename here silently breaks every remote announcement: the
+        // RemoteEventValidator would drop all messages as invalid payloads.
+        assertEquals("type", RemotePaymentEvent.KEY_TYPE)
+        assertEquals("eventId", RemotePaymentEvent.KEY_EVENT_ID)
+        assertEquals("amountMinor", RemotePaymentEvent.KEY_AMOUNT)
+        assertEquals("currency", RemotePaymentEvent.KEY_CURRENCY)
+        assertEquals("senderName", RemotePaymentEvent.KEY_SENDER)
+        assertEquals("source", RemotePaymentEvent.KEY_SOURCE)
+        assertEquals("timestampMs", RemotePaymentEvent.KEY_TIMESTAMP)
+    }
+
+    @Test
+    fun `validator accepts a gateway-shaped payment payload`() {
+        // Byte-for-byte the data map fcm-gateway/index.ts sends for a
+        // PAYMENT_RECEIVED event (data keys + string values).
+        val gatewayData = mapOf(
+            "type" to "PAYMENT_RECEIVED",
+            "eventId" to "evt_abc123def456",
+            "amountMinor" to "100000",
+            "currency" to "INR",
+            "senderName" to "",
+            "source" to "GOOGLE_PAY",
+            "timestampMs" to now.toString(),
+        )
+        val e = RemoteEventValidator.validate(gatewayData, now)
+        assertNotNull(e)
+        assertEquals(100_000L, e!!.amountMinor)
+        assertNull(e.senderName) // empty senderName → amount-only wording
+    }
+
     // ---- Supabase wire format (payment_events insert payload) ----
 
     @Test

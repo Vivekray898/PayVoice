@@ -81,11 +81,15 @@ data class RemotePaymentEvent(
     companion object {
         const val KEY_TYPE = "type"
         const val KEY_EVENT_ID = "eventId"
-        const val KEY_AMOUNT = "amount"
+        // Canonical FCM data keys — MUST match the fcm-gateway payload
+        // (amountMinor/timestampMs, per RemoteConfig.FCM_KEY_* and the spec
+        // payload). The old "amount"/"timestamp" names made the employee
+        // validator drop every remote payment as an invalid payload.
+        const val KEY_AMOUNT = "amountMinor"
         const val KEY_CURRENCY = "currency"
         const val KEY_SENDER = "senderName"
         const val KEY_SOURCE = "source"
-        const val KEY_TIMESTAMP = "timestamp"
+        const val KEY_TIMESTAMP = "timestampMs"
 
         /** Builds the canonical FCM/Firestore data map. Compact by design. */
         fun toDataMap(event: RemotePaymentEvent): Map<String, String> = buildMap {

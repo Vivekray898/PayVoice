@@ -41,6 +41,7 @@ fun OwnerRemoteScreen(viewModel: MainViewModel, onBack: () -> Unit) {
     val pairingCode by viewModel.pairingCode.collectAsStateWithLifecycle()
     val sendState by viewModel.remoteSendState.collectAsStateWithLifecycle()
     val testSendState by viewModel.testSendState.collectAsStateWithLifecycle()
+    val revokeState by viewModel.revokeState.collectAsStateWithLifecycle()
     var showAddDialog by remember { mutableStateOf(false) }
 
     LazyColumn(
@@ -86,6 +87,20 @@ fun OwnerRemoteScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 } else {
+                    // Outcome line for the last Remove action (never silent).
+                    when (val r = revokeState) {
+                        is MainViewModel.RevokeState.Success -> Text(
+                            "Device removed — it will no longer receive announcements.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        is MainViewModel.RevokeState.Failed -> Text(
+                            r.message,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                        MainViewModel.RevokeState.Idle -> Unit
+                    }
                     employees.forEach { emp ->
                         Column(Modifier.padding(vertical = 6.dp)) {
                             Row(
@@ -120,7 +135,7 @@ fun OwnerRemoteScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                                     }
                                 }
                                 OutlinedButton(onClick = { viewModel.revokeEmployee(emp.uid) }) {
-                                    Text(if (emp.isActive) "Remove" else "Delete")
+                                    Text("Remove")
                                 }
                             }
                         }

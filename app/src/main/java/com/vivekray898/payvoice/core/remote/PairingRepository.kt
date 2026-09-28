@@ -162,7 +162,7 @@ class PairingRepository(
                     put("left_at", System.currentTimeMillis())
                 },
                 bearer = null,
-            )
+            ).ok
         }
     }
 }

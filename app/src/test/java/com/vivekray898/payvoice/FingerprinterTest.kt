@@ -51,6 +51,23 @@ class FingerprinterTest {
         assertTrue(a.removePrefix("evt_").all { it.isDigit() || it in 'a'..'f' })
     }
 
+    @Test
+    fun `cross-channel id fits every layer cap (rls 64, gateway 64, validator 64)`() {
+        // RLS insert policy on payment_events accepts length(id) in 8..64;
+        // the gateway parseEvent and RemoteEventValidator enforce the same.
+        // captureFingerprint MUST stay within it or every real fan-out dies.
+        val a = Fingerprinter.captureFingerprint(
+            packageId = "com.google.android.apps.nbu.paisa.user",
+            amountMinor = 100L,
+            timestampMs = 1_780_000_000_000,
+            title = "Payment received",
+            text = "₹1 received from Test. Upi Ref 512345678901",
+            referenceId = "512345678901",
+        )
+        assertTrue(a.length in 8..64)
+        assertTrue(a.startsWith("evt_"))
+    }
+
     private fun assertTrue(b: Boolean) {
         org.junit.Assert.assertTrue(b)
     }
