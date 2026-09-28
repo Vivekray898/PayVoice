@@ -36,7 +36,7 @@ import com.vivekray898.payvoice.ui.components.timeAgo
 @Composable
 fun EmployeeScreen(viewModel: MainViewModel, onBack: () -> Unit) {
     val ownDevice by viewModel.ownDevice.collectAsStateWithLifecycle()
-    val joinResult by viewModel.joinResult.collectAsStateWithLifecycle()
+    val joinState by viewModel.joinState.collectAsStateWithLifecycle()
     var showJoinDialog by remember { mutableStateOf(false) }
     var code by remember { mutableStateOf("") }
 
@@ -152,8 +152,10 @@ fun EmployeeScreen(viewModel: MainViewModel, onBack: () -> Unit) {
     if (showJoinDialog) {
         AlertDialog(
             onDismissRequest = {
-                showJoinDialog = false
-                viewModel.clearJoinResult()
+                if (joinState !is MainViewModel.JoinState.Joining) {
+                    showJoinDialog = false
+                    viewModel.clearJoinResult()
+                }
             },
             title = { Text("Join Owner") },
             text = {
@@ -163,25 +165,39 @@ fun EmployeeScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                         onValueChange = { code = it.uppercase() },
                         label = { Text("Pairing code (PAY-XXXXXX)") },
                         singleLine = true,
+                        enabled = joinState !is MainViewModel.JoinState.Joining,
                     )
-                    when (joinResult) {
-                        true -> Text("Connected!", color = MaterialTheme.colorScheme.primary)
-                        false -> Text(
-                            "Invalid, expired, or already used. Ask for a new code.",
+                    when (val s = joinState) {
+                        is MainViewModel.JoinState.Joining -> Text(
+                            "Initializing secure session…",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        is MainViewModel.JoinState.Success -> Text(
+                            "Connected!",
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        is MainViewModel.JoinState.Failed -> Text(
+                            s.message,
                             color = MaterialTheme.colorScheme.error,
                         )
-                        null -> Unit
+                        MainViewModel.JoinState.Idle -> Unit
                     }
                 }
             },
             confirmButton = {
-                TextButton(onClick = { viewModel.joinOwner(code) }) { Text("Connect") }
+                TextButton(
+                    onClick = { viewModel.joinOwner(code) },
+                    enabled = joinState !is MainViewModel.JoinState.Joining,
+                ) { Text("Connect") }
             },
             dismissButton = {
-                TextButton(onClick = {
-                    showJoinDialog = false
-                    viewModel.clearJoinResult()
-                }) { Text("Cancel") }
+                TextButton(
+                    onClick = {
+                        showJoinDialog = false
+                        viewModel.clearJoinResult()
+                    },
+                    enabled = joinState !is MainViewModel.JoinState.Joining,
+                ) { Text("Cancel") }
             },
         )
     }

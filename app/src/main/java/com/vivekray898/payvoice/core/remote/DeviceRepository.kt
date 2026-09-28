@@ -84,6 +84,10 @@ class DeviceRepository(
                 },
                 bearer = null,
                 onConflictMerge = true,
+                // Upsert on the devices.user_id unique index (0002):
+                // without on_conflict=user_id a second registration hits
+                // the generated-id PK conflict → 409 → token never stored.
+                onConflictColumns = listOf("user_id"),
             )
         }
     }

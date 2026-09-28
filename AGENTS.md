@@ -54,7 +54,16 @@ with this file or with old tutorials, the CURRENT official documentation wins.
 
 ## Database
 
-- Tables: `pairing_codes`, `employees` (owner_id), `devices` (user_id),
+- Tables: `pairing_codes`, `employees` (owner_uid — the ONLY owner column
+  name; `owner_id` is a legacy name and causes PostgREST 42703), `devices`
+  (user_id, unique per user — upserts must pass `on_conflict=user_id`),
   `payment_events` (idempotent `evt_...` ids). RLS enabled on everything.
+- Owner RLS on `employees`: SELECT via `owner_uid = auth.uid()` (migration
+  0003). Employees update only their own row and can never change
+  `owner_uid`.
+- Pairing: `claim_pairing()` returns granular errors (`invalid`,
+  `already-used`, `expired`, `unauthenticated`); expiry is enforced ONLY by
+  Postgres server time. The client shows auth-not-ready as a distinct
+  state — never as "pairing code expired".
 - Pairing codes: random, 10-minute TTL, single-use, atomic claim via
   `claim_pairing()`; no identity encoded in the code.

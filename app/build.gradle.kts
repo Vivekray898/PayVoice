@@ -1,3 +1,6 @@
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -45,6 +48,48 @@ android {
 ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
     arg("room.incremental", "true")
+}
+
+// ---------------------------------------------------------------------------
+// Manual Firebase init support (NO google-services plugin, per AGENTS.md).
+//
+// The Firebase CLIENT config lives at the repo-root-adjacent path
+// `app/google-services.json`, which is GITIGNORED (client config only —
+// never any server credential; the service-account JSON is a different
+// file and must never be placed here). This task copies it into
+// src/main/assets at configuration time so manual FirebaseApp
+// initialization finds it in BOTH debug and release APKs. Without it the
+// APK ships without the asset and FCM registration fails on direct-APK
+// installs while wireless-debug installs (which had it via a previous
+// local copy) appeared to work.
+// ---------------------------------------------------------------------------
+tasks.register("copyGoogleServicesJson") {
+    group = "setup"
+    description = "Copies the gitignored app/google-services.json into assets for manual FirebaseApp init."
+    // Plain Files resolved at configuration time (config-cache serializable).
+    val src = File(projectDir, "google-services.json")
+    val dest = File(projectDir, "src/main/assets/google-services.json")
+    inputs.file(src)
+    outputs.file(dest)
+    doLast {
+        if (src.exists()) {
+            dest.parentFile.mkdirs()
+            Files.copy(
+                src.toPath(),
+                dest.toPath(),
+                StandardCopyOption.REPLACE_EXISTING,
+            )
+            println("PayVoice: copied google-services.json into assets (manual Firebase init).")
+        } else {
+            // Honest failure: the build succeeds but the asset stays absent;
+            // the app degrades gracefully (no remote layer) and logs it.
+            println("PayVoice WARNING: app/google-services.json not found — FCM receive will be unavailable.")
+        }
+    }
+}
+
+tasks.matching { it.name == "preBuild" }.configureEach {
+    dependsOn("copyGoogleServicesJson")
 }
 
 dependencies {

@@ -51,14 +51,51 @@ class PairingRepository(
     }
 
     /**
-     * Employee: atomically claim a code and register this device.
-     * Returns the owner UID on success; null when the code is invalid,
-     * expired, already used, or the call failed (offline etc.).
+     * Outcome of a pairing attempt. The UI MUST distinguish these: showing
+     * "Pair code expired" for an auth/network failure is the exact bug this
+     * replaces (a direct-APK install with a still-initializing session was
+     * rendered as an expired code).
      */
-    suspend fun acceptCode(code: String, deviceName: String, fcmToken: String?): String? {
-        auth.ensureSignedIn() ?: return null
+    sealed class ClaimResult {
+        /** Paired; [ownerUid] is the business to announce for. */
+        data class Success(val ownerUid: String) : ClaimResult()
+
+        /** Secure session not ready yet (offline start / sign-in ladder in flight). */
+        object SessionNotReady : ClaimResult()
+
+        /** Structurally wrong code (never reached the server). */
+        object InvalidCode : ClaimResult()
+
+        /** Server-side, authoritative verdicts (server clock, never client). */
+        data class Rejected(val reason: String) : ClaimResult() {
+            companion object {
+                const val INVALID = "invalid"
+                const val EXPIRED = "expired"
+                const val ALREADY_USED = "already-used"
+                const val UNAUTHENTICATED = "unauthenticated"
+            }
+        }
+
+        /** Network/transport failure — retry is meaningful. */
+        object NetworkError : ClaimResult()
+    }
+
+    /**
+     * Employee: atomically claim a code and register this device.
+     * Waits for the single-flight anonymous sign-in BEFORE the RPC — a not-
+     * yet-initialized session must surface as [ClaimResult.SessionNotReady],
+     * never as an expired code. Expiry itself is enforced ONLY by the
+     * server (claim_pairing uses now()); no client timestamp is consulted.
+     */
+    suspend fun acceptCode(code: String, deviceName: String, fcmToken: String?): ClaimResult {
         val trimmed = code.trim().uppercase()
-        if (!PairingCodeGenerator.CODE_REGEX.matches(trimmed)) return null
+        if (!PairingCodeGenerator.CODE_REGEX.matches(trimmed)) return ClaimResult.InvalidCode
+
+        // Identity first: this can take a few seconds on a fresh install
+        // (single-flight sign-in ladder). awaitReady() joins that in-flight
+        // attempt; if auth still cannot establish, report it honestly.
+        val uid = auth.awaitReady(timeoutMs = 20_000L) ?: return ClaimResult.SessionNotReady
+
         val responseBody = withContext(Dispatchers.IO) {
             client.rpc(
                 function = "claim_pairing",
@@ -67,18 +104,28 @@ class PairingRepository(
                     put("p_device_name", deviceName.trim().take(40).ifBlank { "Employee Device" })
                 },
             )
-        } ?: return null
-        val ownerUid = runCatching {
+        } ?: return ClaimResult.NetworkError
+
+        val claim = runCatching {
             val obj = RemoteConfig.json.parseToJsonElement(responseBody)
-                as? kotlinx.serialization.json.JsonObject ?: return@runCatching null
-            val okFlag = (obj["ok"] as? kotlinx.serialization.json.JsonPrimitive)?.content == "true"
-            if (!okFlag) return@runCatching null
-            RestJson.str(obj, "owner_uid")
-        }.getOrNull() ?: return null
+                as? kotlinx.serialization.json.JsonObject
+            when {
+                obj == null -> null
+                (obj["ok"] as? kotlinx.serialization.json.JsonPrimitive)?.content == "true" ->
+                    RestJson.str(obj, "owner_uid")?.let { ClaimResult.Success(it) }
+                else -> ClaimResult.Rejected(
+                    (obj["error"] as? kotlinx.serialization.json.JsonPrimitive)?.content
+                        ?: "unknown-rejection",
+                )
+            }
+        }.getOrNull() ?: return ClaimResult.NetworkError
+
+        val ownerUid = (claim as? ClaimResult.Success)?.ownerUid
+            ?: return claim
 
         // Token lives on the employee's own row (RLS: id = auth.uid()).
         if (fcmToken != null) touchDevice(fcmToken)
-        return ownerUid
+        return ClaimResult.Success(ownerUid)
     }
 
     /** Employee: heartbeat so the Owner sees a real last-seen time (spec §13). */

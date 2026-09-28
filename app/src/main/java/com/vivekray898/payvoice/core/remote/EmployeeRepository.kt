@@ -17,7 +17,9 @@ import kotlinx.serialization.json.put
  * Owner/employee registry state (spec §3, §15, §16) — Supabase REST+Realtime.
  *
  * Reads/writes ONLY rows RLS grants this authenticated identity: employees
- * whose `owner_id` matches (owner side), and the employee's own row.
+ * whose `owner_uid` matches (owner side — canonical column name per
+ * 0001_init.sql; the legacy `owner_id` caused PostgREST 42703), and the
+ * employee's own row.
  *
  * State sync uses Supabase **Realtime** ([SupabaseRealtime], user JWT → RLS)
  * on top of a REST snapshot prime, with a bounded fallback poll that keeps
@@ -38,8 +40,15 @@ class EmployeeRepository(
 
         coroutineScope {
             val poll = launch {
+                // Lightweight fallback while Realtime is not LIVE. Once the
+                // socket is live the poll idles; if the socket drops, it
+                // resumes after the REALTIME_FALLBACK_MS grace (no tight
+                // retry loop against deterministic failures).
                 while (isActive) {
-                    delay(POLL_INTERVAL_MS)
+                    val live = realtime.status.value.state ==
+                        SupabaseRealtime.Status.State.LIVE
+                    delay(if (live) POLL_IDLE_WHEN_LIVE_MS else POLL_INTERVAL_MS)
+                    if (live) continue
                     val fresh = runCatching { fetchEmployees() }.getOrNull() ?: continue
                     if (fresh != latest) {
                         latest = fresh
@@ -50,7 +59,10 @@ class EmployeeRepository(
             if (uid != null) {
                 realtime.postgresChanges(
                     filters = listOf(
-                        SupabaseRealtime.RealtimeFilter(event = "*", table = "employees"),
+                        SupabaseRealtime.RealtimeFilter(
+                            event = "*", table = "employees",
+                            filter = "owner_uid=eq.$uid",
+                        ),
                     ),
                     accessTokenProvider = { client.currentSession()?.accessToken },
                 ).collect { change ->
@@ -78,8 +90,12 @@ class EmployeeRepository(
 
         coroutineScope {
             val poll = launch {
+                // Same LIVE-gated fallback as the owner flow above.
                 while (isActive) {
-                    delay(OWN_POLL_INTERVAL_MS)
+                    val live = realtime.status.value.state ==
+                        SupabaseRealtime.Status.State.LIVE
+                    delay(if (live) POLL_IDLE_WHEN_LIVE_MS else OWN_POLL_INTERVAL_MS)
+                    if (live) continue
                     val fresh = runCatching { fetchOwnDevice() }.getOrNull() ?: continue
                     if (fresh != latest) {
                         latest = fresh
@@ -90,7 +106,10 @@ class EmployeeRepository(
             if (uid != null) {
                 realtime.postgresChanges(
                     filters = listOf(
-                        SupabaseRealtime.RealtimeFilter(event = "*", table = "employees"),
+                        SupabaseRealtime.RealtimeFilter(
+                            event = "*", table = "employees",
+                            filter = "id=eq.$uid",
+                        ),
                     ),
                     accessTokenProvider = { client.currentSession()?.accessToken },
                 ).collect { change ->
@@ -118,7 +137,7 @@ class EmployeeRepository(
         val body = withContext(Dispatchers.IO) {
             client.selectRows(
                 table = RemoteCollections.EMPLOYEES,
-                query = "owner_id=eq.$uid&select=id,name,status,paired_at,last_seen_at,last_event_delivered_at",
+                query = "owner_uid=eq.$uid&select=id,name,status,paired_at,last_seen_at,last_event_delivered_at",
                 bearer = null,
             )
         } ?: return null
@@ -163,7 +182,7 @@ class EmployeeRepository(
         return withContext(Dispatchers.IO) {
             client.updateRow(
                 table = RemoteCollections.EMPLOYEES,
-                filter = "id=eq.$employeeUid&owner_id=eq.$uid",
+                filter = "id=eq.$employeeUid&owner_uid=eq.$uid",
                 body = buildJsonObject {
                     put("status", "REVOKED")
                     put("revoked_at", System.currentTimeMillis())
@@ -203,5 +222,6 @@ class EmployeeRepository(
         const val TAG = "EmployeeRepo"
         const val POLL_INTERVAL_MS = 15_000L
         const val OWN_POLL_INTERVAL_MS = 10_000L
+        const val POLL_IDLE_WHEN_LIVE_MS = 60_000L
     }
 }

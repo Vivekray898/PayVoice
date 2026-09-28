@@ -162,20 +162,29 @@ export default {
     }
 
     // ACTIVE device tokens of THIS owner's employees (secret key = BYPASSRLS).
+    // Schema: employees.owner_uid (never owner_id — see 0001_init.sql).
+    const { data: activeEmployees, error: employeesError } = await ctx.supabaseAdmin
+      .from("employees")
+      .select("id")
+      .eq("owner_uid", event.ownerUid)
+      .eq("status", "ACTIVE");
+    if (employeesError) {
+      console.error("employees query failed");
+      return Response.json({ error: "db error" }, { status: 500 });
+    }
+    const employeeIds = (activeEmployees ?? []).map((e: { id: string }) => e.id);
+    if (employeeIds.length === 0) {
+      // Nothing to fan out to; still record diagnostics on the event row.
+      await ctx.supabaseAdmin.from("payment_events")
+        .update({ fanout_count: 0, delivered_to: {}, delivered_at: new Date().toISOString() })
+        .eq("id", event.eventId);
+      return Response.json({ fanout: 0, delivered: 0 });
+    }
+
     const { data: devices, error: devicesError } = await ctx.supabaseAdmin
       .from("devices")
       .select("id, user_id, fcm_token")
-      .in(
-        "user_id",
-        (await ctx.supabaseAdmin
-          .from("employees")
-          .select("id")
-          .eq("owner_id", event.ownerUid)
-          .eq("status", "ACTIVE")
-          .then((r: { data: Array<{ id: string }> | null }) =>
-            (r.data ?? []).map((e) => e.id)
-          )),
-      )
+      .in("user_id", employeeIds)
       .eq("is_active", true)
       .neq("fcm_token", "");
 
@@ -249,7 +258,8 @@ export default {
       }
     }));
 
-    // Delivery diagnostics on the event row (visible to the owner via RLS).
+    // Delivery diagnostics on the event row (visible to the owner via RLS)
+    // and on each employee row (last_event_delivered_at feeds the owner card).
     await ctx.supabaseAdmin.from("payment_events")
       .update({
         fanout_count: deviceList.length,
@@ -258,6 +268,14 @@ export default {
         remote_accepted_at_ms: Date.now(),
       })
       .eq("id", event.eventId);
+    if (delivered > 0) {
+      const nowMs = Date.now();
+      await Promise.all(deviceList
+        .filter((d) => deliveredTo[d.user_id])
+        .map((d) => ctx.supabaseAdmin.from("employees")
+          .update({ last_event_delivered_at: nowMs })
+          .eq("id", d.user_id)));
+    }
 
     console.log(`event ${event.eventId.slice(0, 12)} fanout=${deviceList.length} delivered=${delivered}`);
     return Response.json({ fanout: deviceList.length, delivered });

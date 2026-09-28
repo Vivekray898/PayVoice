@@ -27,9 +27,13 @@ Supabase and are not used anywhere in this project.
 2. **Authentication → Sign In / Up → enable *Anonymous sign-ins*** (device
    identity).
 3. **SQL Editor** — run `supabase/migrations/0001_init.sql`, then
-   `supabase/migrations/0002_devices_and_realtime.sql`.
+   `supabase/migrations/0002_devices_and_realtime.sql`, then
+   `supabase/migrations/0003_pairing_fixes.sql`.
    (0002 also retires the old `app.settings.service_jwt` trigger — no
-   credential is stored in Postgres settings anywhere in this schema.)
+   credential is stored in Postgres settings anywhere in this schema.
+   0003 adds the missing owner SELECT policy on `employees`, keeps
+   `owner_uid` client-immutable, and returns granular `claim_pairing`
+   errors.)
 4. **Database → Webhooks → Create**:
    - Table `payment_events`, event `INSERT`
    - URL `https://<project>.supabase.co/functions/v1/fcm-gateway`
@@ -111,9 +115,11 @@ $$);
 
 - Pairing codes: 10-minute TTL, single-use (enforced inside the atomic
   `claim_pairing()`), cryptographically random, no identity data encoded.
-- RLS: an owner touches only rows carrying their own `owner_id`; an employee
-  only writes their own `employees`/`devices` rows (`id`/`user_id` =
-  `auth.uid()`); `payment_events` are readable only by their owner;
-  employees receive events exclusively through FCM.
+- RLS: an owner touches only rows carrying their own `owner_uid` (the
+  canonical column — never `owner_id`); an employee only writes their own
+  `employees`/`devices` rows (`id`/`user_id` = `auth.uid()`, and
+  `owner_uid` is immutable through client updates per 0003);
+  `payment_events` are readable only by their owner; employees receive
+  events exclusively through FCM.
 - No privileged credential appears in the APK: publishable key + Firebase
   client config only. Verified by the repository sweep + APK audit.

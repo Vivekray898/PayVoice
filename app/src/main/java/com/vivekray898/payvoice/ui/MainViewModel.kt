@@ -16,6 +16,7 @@ import com.vivekray898.payvoice.core.settings.ParentSettings
 import com.vivekray898.payvoice.core.remote.DeviceRole
 import com.vivekray898.payvoice.core.remote.EmployeeDevice
 import com.vivekray898.payvoice.core.remote.PairingCode
+import com.vivekray898.payvoice.core.remote.PairingRepository
 import com.vivekray898.payvoice.core.remote.PayVoiceAuth
 import com.vivekray898.payvoice.core.remote.RemoteEventSender
 import com.vivekray898.payvoice.service.messaging.MessagingRepository
@@ -92,8 +93,29 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _pairingCode = MutableStateFlow<PairingCode?>(null)
     val pairingCode: StateFlow<PairingCode?> = _pairingCode
 
-    private val _joinResult = MutableStateFlow<Boolean?>(null)
-    val joinResult: StateFlow<Boolean?> = _joinResult
+    /**
+     * Join outcome for the employee UI. Tri-state Boolean was a lie: an
+     * auth-still-initializing attempt rendered as "expired". The screen now
+     * shows an honest "initializing secure session" state while pairing.
+     */
+    sealed class JoinState {
+        object Idle : JoinState()
+        object Joining : JoinState()
+        data class Success(val ownerUid: String) : JoinState()
+        data class Failed(val message: String) : JoinState()
+    }
+
+    private val _joinState = MutableStateFlow<JoinState>(JoinState.Idle)
+    val joinState: StateFlow<JoinState> = _joinState
+
+    /**
+     * Backward-compatible alias for joinState rendered as Boolean?
+     * (null = idle/joining, true = success, false = failed).
+     */
+    @Deprecated("Use joinState for accurate outcomes")
+    val joinResult: StateFlow<Boolean?>
+        get() = _joinResultAlias
+    private val _joinResultAlias = MutableStateFlow<Boolean?>(null)
 
     init {
         // Employee heartbeat: register/refresh this device so the Owner sees
@@ -127,25 +149,66 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Employee: claim a code and join the owner (spec §4). */
+    /**
+     * Employee: claim a code and join the owner (spec §4). Waits for the
+     * single-flight anonymous session BEFORE the RPC; surfaces the real
+     * failure mode instead of a blanket "expired".
+     */
     fun joinOwner(code: String) {
+        if (_joinState.value is JoinState.Joining) return
         viewModelScope.launch {
-            _joinResult.value = null
-            val ownerUid = container.pairing.acceptCode(
+            _joinState.value = JoinState.Joining
+            _joinResultAlias.value = null
+            val result = container.pairing.acceptCode(
                 code = code,
                 deviceName = container.settings.settings.value.deviceName
                     .ifBlank { android.os.Build.MODEL ?: "Employee Device" },
                 fcmToken = container.messaging.cachedToken(),
             )
-            _joinResult.value = ownerUid != null
-            if (ownerUid != null) {
-                container.pairing.touchDevice(container.messaging.cachedToken())
+            when (result) {
+                is PairingRepository.ClaimResult.Success -> {
+                    _joinState.value = JoinState.Success(result.ownerUid)
+                    _joinResultAlias.value = true
+                    container.pairing.touchDevice(container.messaging.cachedToken())
+                }
+                is PairingRepository.ClaimResult.Rejected -> {
+                    _joinState.value = JoinState.Failed(
+                        when (result.reason) {
+                            PairingRepository.ClaimResult.Rejected.EXPIRED ->
+                                "Pairing code expired. Ask for a new code."
+                            PairingRepository.ClaimResult.Rejected.ALREADY_USED ->
+                                "Pairing code already used. Ask for a new code."
+                            PairingRepository.ClaimResult.Rejected.INVALID,
+                            PairingRepository.ClaimResult.Rejected.UNAUTHENTICATED ->
+                                "Invalid pairing code. Check it and try again."
+                            else -> "Pairing rejected (${result.reason})."
+                        },
+                    )
+                    _joinResultAlias.value = false
+                }
+                PairingRepository.ClaimResult.SessionNotReady -> {
+                    _joinState.value = JoinState.Failed(
+                        "Still connecting securely — check internet, then try again.",
+                    )
+                    _joinResultAlias.value = false
+                }
+                PairingRepository.ClaimResult.InvalidCode -> {
+                    _joinState.value = JoinState.Failed("Invalid pairing code format.")
+                    _joinResultAlias.value = false
+                }
+                PairingRepository.ClaimResult.NetworkError -> {
+                    _joinState.value = JoinState.Failed(
+                        "Network problem reaching the server — try again.",
+                    )
+                    _joinResultAlias.value = false
+                }
             }
         }
     }
 
     fun clearJoinResult() {
-        _joinResult.value = null
+        _joinState.value = JoinState.Idle
+        _joinResultAlias.value = null
     }
 
     /** Owner: revoke an employee device (spec §16) — backend-enforced. */
@@ -153,10 +216,38 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { container.employees.revoke(employeeUid) }
     }
 
-    /** Owner: send the TEST_ANNOUNCEMENT event to all active employees. */
+    /**
+     * Owner: send the TEST_ANNOUNCEMENT event to all active employees.
+     * Failures surface in the UI state — never silently swallowed (an
+     * unsurfaced error on HyperOS looked like a random crash).
+     */
     fun sendTestToEmployees() {
-        viewModelScope.launch { container.employees.sendTestAnnouncement() }
+        if (_testSendState.value is TestSendState.Sending) return
+        viewModelScope.launch {
+            _testSendState.value = TestSendState.Sending
+            runCatching { container.employees.sendTestAnnouncement() }
+                .onSuccess { ok ->
+                    _testSendState.value =
+                        if (ok) TestSendState.Sent(System.currentTimeMillis())
+                        else TestSendState.Failed("Backend rejected or unreachable — check connection")
+                }
+                .onFailure { e ->
+                    _testSendState.value = TestSendState.Failed(
+                        "Test announcement failed (${e.javaClass.simpleName}) — local announcements unaffected",
+                    )
+                }
+        }
     }
+
+    sealed class TestSendState {
+        object Idle : TestSendState()
+        object Sending : TestSendState()
+        data class Sent(val atMs: Long) : TestSendState()
+        data class Failed(val message: String) : TestSendState()
+    }
+
+    private val _testSendState = MutableStateFlow<TestSendState>(TestSendState.Idle)
+    val testSendState: StateFlow<TestSendState> = _testSendState
 
     /** Employee: leave the owner's business (spec §21). */
     fun leaveOwner() {

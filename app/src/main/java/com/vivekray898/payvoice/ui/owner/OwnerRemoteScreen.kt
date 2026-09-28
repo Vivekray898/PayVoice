@@ -40,6 +40,7 @@ fun OwnerRemoteScreen(viewModel: MainViewModel, onBack: () -> Unit) {
     val employees by viewModel.employees.collectAsStateWithLifecycle()
     val pairingCode by viewModel.pairingCode.collectAsStateWithLifecycle()
     val sendState by viewModel.remoteSendState.collectAsStateWithLifecycle()
+    val testSendState by viewModel.testSendState.collectAsStateWithLifecycle()
     var showAddDialog by remember { mutableStateOf(false) }
 
     LazyColumn(
@@ -136,16 +137,31 @@ fun OwnerRemoteScreen(viewModel: MainViewModel, onBack: () -> Unit) {
 
         item(key = "test") {
             SectionCard(title = "Test") {
-                OutlinedButton(onClick = { viewModel.sendTestToEmployees() }) {
-                    Text("Send Test Announcement")
+                OutlinedButton(
+                    onClick = { viewModel.sendTestToEmployees() },
+                    enabled = testSendState !is MainViewModel.TestSendState.Sending,
+                ) {
+                    Text(
+                        if (testSendState is MainViewModel.TestSendState.Sending) "Sending…"
+                        else "Send Test Announcement",
+                    )
                 }
                 Text(
-                    when (val s = sendState) {
-                        is RemoteEventSender.SendState.SENT ->
-                            "Last event accepted by backend ${timeAgo(s.atMs)}"
-                        is RemoteEventSender.SendState.FAILED ->
-                            "Last send failed (${s.reason}) — local announcements unaffected"
-                        else -> "Employees hear: \"PayVoice test announcement.\""
+                    when (val s = testSendState) {
+                        is MainViewModel.TestSendState.Sent ->
+                            "Test event accepted by backend ${timeAgo(s.atMs)} — check the employee device."
+                        is MainViewModel.TestSendState.Failed ->
+                            s.message
+                        MainViewModel.TestSendState.Sending ->
+                            "Sending test event…"
+                        MainViewModel.TestSendState.Idle ->
+                            when (val r = sendState) {
+                                is RemoteEventSender.SendState.SENT ->
+                                    "Last event accepted by backend ${timeAgo(r.atMs)}"
+                                is RemoteEventSender.SendState.FAILED ->
+                                    "Last send failed (${r.reason}) — local announcements unaffected"
+                                else -> "Employees hear: \"PayVoice test announcement.\""
+                            }
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

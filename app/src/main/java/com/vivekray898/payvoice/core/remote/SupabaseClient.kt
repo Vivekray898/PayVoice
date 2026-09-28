@@ -185,25 +185,33 @@ class SupabaseClient(private val context: Context) {
         execute(url, baseHeaders(bearer), body)
 
     /**
-     * Authenticated PostgREST insert. `onConflict` adds the
+     * Authenticated PostgREST insert. `onConflictMerge` adds the
      * `Prefer: resolution=merge-duplicates` header (idempotent upsert).
+     * `onConflictColumns` appends `?on_conflict=col1,col2` so PostgREST
+     * applies the merge against the RIGHT unique constraint (e.g. the
+     * `devices.user_id` unique index — without it a second registration
+     * fails with 409 instead of updating the row in place).
      */
     suspend fun insertRow(
         table: String,
         body: JsonObject,
         bearer: String?,
         onConflictMerge: Boolean = false,
+        onConflictColumns: List<String>? = null,
     ): Boolean {
         val session = bearer?.let { return@let Session(it, "", "", Long.MAX_VALUE) }
             ?: ensureSignedIn() ?: return false
-        val headers = baseHeaders(session.accessToken).toMutableMap()
-        headers["Prefer"] =
+        val prefer =
             if (onConflictMerge) "return=minimal,resolution=merge-duplicates"
             else "return=minimal"
+        val suffix = onConflictColumns
+            ?.takeIf { it.isNotEmpty() }
+            ?.joinToString("=") { col -> col }?.let { "?on_conflict=$it" }
+            .orEmpty()
         val response = runCatching {
             execute(
-                RemoteConfig.url() + RemoteConfig.REST_PATH + "/" + table,
-                headers,
+                RemoteConfig.url() + RemoteConfig.REST_PATH + "/" + table + suffix,
+                baseHeaders(session.accessToken) + ("Prefer" to prefer),
                 body.toString(),
             )
         }.getOrElse {
@@ -213,14 +221,10 @@ class SupabaseClient(private val context: Context) {
         if (response.code == 401) {
             // Access token expired mid-flight: refresh once and retry once.
             val refreshed = runCatching { refreshSession() }.getOrNull() ?: return false
-            val retryHeaders = baseHeaders(refreshed.accessToken).toMutableMap()
-            retryHeaders["Prefer"] =
-                if (onConflictMerge) "return=minimal,resolution=merge-duplicates"
-                else "return=minimal"
             val retry = runCatching {
                 execute(
-                    RemoteConfig.url() + RemoteConfig.REST_PATH + "/" + table,
-                    retryHeaders,
+                    RemoteConfig.url() + RemoteConfig.REST_PATH + "/" + table + suffix,
+                    baseHeaders(refreshed.accessToken) + ("Prefer" to prefer),
                     body.toString(),
                 )
             }.getOrNull() ?: return false

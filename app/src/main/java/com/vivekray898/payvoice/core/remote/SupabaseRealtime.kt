@@ -128,6 +128,20 @@ class SupabaseRealtime {
                     })
                 }
                 send(ws, "realtime:public", "phx_join", joinPayload)
+                // Documented Realtime authorization flow: after the join, a
+                // separate `access_token` event carries the CURRENT token. If
+                // auth was still initializing at join time (fresh install),
+                // the server re-authorizes the channel here — without this
+                // the subscription sat connected but RLS-blind (no owner
+                // updates ever arrived).
+                accessTokenProvider()?.takeIf { it.isNotBlank() }?.let { token ->
+                    send(
+                        ws,
+                        "realtime:public",
+                        "access_token",
+                        buildJsonObject { put("access_token", token) },
+                    )
+                }
             }
 
             override fun onMessage(ws: WebSocket, text: String) {

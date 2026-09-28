@@ -280,13 +280,13 @@ class RemoteLayerTest {
     @Test
     fun `realtime filter json matches the postgres_changes contract`() {
         val filter = SupabaseRealtime.RealtimeFilter(
-            event = "*", table = "employees", filter = "owner_id=eq.abc",
+            event = "*", table = "employees", filter = "owner_uid=eq.abc",
         )
         val json = filter.toJson().toString()
         assertTrue(json.contains("\"event\":\"*\""))
         assertTrue(json.contains("\"schema\":\"public\""))
         assertTrue(json.contains("\"table\":\"employees\""))
-        assertTrue(json.contains("\"filter\":\"owner_id=eq.abc\""))
+        assertTrue(json.contains("\"filter\":\"owner_uid=eq.abc\""))
     }
 
     private fun assertFalse(b: Boolean) = org.junit.Assert.assertFalse(b)

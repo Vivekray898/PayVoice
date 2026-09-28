@@ -61,8 +61,12 @@ class MessagingRepository(private val context: Context) {
      * Ensures a FirebaseApp exists, initializing it from the local
      * google-services.json asset (which the removed google-services plugin
      * would otherwise inject at build time). Idempotent; returns false when
-     * the asset is absent so callers can surface an honest status instead of
-     * crashing.
+     * the asset is absent or malformed so callers can surface an honest
+     * status instead of crashing.
+     *
+     * google-services.json is Firebase CLIENT configuration (public by
+     * design) — never a service-account/Admin JSON, which must never be
+     * packaged.
      */
     fun ensureFirebaseInitialized(): Boolean {
         if (FirebaseApp.getApps(context).isNotEmpty()) {
@@ -75,16 +79,26 @@ class MessagingRepository(private val context: Context) {
                     as? JsonObject ?: return false
             }
             val projectInfo = root["project_info"] as? JsonObject ?: return false
+            // Real google-services.json shape: client[0].client_info carries
+            // mobilesdk_app_id; api_key[] sits beside it on the client object.
             val client = (root["client"] as? JsonArray)
                 ?.firstNotNullOfOrNull { it as? JsonObject } ?: return false
+            val clientInfo = client["client_info"] as? JsonObject
+            val mobileSdkAppId = clientInfo?.get("mobilesdk_app_id")
+                ?.let { (it as? JsonPrimitive)?.content }
+                ?: return false
             val apiKey = (client["api_key"] as? JsonArray)
                 ?.firstNotNullOfOrNull { (it as? JsonObject)?.get("current_key") }
                 ?.let { (it as? JsonPrimitive)?.content } ?: return false
             val options = FirebaseOptions.Builder()
-                .setApplicationId((client["mobilesdk_app_id"] as? JsonPrimitive)?.content ?: return false)
+                .setApplicationId(mobileSdkAppId)
                 .setApiKey(apiKey)
                 .setProjectId((projectInfo["project_id"] as? JsonPrimitive)?.content ?: return false)
-                .setGcmSenderId((projectInfo["project_number"] as? JsonPrimitive)?.content)
+                .setGcmSenderId(
+                    (projectInfo["project_number"] as? JsonPrimitive)?.content
+                        ?: clientInfo["android_client_info"]?.let { (it as? JsonObject)?.get("package_name") }
+                            ?.let { (it as? JsonPrimitive)?.content },
+                )
                 .setStorageBucket((projectInfo["storage_bucket"] as? JsonPrimitive)?.content)
                 .build()
             FirebaseApp.initializeApp(context, options) != null
