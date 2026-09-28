@@ -3,6 +3,7 @@ package com.vivekray898.payvoice
 import android.app.Application
 import android.util.Log
 import androidx.work.Configuration
+import com.vivekray898.payvoice.service.messaging.PaymentNotification
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -26,6 +27,13 @@ class PayVoiceApp : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
+
+        // Create the silent "payment announced" notification channel up front.
+        // It exists so the FCM high-priority channel is not downgraded to
+        // normal priority by Google (which delays delivery in Doze). Cheap
+        // and idempotent; safe to call on every cold start.
+        PaymentNotification.ensureChannel(this)
+
         // Off-main: schedule the daily retention pass (WorkManager is on-demand
         // initialized, so this must run after onCreate starts). No other startup
         // work happens here — the notification path never pays UI-startup cost.
