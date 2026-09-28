@@ -99,7 +99,12 @@ private fun PayVoiceNavHost(viewModel: MainViewModel) {
             EmployeeScreen(viewModel, onBack = { nav.popBackStack() })
         }
         composable(Routes.SETTINGS) {
-            SettingsScreen(viewModel, onBack = { nav.popBackStack() })
+            SettingsScreen(
+                viewModel,
+                onBack = { nav.popBackStack() },
+                onOpenDiagnostics = { nav.navigate(Routes.DIAGNOSTICS) },
+                onOpenReliability = { nav.navigate(Routes.RELIABILITY) },
+            )
         }
         composable(Routes.DIAGNOSTICS) {
             DiagnosticsScreen(viewModel, onBack = { nav.popBackStack() })

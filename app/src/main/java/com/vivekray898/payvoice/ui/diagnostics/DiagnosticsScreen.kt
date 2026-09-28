@@ -115,6 +115,13 @@ fun DiagnosticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
         }
 
         if (viewModel.isDebugBuild) {
+            item(key = "gpay-test") {
+                SectionCard(title = "GPay parser test (debug)") {
+                    Button(onClick = { viewModel.simulate(com.vivekray898.payvoice.core.model.PaymentSource.GOOGLE_PAY) }) {
+                        Text("Simulate GPay ₹500")
+                    }
+                }
+            }
             item(key = "sms-test") {
                 SectionCard(title = "SMS parser test (debug)") {
                     Text(

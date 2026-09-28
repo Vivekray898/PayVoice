@@ -2,6 +2,7 @@ package com.vivekray898.payvoice.ui.parenthome
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -9,8 +10,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -19,22 +27,27 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.os.Build
-import com.vivekray898.payvoice.core.model.PaymentSource
-import com.vivekray898.payvoice.core.parser.AmountExtractor
 import com.vivekray898.payvoice.core.remote.DeviceRole
 import com.vivekray898.payvoice.ui.MainViewModel
-import com.vivekray898.payvoice.ui.components.SectionCard
-import com.vivekray898.payvoice.ui.components.StatusLine
+import com.vivekray898.payvoice.ui.components.PvDivider
+import com.vivekray898.payvoice.ui.components.PvEmptyState
+import com.vivekray898.payvoice.ui.components.PvPaymentRow
+import com.vivekray898.payvoice.ui.components.PvRow
+import com.vivekray898.payvoice.ui.components.PvSection
+import com.vivekray898.payvoice.ui.components.PvStatusHero
+import com.vivekray898.payvoice.ui.components.statusNegative
+import com.vivekray898.payvoice.ui.components.statusPositive
 import com.vivekray898.payvoice.ui.components.timeAgo
 import java.util.Calendar
 
 /**
- * Parent home (spec §22 Phase-1 subset). Device cards / pairing arrive with
- * Phase 2-3.
+ * Home (production redesign): one calm status block in human language, the
+ * recent payments list, and a single entry per device role. All technical
+ * detail lives behind Settings → Advanced. Existing ViewModel wiring is
+ * untouched — presentation only.
  */
 @Composable
 fun ParentHomeScreen(
@@ -47,146 +60,178 @@ fun ParentHomeScreen(
 ) {
     val status by viewModel.status.collectAsStateWithLifecycle()
     val history by viewModel.history.collectAsStateWithLifecycle()
-    val role by viewModel.settings.collectAsStateWithLifecycle()
+    val settings by viewModel.settings.collectAsStateWithLifecycle()
+
+    val listenerOk = status?.listenerEnabled == true
+    val notifOk = status?.notificationsEnabled == true
+    val ready = listenerOk && notifOk
+    val needsAttention = !ready
+    val isEmployee = settings.role == DeviceRole.EMPLOYEE
 
     LazyColumn(
-        Modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        item(key = "header") { Spacer(Modifier.height(8.dp)) }
-
-        item(key = "title") {
-            Column {
-                Text("PayVoice", style = MaterialTheme.typography.headlineMedium)
-                Text(
-                    greeting(),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-
-        item(key = "status") {
-            SectionCard(title = "Detection status") {
-                StatusLine(status?.listenerEnabled == true, "Notification listener")
-                StatusLine(status?.notificationsEnabled == true, "App notifications")
-                StatusLine(status?.batteryExempt == true, "Unrestricted battery")
-                status?.romHint?.takeIf { it.isNotBlank() }?.let {
+        item(key = "header") {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(start = 20.dp, end = 8.dp, top = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column {
+                    Text("PayVoice", style = MaterialTheme.typography.headlineMedium)
                     Text(
-                        "ROM: $it",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = onOpenSettings) { Text("Settings") }
-                    TextButton(onClick = onOpenReliability) { Text("Reliability") }
-                    TextButton(onClick = onOpenDiagnostics) { Text("Diagnostics") }
-                }
-            }
-        }
-
-        item(key = "remote") {
-            // Role card (spec §2/§26): the remote path is an addition — the
-            // local detection status card above stays authoritative.
-            SectionCard(title = "Payment Announcements") {
-                when (role.role) {
-                    DeviceRole.OWNER -> {
-                        val employees by viewModel.employees.collectAsStateWithLifecycle()
-                        StatusLine(true, "Your device · Receiving payments")
-                        Text(
-                            "${employees.count { it.isActive }} employee(s) connected",
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        OutlinedButton(onClick = onOpenOwnerRemote) { Text("Manage Employees") }
-                    }
-                    DeviceRole.EMPLOYEE -> {
-                        val own by viewModel.ownDevice.collectAsStateWithLifecycle()
-                        StatusLine(own?.isActive == true, "Remote announcements")
-                        Text(
-                            if (own?.isActive == true) "Connected — ready to announce payments"
-                            else "Not connected — join with a pairing code",
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        OutlinedButton(onClick = onOpenEmployeeRemote) { Text("Open") }
-                    }
-                    DeviceRole.UNSET -> {
-                        Text(
-                            "Choose this device's role to enable remote announcements.",
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(onClick = { viewModel.setRole(DeviceRole.OWNER, Build.MODEL ?: "Owner") }) {
-                                Text("I'm the Owner")
-                            }
-                            OutlinedButton(onClick = { viewModel.setRole(DeviceRole.EMPLOYEE, Build.MODEL ?: "Employee") }) {
-                                Text("I'm an Employee")
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        item(key = "history-title") {
-            SectionCard(title = "Recent payments") {
-                if (history.isEmpty()) {
-                    Text(
-                        "No payments announced yet. When Google Pay or a bank SMS " +
-                            "credit arrives, the announcement appears here.",
+                        greeting(),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                }
+                IconButton(onClick = onOpenSettings) {
+                    Icon(Icons.Filled.Settings, contentDescription = "Settings")
+                }
+            }
+        }
+
+        item(key = "hero") {
+            if (isEmployee) {
+                EmployeeHero(viewModel, onOpen = onOpenEmployeeRemote)
+            } else {
+                if (ready) {
+                    PvStatusHero(
+                        icon = Icons.Filled.CheckCircle,
+                        tint = statusPositive(),
+                        title = "Payment announcements",
+                        headline = "ON",
+                        body = "You're ready to announce payments.",
+                    )
                 } else {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        history.take(5).forEach { entry ->
-                            Column(Modifier.fillMaxWidth()) {
-                                Text(
-                                    AmountExtractor.formatMinor(entry.amountMinor, entry.currency),
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.SemiBold,
-                                )
-                                Text(
-                                    buildString {
-                                        append("Received")
-                                        append(entry.senderName?.let { " from $it" } ?: "")
-                                    },
-                                    style = MaterialTheme.typography.bodyMedium,
-                                )
-                                Text(
-                                    "${entry.sourceName} · ${timeAgo(entry.announcedAtMs)}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
+                    PvStatusHero(
+                        icon = Icons.Filled.Warning,
+                        tint = statusNegative(),
+                        title = "Payment announcements",
+                        headline = "Action needed",
+                        body = "Allow notification access so PayVoice can hear your payments.",
+                        actionLabel = "Fix this",
+                        onAction = onOpenReliability,
+                    )
+                }
+            }
+        }
+
+        item(key = "payments") {
+            PvSection(title = if (history.isEmpty()) null else "Recent payments") {
+                when {
+                    history.isEmpty() -> PvEmptyState(
+                        title = "No payments yet",
+                        body = "Payments will appear here when they are detected.",
+                        actionLabel = if (needsAttention) "Check setup" else null,
+                        onAction = if (needsAttention) onOpenReliability else null,
+                    )
+                    else -> {
+                        history.take(6).forEachIndexed { index, entry ->
+                            if (index > 0) PvDivider()
+                            PvPaymentRow(
+                                amountText = com.vivekray898.payvoice.core.parser.AmountExtractor
+                                    .formatMinor(entry.amountMinor, entry.currency),
+                                source = entry.sourceName,
+                                sender = entry.senderName,
+                                timeText = timeAgo(entry.announcedAtMs),
+                            )
                         }
                     }
                 }
             }
         }
 
-        item(key = "test") {
-            SectionCard(title = "Test") {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { viewModel.speakTest() }) { Text("🔊 Test announcement") }
+        item(key = "role-entry") {
+            when (settings.role) {
+                DeviceRole.OWNER -> {
+                    val employees by viewModel.employees.collectAsStateWithLifecycle()
+                    val active = employees.count { it.isActive }
+                    PvSection(title = "Employees") {
+                        Text(
+                            if (active == 1) "1 device connected"
+                            else "$active devices connected",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        OutlinedButton(onClick = onOpenOwnerRemote) {
+                            Text("Manage employees")
+                        }
+                    }
                 }
-                Text(
-                    "Debug: simulate a real notification through the full pipeline " +
-                        "(parse → dedup → announce).",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { viewModel.simulate(PaymentSource.GOOGLE_PAY) }) {
-                        Text("Simulate GPay ₹500")
+                DeviceRole.EMPLOYEE -> Unit // hero covers it; deep link below
+                DeviceRole.UNSET -> PvSection(title = "Announce on more devices") {
+                    Text(
+                        "Let another phone announce the same payments — for a shop " +
+                            "counter or another staff member.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = { viewModel.setRole(DeviceRole.OWNER, Build.MODEL ?: "Owner") }) {
+                            Text("I'm the owner")
+                        }
+                        OutlinedButton(onClick = { viewModel.setRole(DeviceRole.EMPLOYEE, Build.MODEL ?: "Employee") }) {
+                            Text("I'm an employee")
+                        }
                     }
                 }
             }
         }
 
-        item(key = "footer") { Spacer(Modifier.height(24.dp)) }
+        item(key = "settings-entry") {
+            PvSection {
+                PvRow(onClick = onOpenSettings) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Settings", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "Voice, announcements & more",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+
+        item(key = "footer") { Spacer(Modifier.height(16.dp)) }
+    }
+}
+
+@Composable
+private fun EmployeeHero(viewModel: MainViewModel, onOpen: () -> Unit) {
+    val own by viewModel.ownDevice.collectAsStateWithLifecycle()
+    val connected = own?.isActive == true
+    if (connected) {
+        PvStatusHero(
+            icon = Icons.Filled.CheckCircle,
+            tint = statusPositive(),
+            title = "Remote announcements",
+            headline = "Connected",
+            body = "This phone announces your owner's payments.",
+            actionLabel = "View connection",
+            onAction = onOpen,
+        )
+    } else {
+        PvStatusHero(
+            icon = Icons.Filled.Warning,
+            tint = com.vivekray898.payvoice.ui.components.statusCaution(),
+            title = "Remote announcements",
+            headline = "Not connected",
+            body = "Join with a code from your owner to start announcing.",
+            actionLabel = "Join",
+            onAction = onOpen,
+        )
     }
 }
 

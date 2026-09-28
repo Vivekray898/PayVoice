@@ -43,6 +43,11 @@ class PayVoiceMessagingService : FirebaseMessagingService() {
         val eid = "event=${event.eventId.take(12)}…"
         stageLog(eid, stage = "fcm_received", extra = "latency=${System.currentTimeMillis() - receivedAt}ms")
 
+        // FCM requires high-priority messages to produce a user-visible notification,
+        // or the channel is downgraded to normal priority (delayed delivery in Doze).
+        // Post a silent receipt immediately — before any auth/dedup/TTS work.
+        PaymentNotification.post(applicationContext)
+
         container.applicationScope.launch {
             runCatching {
                 // 1. AUTHORIZE before ANY announcement work (spec §5): this
@@ -66,6 +71,7 @@ class PayVoiceMessagingService : FirebaseMessagingService() {
                         AnnouncementComposer.TEST_ANNOUNCEMENT_EN
                     )
                     stageLog(eid, stage = "tts_started", extra = "ok=$ok fcmLatency=${System.currentTimeMillis() - receivedAt}ms")
+                    PaymentNotification.cancel(applicationContext)
                     return@launch
                 }
 
@@ -116,6 +122,13 @@ class PayVoiceMessagingService : FirebaseMessagingService() {
                 stageLog(
                     eid, stage = "tts_started",
                     extra = "fcm→ttsRequest=${ttsRequestedAt - receivedAt}ms",
+                )
+                // The speaker is async (speakWhenReady returns immediately). Cancel on a
+                // short delay — long enough for FCM to register the notification, short
+                // enough that the user never sees it linger.
+                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(
+                    { PaymentNotification.cancel(applicationContext) },
+                    4_000L,
                 )
             }.onFailure {
                 stageLog(eid, stage = "failed", reason = it.javaClass.simpleName)

@@ -1,7 +1,6 @@
 package com.vivekray898.payvoice.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,25 +18,43 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.vivekray898.payvoice.ui.theme.Caution
+import com.vivekray898.payvoice.ui.theme.CautionDark
 import com.vivekray898.payvoice.ui.theme.Negative
+import com.vivekray898.payvoice.ui.theme.NegativeDark
 import com.vivekray898.payvoice.ui.theme.Positive
+import com.vivekray898.payvoice.ui.theme.PositiveDark
+
+/** Status colors that keep contrast correct in light AND dark. */
+@Composable
+fun statusPositive(): Color =
+    if (MaterialTheme.colorScheme.surface.luminance() > 0.5f) Positive else PositiveDark
+
+@Composable
+fun statusNegative(): Color =
+    if (MaterialTheme.colorScheme.surface.luminance() > 0.5f) Negative else NegativeDark
+
+@Composable
+fun statusCaution(): Color =
+    if (MaterialTheme.colorScheme.surface.luminance() > 0.5f) Caution else CautionDark
 
 /** null = caution/unknown. */
 @Composable
 fun StatusDot(ok: Boolean?, modifier: Modifier = Modifier) {
     val color = when (ok) {
-        true -> Positive
-        false -> Negative
-        null -> Caution
+        true -> statusPositive()
+        false -> statusNegative()
+        null -> statusCaution()
     }
     Box(
         modifier
             .size(10.dp)
             .clip(CircleShape)
-            .background(color)
+            .background(color),
     )
 }
 
@@ -51,6 +68,22 @@ fun StatusLine(ok: Boolean?, label: String) {
         Text(label, style = MaterialTheme.typography.bodyMedium)
     }
 }
+
+/** Compact relative time for history rows. */
+fun timeAgo(thenMs: Long, nowMs: Long = System.currentTimeMillis()): String {
+    val diff = (nowMs - thenMs).coerceAtLeast(0)
+    val minutes = diff / 60_000
+    return when {
+        diff < 45_000 -> "just now"
+        minutes < 60 -> "${minutes}m ago"
+        minutes < 1_440 -> "${minutes / 60}h ago"
+        else -> "${minutes / 1_440}d ago"
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Shared card + switch row (used by Reliability / Diagnostics / Onboarding)
+// ---------------------------------------------------------------------------
 
 @Composable
 fun SectionCard(
@@ -99,17 +132,5 @@ fun SwitchRow(
             }
         }
         Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
-    }
-}
-
-/** Compact relative time for history rows. */
-fun timeAgo(thenMs: Long, nowMs: Long = System.currentTimeMillis()): String {
-    val diff = (nowMs - thenMs).coerceAtLeast(0)
-    val minutes = diff / 60_000
-    return when {
-        diff < 45_000 -> "just now"
-        minutes < 60 -> "${minutes}m ago"
-        minutes < 1_440 -> "${minutes / 60}h ago"
-        else -> "${minutes / 1_440}d ago"
     }
 }

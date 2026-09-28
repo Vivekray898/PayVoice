@@ -9,37 +9,61 @@ import androidx.compose.ui.graphics.Color
 
 private val LightColors = lightColorScheme(
     primary = TealPrimary,
-    onPrimary = Color.White,
+    onPrimary = TealOnPrimary,
     primaryContainer = TealContainer,
-    onPrimaryContainer = Color(0xFF00201B),
+    onPrimaryContainer = TealOnContainer,
     secondary = SandSecondary,
-    onSecondary = Color.White,
+    onSecondary = SandOnSecondary,
     secondaryContainer = SandContainer,
-    onSecondaryContainer = Color(0xFF241A00),
+    onSecondaryContainer = SandOnContainer,
+    tertiary = IndigoTertiary,
+    onTertiary = Color.White,
+    tertiaryContainer = IndigoContainer,
+    onTertiaryContainer = Color(0xFF001E31),
     background = SurfaceLight,
     onBackground = InkText,
     surface = SurfaceLight,
     onSurface = InkText,
+    surfaceVariant = SurfaceContainerLight,
+    onSurfaceVariant = MutedText,
     surfaceContainer = SurfaceContainerLight,
+    surfaceContainerHigh = SurfaceContainerHighLight,
+    surfaceContainerHighest = SurfaceContainerHighLight,
+    outline = OutlineLight,
+    outlineVariant = OutlineVariantLight,
+    error = Negative,
+    onError = Color.White,
 )
 
 private val DarkColors = darkColorScheme(
     primary = TealPrimaryDark,
-    onPrimary = Color(0xFF00382F),
+    onPrimary = TealOnPrimaryDark,
     primaryContainer = TealContainerDark,
-    onPrimaryContainer = TealContainer,
+    onPrimaryContainer = TealOnContainerDark,
     secondary = SandSecondaryDark,
-    onSecondary = Color(0xFF3F2E00),
+    onSecondary = SandOnSecondaryDark,
     secondaryContainer = SandContainerDark,
-    onSecondaryContainer = SandContainer,
+    onSecondaryContainer = SandOnContainerDark,
+    tertiary = IndigoTertiaryDark,
+    onTertiary = Color(0xFF10202C),
+    tertiaryContainer = IndigoContainerDark,
+    onTertiaryContainer = IndigoContainerDark,
     background = SurfaceDark,
     onBackground = InkTextDark,
     surface = SurfaceDark,
     onSurface = InkTextDark,
+    surfaceVariant = SurfaceContainerDark,
+    onSurfaceVariant = MutedTextDark,
     surfaceContainer = SurfaceContainerDark,
+    surfaceContainerHigh = SurfaceContainerHighDark,
+    surfaceContainerHighest = SurfaceContainerHighDark,
+    outline = OutlineDark,
+    outlineVariant = OutlineVariantDark,
+    error = NegativeDark,
+    onError = Color(0xFF601410),
 )
 
-/** Original PayVoice identity — dynamic color intentionally off for brand consistency. */
+/** PayVoice identity — dynamic color intentionally off for brand consistency. */
 @Composable
 fun PayVoiceTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
@@ -48,6 +72,7 @@ fun PayVoiceTheme(
     MaterialTheme(
         colorScheme = if (darkTheme) DarkColors else LightColors,
         typography = Typography,
+        shapes = PayVoiceShapes,
         content = content,
     )
 }
