@@ -165,6 +165,7 @@ object RemoteCollections {
     const val PAIRING_CODES = "pairing_codes"
     const val EMPLOYEES = "employees"
     const val PAYMENT_EVENTS = "payment_events"
+    const val DEVICES = "devices"
 
     fun newEventId(): String = "evt_" + UUID.randomUUID().toString().replace("-", "").take(20)
 }

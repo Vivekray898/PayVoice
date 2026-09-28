@@ -13,3 +13,8 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Local secret files — never committed. Runtime secrets live in the platform
+# secret stores (Supabase Edge Function Secrets), not on disk (see AGENTS.md).
+.env
+.env.local

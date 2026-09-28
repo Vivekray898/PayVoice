@@ -40,6 +40,8 @@ class PayVoiceApp : Application(), Configuration.Provider {
             // Anonymous auth warm-up (device identity for the remote layer).
             // Fire-and-forget: remote features degrade gracefully offline.
             runCatching { container.auth.warmUp() }
+            // Device heartbeat: keep last_seen fresh for the owner card.
+            runCatching { container.devices.touch() }
             // Async TTS engine warm-up — never blocks startup, never blocks TTS.
             runCatching {
                 container.speaker.warmUp()

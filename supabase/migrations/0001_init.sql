@@ -5,15 +5,14 @@
 --   auth.users            one anonymous user per device (Supabase Auth).
 --   pairing_codes         owner-created, short-lived, single-use codes.
 --   employees             employee device registry (id == auth.uid()).
---   payment_events        owner-created events; trigger fans out via FCM.
+--   payment_events        owner-created events; fanned out via Database
+--                         Webhook → fcm-gateway (no trigger, no stored creds).
 --
 -- Wire convention: timestamps are epoch-millis bigint (the Android client
 -- parses no date strings). Security model lives entirely in RLS + the
 -- security-definer claim_pairing() function; clients hold only the anon key
 -- and their own JWT.
 -- =============================================================================
-
-create extension if not exists pg_net;
 
 -- =============================================================================
 -- Tables
@@ -203,44 +202,10 @@ revoke all on function public.claim_pairing(text, text) from public;
 grant execute on function public.claim_pairing(text, text) to authenticated;
 
 -- =============================================================================
--- Fan-out trigger → fcm-gateway edge function (via pg_net)
+-- Payment fan-out (Deliberately NOT here)
 -- =============================================================================
--- The edge function verifies service_auth = decode_jwt(verification_token).sub
--- is the service_role key's subject — see supabase/functions/fcm-gateway.
-create or replace function public.trigger_fcm_gateway()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-    v_payload json := json_build_object(
-        'eventId',      new.id,
-        'ownerUid',     new.owner_uid,
-        'type',         new.type,
-        'amountMinor',  new.amount_minor,
-        'currency',     new.currency,
-        'senderName',   new.sender_name,
-        'source',       new.source,
-        'timestampMs',  new.timestamp_ms
-    );
-begin
-    perform net.http_post(
-        url := 'https://vcupljjcowlgqvsdieem.supabase.co/functions/v1/fcm-gateway',
-        headers := json_build_object(
-            'Content-Type', 'application/json',
-            'Authorization', 'Bearer ' || current_setting('app.settings.service_jwt', true)
-        )::jsonb,
-        body := v_payload::jsonb
-    );
-    return new;
-end;
-$$;
-
-create trigger payment_events_fanout
-    after insert on public.payment_events
-    for each row execute function public.trigger_fcm_gateway();
-
--- The service JWT is provided per-transaction by the edge gateway path via
--- `ALTER DATABASE ... SET app.settings.service_jwt` (see supabase/README.md,
--- step 5) so the trigger never stores a secret in a table.
+-- There is NO database trigger and NO credential in Postgres settings.
+-- The payment_events INSERT is delivered to the fcm-gateway edge function by
+-- a Supabase **Database Webhook** (Dashboard → Database → Webhooks), which
+-- authenticates with a secret key server-side. See supabase/README.md step 4
+-- and supabase/functions/fcm-gateway (auth: 'secret').

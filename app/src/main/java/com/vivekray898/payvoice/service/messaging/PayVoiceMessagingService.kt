@@ -100,15 +100,15 @@ class PayVoiceMessagingService : FirebaseMessagingService() {
     }
 
     /**
-     * Token rotation (spec §14): push the fresh token into this device's
-     * registry record so the Cloud Function always dials a live token.
+     * Token rotation (spec §14/§15): persist securely AND refresh this
+     * device's `devices` row so the fcm-gateway always dials a live token.
      */
     override fun onNewToken(token: String) {
         val app = application as? PayVoiceApp ?: return
         app.container.applicationScope.launch {
             runCatching {
                 app.container.messaging.storeTokenSecurely(token)
-                app.container.pairing.touchDevice(fcmToken = token)
+                app.container.devices.onTokenRefreshed(token)
             }
         }
     }

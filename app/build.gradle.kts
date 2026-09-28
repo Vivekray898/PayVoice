@@ -72,9 +72,10 @@ dependencies {
     // gets token + data messages for the Supabase edge-function gateway.
     // Identity + data live in Supabase (REST); only FCM transport remains.
     implementation(libs.firebase.messaging)
-    // Supabase: hand-rolled REST client on kotlinx-serialization (GoTrue anon
-    // auth + PostgREST + edge functions). No Supabase SDK dependency.
+    // Supabase: hand-rolled REST + Realtime clients on kotlinx-serialization
+    // and OkHttp (current sb_publishable_ key system; no Supabase SDK dep).
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.okhttp)
 
     implementation("androidx.security:security-crypto:1.1.0")
 

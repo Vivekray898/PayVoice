@@ -7,6 +7,7 @@ import com.vivekray898.payvoice.core.remote.RemoteEventValidator
 import com.vivekray898.payvoice.core.remote.RemoteEventType
 import com.vivekray898.payvoice.core.remote.RemotePaymentEvent
 import com.vivekray898.payvoice.core.remote.RemoteConfig
+import com.vivekray898.payvoice.core.remote.SupabaseRealtime
 import com.vivekray898.payvoice.core.remote.toPayload
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
@@ -249,13 +250,43 @@ class RemoteLayerTest {
     }
 
     @Test
-    fun `supabase config exposes only public credentials`() {
-        // The anon key is publishable by design; there must be no service
-        // role / server key anywhere in RemoteConfig.
+    fun `supabase config uses the current publishable key system only`() {
+        // Current system: URL + sb_publishable_ key. No legacy anon/
+        // service_role JWT keys, no secret key, no FCM server key anywhere.
         val fields = RemoteConfig::class.java.declaredFields.map { it.name }
         assertTrue("SUPABASE_URL" in fields)
-        assertTrue("SUPABASE_ANON_KEY" in fields)
-        assertTrue(fields.none { it.contains("SERVICE", ignoreCase = true) || it.contains("SERVER_KEY", ignoreCase = true) })
+        assertTrue("SUPABASE_PUBLISHABLE_KEY" in fields)
+        assertTrue(fields.none {
+            it.contains("ANON", ignoreCase = true) ||
+                it.contains("SERVICE", ignoreCase = true) ||
+                it.contains("SECRET", ignoreCase = true) ||
+                it.contains("SERVER_KEY", ignoreCase = true)
+        })
+    }
+
+    @Test
+    fun `publishable key must carry the current prefix and reject legacy keys`() {
+        assertEquals("sb_publishable_", RemoteConfig.publishableKey().take("sb_publishable_".length))
+        RemoteConfig.publishableKeyOverride = "eyJhbGciOiJIUzI1NiJ9.legacy"
+        try {
+            runCatching { RemoteConfig.publishableKey() }.onSuccess {
+                throw AssertionError("legacy eyJ key accepted")
+            }
+        } finally {
+            RemoteConfig.publishableKeyOverride = null
+        }
+    }
+
+    @Test
+    fun `realtime filter json matches the postgres_changes contract`() {
+        val filter = SupabaseRealtime.RealtimeFilter(
+            event = "*", table = "employees", filter = "owner_id=eq.abc",
+        )
+        val json = filter.toJson().toString()
+        assertTrue(json.contains("\"event\":\"*\""))
+        assertTrue(json.contains("\"schema\":\"public\""))
+        assertTrue(json.contains("\"table\":\"employees\""))
+        assertTrue(json.contains("\"filter\":\"owner_id=eq.abc\""))
     }
 
     private fun assertFalse(b: Boolean) = org.junit.Assert.assertFalse(b)

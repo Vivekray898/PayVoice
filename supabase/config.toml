@@ -1,7 +1,7 @@
 project_id = "payvoice"
 
 [functions.fcm-gateway]
-verify_jwt = true
-
-[functions.claim-pairing]
-verify_jwt = true
+# Called by the Database Webhook with a SECRET key on `apikey` (auth: 'secret'
+# inside the function). The platform JWT check must be off — the function
+# authenticates the caller itself via @supabase/server.
+verify_jwt = false

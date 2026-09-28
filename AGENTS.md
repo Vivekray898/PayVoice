@@ -1,0 +1,60 @@
+# PayVoice — Agent Instructions
+
+Rules for any AI agent or contributor touching this repository. These encode
+the CURRENT (2026) Supabase + FCM architecture. When official docs conflict
+with this file or with old tutorials, the CURRENT official documentation wins.
+
+## Supabase API keys
+
+- The Android app uses ONLY: `SUPABASE_URL` + a `sb_publishable_...` key
+  (`RemoteConfig.kt`). Publishable keys are public; RLS is the data guard.
+- Server components (Edge Functions, webhooks, cron) use `sb_secret_...`
+  keys via `apikey:` — never ship one to the client, never commit one.
+- NEVER use the legacy `anon` / `service_role` JWT keys (`eyJ...`), and never
+  create code around `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY`
+  runtime variables.
+- Never store credentials in Postgres settings (e.g. no
+  `app.settings.service_jwt`), `BuildConfig`, `gradle.properties`,
+  `AndroidManifest.xml`, `assets/`, or resources.
+
+## Edge Functions
+
+- Use the current auth model: `withSupabase` from `npm:@supabase/server`
+  with `auth: 'secret'` for service-to-service calls (Database Webhooks,
+  pg_net, cron) and `verify_jwt = false` in `supabase/config.toml`.
+- Deno + TypeScript + `fetch()` + Web APIs only; shared helpers live in
+  `supabase/functions/_shared/` if needed. No dependency spaghetti.
+
+## FCM
+
+- Sending: **HTTP v1 only** — `POST https://fcm.googleapis.com/v1/projects/{PROJECT_ID}/messages:send`
+  with `Authorization: Bearer <short-lived OAuth 2.0 access token>` minted
+  from the service-account secrets (`FCM_PROJECT_ID`, `FCM_CLIENT_EMAIL`,
+  `FCM_PRIVATE_KEY` in Edge Function secrets).
+- NEVER: `https://fcm.googleapis.com/fcm/send`, `Authorization: key=...`,
+  legacy server keys, `FCM_SERVER_KEY`.
+- The Android app only REGISTERS tokens and RECEIVES messages
+  (`FirebaseMessagingService` → `PayVoiceMessagingService`). It never sends.
+- Deactivate `devices` rows whose token FCM reports `UNREGISTERED`/410.
+
+## Firebase scope
+
+- Firebase exists in this project ONLY as FCM transport (free tier).
+- NO Firebase Cloud Functions (no `functions/` directory), NO Firestore,
+  NO Firebase Auth. The backend is Supabase Free.
+
+## Android
+
+- google-services Gradle plugin stays REMOVED; `FirebaseApp` initializes
+  manually from the gitignored `assets/google-services.json` (client config
+  only — never any server credential).
+- Remote delivery must never block the local announcement path.
+- Realtime (`SupabaseRealtime`) is for STATE sync only; payment delivery is
+  FCM-only.
+
+## Database
+
+- Tables: `pairing_codes`, `employees` (owner_id), `devices` (user_id),
+  `payment_events` (idempotent `evt_...` ids). RLS enabled on everything.
+- Pairing codes: random, 10-minute TTL, single-use, atomic claim via
+  `claim_pairing()`; no identity encoded in the code.

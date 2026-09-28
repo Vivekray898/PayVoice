@@ -10,7 +10,10 @@ import com.vivekray898.payvoice.core.remote.EmployeeRepository
 import com.vivekray898.payvoice.core.remote.PayVoiceAuth
 import com.vivekray898.payvoice.core.remote.PairingRepository
 import com.vivekray898.payvoice.core.remote.RemoteEventSender
+import com.vivekray898.payvoice.core.remote.DeviceRepository
+import com.vivekray898.payvoice.core.remote.RemoteConfig
 import com.vivekray898.payvoice.core.remote.SupabaseClient
+import com.vivekray898.payvoice.core.remote.SupabaseRealtime
 import com.vivekray898.payvoice.core.settings.SettingsRepository
 import com.vivekray898.payvoice.core.settings.SettingsRepositoryImpl
 import com.vivekray898.payvoice.service.messaging.MessagingRepository
@@ -54,13 +57,22 @@ class AppContainer(private val appContext: Context) {
     // Backend is Supabase (REST + edge functions). Identity/data never touch
     // Firebase; FCM is transport only, driven by the fcm-gateway function.
 
-    val supabase: SupabaseClient by lazy { SupabaseClient(appContext) }
+    val supabase: SupabaseClient by lazy {
+        // Allow local (non-source) publishable-key configuration. Publishable
+        // keys are public by design — this never handles secrets.
+        RemoteConfig.applyResourceOverrides(appContext)
+        SupabaseClient(appContext)
+    }
 
     val auth: PayVoiceAuth by lazy { PayVoiceAuth(supabase) }
 
-    val pairing: PairingRepository by lazy { PairingRepository(auth, supabase, applicationScope) }
+    val devices: DeviceRepository by lazy { DeviceRepository(auth, supabase) }
 
-    val employees: EmployeeRepository by lazy { EmployeeRepository(auth, supabase) }
+    val realtime: SupabaseRealtime by lazy { SupabaseRealtime() }
+
+    val pairing: PairingRepository by lazy { PairingRepository(auth, supabase, devices, applicationScope) }
+
+    val employees: EmployeeRepository by lazy { EmployeeRepository(auth, supabase, realtime) }
 
     val remoteSender: RemoteEventSender by lazy { RemoteEventSender(auth, supabase, applicationScope) }
 

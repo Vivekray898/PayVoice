@@ -2,41 +2,127 @@ package com.vivekray898.payvoice.core.remote
 
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
 /**
- * Owner-side employee registry (spec §3, §15, §16) — Supabase REST.
+ * Owner/employee registry state (spec §3, §15, §16) — Supabase REST+Realtime.
  *
- * Reads/writes ONLY rows RLS grants this authenticated owner: employees whose
- * `owner_uid` matches, and payment events created by this owner.
+ * Reads/writes ONLY rows RLS grants this authenticated identity: employees
+ * whose `owner_id` matches (owner side), and the employee's own row.
  *
- * REST has no server push, so the live lists are **polls**: the Owner list
- * refreshes every [POLL_INTERVAL_MS] while subscribed (UI-visible only), and
- * the employee's own-device row refreshes more often so pairing/revocation
- * shows up quickly. Polls stop immediately when the collector goes away.
+ * State sync uses Supabase **Realtime** ([SupabaseRealtime], user JWT → RLS)
+ * on top of a REST snapshot prime, with a bounded fallback poll that keeps
+ * the UI fresh while the socket is not LIVE. FCM remains the payment-
+ * delivery channel — Realtime never carries announcements.
  */
 class EmployeeRepository(
     private val auth: PayVoiceAuth,
     private val client: SupabaseClient,
+    private val realtime: SupabaseRealtime,
 ) {
 
     /** Live employee list for the Owner home card (spec §3). */
-    fun observeEmployees(): Flow<List<EmployeeDevice>> = pollFlow(POLL_INTERVAL_MS) {
-        val uid = auth.ensureSignedIn() ?: return@pollFlow emptyList()
+    fun observeEmployees(): Flow<List<EmployeeDevice>> = flow {
+        val uid = auth.ensureSignedIn()
+        var latest = runCatching { fetchEmployees() }.getOrNull() ?: emptyList()
+        emit(latest)
+
+        coroutineScope {
+            val poll = launch {
+                while (isActive) {
+                    delay(POLL_INTERVAL_MS)
+                    val fresh = runCatching { fetchEmployees() }.getOrNull() ?: continue
+                    if (fresh != latest) {
+                        latest = fresh
+                        emit(fresh)
+                    }
+                }
+            }
+            if (uid != null) {
+                realtime.postgresChanges(
+                    filters = listOf(
+                        SupabaseRealtime.RealtimeFilter(event = "*", table = "employees"),
+                    ),
+                    accessTokenProvider = { client.currentSession()?.accessToken },
+                ).collect { change ->
+                    if (change.table != RemoteCollections.EMPLOYEES) return@collect
+                    val fresh = runCatching { fetchEmployees() }.getOrNull()
+                        ?: return@collect
+                    if (fresh != latest) {
+                        latest = fresh
+                        emit(fresh)
+                    }
+                }
+            }
+            poll.join()
+        }
+    }.flowOn(Dispatchers.IO)
+
+    /**
+     * Employee side: observe THIS device's registry record (own row only —
+     * RLS never allows reading other employees). Null = not paired.
+     */
+    fun observeOwnDevice(): Flow<EmployeeDevice?> = flow {
+        val uid = auth.ensureSignedIn()
+        var latest = runCatching { fetchOwnDevice() }.getOrNull()
+        emit(latest)
+
+        coroutineScope {
+            val poll = launch {
+                while (isActive) {
+                    delay(OWN_POLL_INTERVAL_MS)
+                    val fresh = runCatching { fetchOwnDevice() }.getOrNull() ?: continue
+                    if (fresh != latest) {
+                        latest = fresh
+                        emit(fresh)
+                    }
+                }
+            }
+            if (uid != null) {
+                realtime.postgresChanges(
+                    filters = listOf(
+                        SupabaseRealtime.RealtimeFilter(event = "*", table = "employees"),
+                    ),
+                    accessTokenProvider = { client.currentSession()?.accessToken },
+                ).collect { change ->
+                    if (change.table != RemoteCollections.EMPLOYEES) return@collect
+                    // Deliver only changes to THIS device's row (event carries
+                    // the record; primary key column is `id`).
+                    val rowId = change.new?.let { RestJson.str(it, "id") }
+                        ?: change.old?.let { RestJson.str(it, "id") }
+                    if (rowId != null && rowId != uid) return@collect
+                    val fresh = runCatching { fetchOwnDevice() }.getOrNull() ?: return@collect
+                    if (fresh != latest) {
+                        latest = fresh
+                        emit(fresh)
+                    }
+                }
+            }
+            poll.join()
+        }
+    }.flowOn(Dispatchers.IO)
+
+    // ---- Supabase REST (PostgREST) queries ----
+
+    private suspend fun fetchEmployees(): List<EmployeeDevice>? {
+        val uid = auth.ensureSignedIn() ?: return null
         val body = withContext(Dispatchers.IO) {
             client.selectRows(
                 table = RemoteCollections.EMPLOYEES,
-                query = "owner_uid=eq.$uid&select=id,name,status,paired_at,last_seen_at,last_event_delivered_at",
+                query = "owner_id=eq.$uid&select=id,name,status,paired_at,last_seen_at,last_event_delivered_at",
                 bearer = null,
             )
-        } ?: return@pollFlow emptyList()
-        RestJson.parseArray(body).mapNotNull { row ->
+        } ?: return null
+        return RestJson.parseArray(body).mapNotNull { row ->
             val status = RestJson.str(row, "status") ?: return@mapNotNull null
             EmployeeDevice(
                 uid = RestJson.str(row, "id") ?: return@mapNotNull null,
@@ -49,21 +135,17 @@ class EmployeeRepository(
         }
     }
 
-    /**
-     * Employee side: observe THIS device's registry record (own doc only —
-     * RLS never allows reading other employees). Null = not paired.
-     */
-    fun observeOwnDevice(): Flow<EmployeeDevice?> = pollFlow(OWN_POLL_INTERVAL_MS) {
-        val uid = auth.ensureSignedIn() ?: return@pollFlow null
+    private suspend fun fetchOwnDevice(): EmployeeDevice? {
+        val uid = auth.ensureSignedIn() ?: return null
         val body = withContext(Dispatchers.IO) {
             client.selectRows(
                 table = RemoteCollections.EMPLOYEES,
                 query = "id=eq.$uid&select=id,name,status,paired_at,last_seen_at,last_event_delivered_at",
                 bearer = null,
             )
-        } ?: return@pollFlow null
-        RestJson.parseArray(body).firstOrNull()?.let { row ->
-            val status = RestJson.str(row, "status") ?: return@pollFlow null
+        } ?: return null
+        return RestJson.parseArray(body).firstOrNull()?.let { row ->
+            val status = RestJson.str(row, "status") ?: return null
             EmployeeDevice(
                 uid = RestJson.str(row, "id") ?: uid,
                 name = RestJson.str(row, "name") ?: "Employee Device",
@@ -75,25 +157,13 @@ class EmployeeRepository(
         }
     }
 
-    /** Generic bounded poll that re-runs [fetch] while collected. */
-    private fun <T> pollFlow(intervalMs: Long, fetch: suspend () -> T): Flow<T> = flow {
-        while (true) {
-            val value = runCatching { fetch() }.getOrElse { e ->
-                Log.w(TAG, "poll failed: ${e.javaClass.simpleName}")
-                null
-            }
-            if (value != null) emit(value)
-            delay(intervalMs)
-        }
-    }.flowOn(Dispatchers.IO)
-
     /** Owner revokes an employee: backend status flips, FCM fan-out stops. */
     suspend fun revoke(employeeUid: String): Boolean {
         val uid = auth.ensureSignedIn() ?: return false
         return withContext(Dispatchers.IO) {
             client.updateRow(
                 table = RemoteCollections.EMPLOYEES,
-                filter = "id=eq.$employeeUid&owner_uid=eq.$uid",
+                filter = "id=eq.$employeeUid&owner_id=eq.$uid",
                 body = buildJsonObject {
                     put("status", "REVOKED")
                     put("revoked_at", System.currentTimeMillis())

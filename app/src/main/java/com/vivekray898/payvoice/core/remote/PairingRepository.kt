@@ -27,6 +27,7 @@ import kotlinx.serialization.json.put
 class PairingRepository(
     private val auth: PayVoiceAuth,
     private val client: SupabaseClient,
+    private val devices: DeviceRepository? = null,
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
 ) {
 
@@ -90,13 +91,17 @@ class PairingRepository(
                     filter = "id=eq.$uid",
                     body = buildJsonObject {
                         put("last_seen_at", System.currentTimeMillis())
-                        if (!fcmToken.isNullOrBlank()) put("fcm_token", fcmToken)
                     },
                     bearer = null,
                 )
             }
+            // FCM token lives in `devices` (spec §12/§15), not on employees.
+            fcmToken?.let { devices?.upsertDevice(it, deviceName = deviceName()) }
         }
     }
+
+    private fun deviceName(): String =
+        android.os.Build.MODEL?.trim()?.take(60).orEmpty().ifBlank { "Employee Device" }
 
     /** Employee: leave the business (spec §21). Owner-side revoke is separate. */
     suspend fun leaveOwner(): Boolean {

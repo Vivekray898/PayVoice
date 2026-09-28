@@ -22,8 +22,10 @@ import kotlin.coroutines.resume
  * dependency weight. Every call:
  *  - is suspend + cancellable, with a bounded timeout;
  *  - runs OFF the main thread (callers are already on Dispatchers.Default);
- *  - carries the anon key always, plus the user's access token when signed in
- *    (Authorization: Bearer) — PostgREST RLS sees the user role via the JWT;
+ *  - carries the CURRENT publishable key on `apikey` (sb_publishable_... —
+ *    never the deprecated `anon`/`service_role` JWT keys), plus the user's
+ *    access token when signed in (Authorization: Bearer) — PostgREST RLS
+ *    sees the authenticated role via the JWT;
  *  - silently refreshes an expired access token once (GoTrue /token?grant_type=refresh_token).
  */
 class SupabaseClient(private val context: Context) {
@@ -59,6 +61,12 @@ class SupabaseClient(private val context: Context) {
 
     fun currentUserId(): String? = cached?.userId
 
+    /**
+     * Current valid access token for Realtime/RPC callers — refreshes when
+     * near expiry. Null only when there is no identity (never crash).
+     */
+    suspend fun sessionAccessToken(): String? = ensureSignedIn()?.accessToken
+
     /** Persist a session (called after sign-in / refresh). */
     fun storeSession(session: StoredSession) {
         sessionStore.save(session)
@@ -74,16 +82,16 @@ class SupabaseClient(private val context: Context) {
 
     /**
      * Anonymous sign-in (spec §18): POST /auth/v1/signup {"is_anonymous":true}
-     * with the anon key. No email, no PII — the returned user id is the
-     * device's stable identity. Project must have anonymous sign-ins enabled.
+     * with the publishable key. No email, no PII — the returned user id is
+     * the device's stable identity. Project must have anonymous sign-ins
+     * enabled.
      */
     suspend fun signInAnonymously(): Session? {
         cached?.let { return it }
         val body = buildJsonObject { put("is_anonymous", true) }.toString()
         val response = runCatching {
             postJson(
-                url = RemoteConfig.SUPABASE_URL + RemoteConfig.AUTH_PATH + "/signup",
-                apiKey = RemoteConfig.SUPABASE_ANON_KEY,
+                url = RemoteConfig.url() + RemoteConfig.AUTH_PATH + "/signup",
                 bearer = null,
                 body = body,
             )
@@ -122,9 +130,8 @@ class SupabaseClient(private val context: Context) {
             val body = buildJsonObject { put("refresh_token", current.refreshToken) }.toString()
             val response = runCatching {
                 postJson(
-                    url = RemoteConfig.SUPABASE_URL + RemoteConfig.AUTH_PATH +
+                    url = RemoteConfig.url() + RemoteConfig.AUTH_PATH +
                         "/token?grant_type=refresh_token",
-                    apiKey = RemoteConfig.SUPABASE_ANON_KEY,
                     bearer = null,
                     body = body,
                 )
@@ -160,19 +167,21 @@ class SupabaseClient(private val context: Context) {
 
     // ---- Generic REST helpers ----
 
-    /** Headers used for every Supabase call. */
+    /** Headers used for every Supabase call: publishable key + user JWT. */
     private fun baseHeaders(bearer: String?): Map<String, String> = buildMap {
-        put("apikey", RemoteConfig.SUPABASE_ANON_KEY)
+        put("apikey", RemoteConfig.publishableKey())
         put("Content-Type", "application/json")
         put("Accept", "application/json")
-        if (bearer != null) put("Authorization", "Bearer $bearer")
+        // User identity: Supabase Auth JWT (RLS applies) — distinct from the
+        // API key itself (sb_publishable_...) which only names the project.
+        put("Authorization", "Bearer ${bearer ?: RemoteConfig.publishableKey()}")
     }
 
     /**
      * One-shot POST returning the body, or null on failure. Refreshes the
      * session exactly once on a 401 before giving up.
      */
-    suspend fun postJson(url: String, apiKey: String, bearer: String?, body: String): HttpResponse =
+    suspend fun postJson(url: String, bearer: String?, body: String): HttpResponse =
         execute(url, baseHeaders(bearer), body)
 
     /**
@@ -193,7 +202,7 @@ class SupabaseClient(private val context: Context) {
             else "return=minimal"
         val response = runCatching {
             execute(
-                RemoteConfig.SUPABASE_URL + RemoteConfig.REST_PATH + "/" + table,
+                RemoteConfig.url() + RemoteConfig.REST_PATH + "/" + table,
                 headers,
                 body.toString(),
             )
@@ -210,7 +219,7 @@ class SupabaseClient(private val context: Context) {
                 else "return=minimal"
             val retry = runCatching {
                 execute(
-                    RemoteConfig.SUPABASE_URL + RemoteConfig.REST_PATH + "/" + table,
+                    RemoteConfig.url() + RemoteConfig.REST_PATH + "/" + table,
                     retryHeaders,
                     body.toString(),
                 )
@@ -232,7 +241,7 @@ class SupabaseClient(private val context: Context) {
             ?: ensureSignedIn() ?: return null
         val response = runCatching {
             get(
-                RemoteConfig.SUPABASE_URL + RemoteConfig.REST_PATH + "/" + table +
+                RemoteConfig.url() + RemoteConfig.REST_PATH + "/" + table +
                     "?" + query,
                 baseHeaders(session.accessToken),
             )
@@ -241,7 +250,7 @@ class SupabaseClient(private val context: Context) {
             val refreshed = runCatching { refreshSession() }.getOrNull() ?: return null
             return runCatching {
                 get(
-                    RemoteConfig.SUPABASE_URL + RemoteConfig.REST_PATH + "/" + table +
+                    RemoteConfig.url() + RemoteConfig.REST_PATH + "/" + table +
                         "?" + query,
                     baseHeaders(refreshed.accessToken),
                 )
@@ -269,7 +278,7 @@ class SupabaseClient(private val context: Context) {
         headers["Prefer"] = "return=minimal"
         val response = runCatching {
             patch(
-                RemoteConfig.SUPABASE_URL + RemoteConfig.REST_PATH + "/" + table +
+                RemoteConfig.url() + RemoteConfig.REST_PATH + "/" + table +
                     "?" + filter,
                 headers,
                 body.toString(),
@@ -281,7 +290,7 @@ class SupabaseClient(private val context: Context) {
             retryHeaders["Prefer"] = "return=minimal"
             val retry = runCatching {
                 patch(
-                    RemoteConfig.SUPABASE_URL + RemoteConfig.REST_PATH + "/" + table +
+                    RemoteConfig.url() + RemoteConfig.REST_PATH + "/" + table +
                         "?" + filter,
                     retryHeaders,
                     body.toString(),
@@ -299,9 +308,9 @@ class SupabaseClient(private val context: Context) {
      */
     suspend fun rpc(function: String, args: JsonObject): String? {
         val session = ensureSignedIn() ?: return null
-        val url = RemoteConfig.SUPABASE_URL + RemoteConfig.REST_PATH + "/rpc/" + function
+        val url = RemoteConfig.url() + RemoteConfig.REST_PATH + "/rpc/" + function
         val response = runCatching {
-            postJson(url, RemoteConfig.SUPABASE_ANON_KEY, session.accessToken, args.toString())
+            postJson(url, session.accessToken, args.toString())
         }.getOrElse {
             Log.w(TAG, "rpc $function network failure: ${it.javaClass.simpleName}")
             return null
@@ -309,7 +318,7 @@ class SupabaseClient(private val context: Context) {
         if (response.code == 401) {
             val refreshed = runCatching { refreshSession() }.getOrNull() ?: return null
             return runCatching {
-                postJson(url, RemoteConfig.SUPABASE_ANON_KEY, refreshed.accessToken, args.toString())
+                postJson(url, refreshed.accessToken, args.toString())
             }.getOrNull()?.body
         }
         if (response.code !in 200..299) {
@@ -327,8 +336,7 @@ class SupabaseClient(private val context: Context) {
         val session = ensureSignedIn() ?: return null
         val response = runCatching {
             postJson(
-                RemoteConfig.SUPABASE_URL + RemoteConfig.FUNCTIONS_PATH + "/" + name,
-                RemoteConfig.SUPABASE_ANON_KEY,
+                RemoteConfig.url() + RemoteConfig.FUNCTIONS_PATH + "/" + name,
                 session.accessToken,
                 body.toString(),
             )

@@ -184,8 +184,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         refreshStatus()
-        // FCM registration in the background — never on the UI path.
-        viewModelScope.launch { container.messaging.refreshToken() }
+        // FCM registration in the background — never on the UI path. The
+        // token is associated with the authenticated user's `devices` row
+        // (spec §15: obtain → associate → upsert → last-seen).
+        viewModelScope.launch {
+            val token = container.messaging.refreshToken().getOrNull() ?: return@launch
+            container.devices.registerDevice(
+                fcmToken = token,
+                deviceName = container.settings.settings.value.deviceName
+                    .ifBlank { android.os.Build.MODEL ?: "Device" },
+            )
+        }
     }
 
     /** Called from onResume via lifecycle observer; off-main, cheap to repeat. */
@@ -341,7 +350,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** FCM: refresh registration token (also used by the Reliability screen). */
     fun refreshFcmToken() {
-        viewModelScope.launch { container.messaging.refreshToken() }
+        viewModelScope.launch {
+            val token = container.messaging.refreshToken().getOrNull() ?: return@launch
+            container.devices.registerDevice(
+                fcmToken = token,
+                deviceName = container.settings.settings.value.deviceName
+                    .ifBlank { android.os.Build.MODEL ?: "Device" },
+            )
+        }
     }
 }
 
