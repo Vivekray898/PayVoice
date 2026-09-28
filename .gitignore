@@ -18,3 +18,5 @@ local.properties
 # secret stores (Supabase Edge Function Secrets), not on disk (see AGENTS.md).
 .env
 .env.local
+
+payment-announcer-43071-firebase-adminsdk-fbsvc-f06cdcb325.json
