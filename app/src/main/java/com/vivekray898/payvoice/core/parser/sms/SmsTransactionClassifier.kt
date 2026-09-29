@@ -34,7 +34,7 @@ object SmsTransactionClassifier {
     )
     private val SENT_SIGNALS = listOf(
         "debited", "sent", "paid", "payment made", "transferred", "withdrawn",
-        "debit card used", "purchased", "payment",
+        "debit card used", "purchased", "payment", "spent",
     )
     private val UPI_SIGNALS = listOf("upi", "utr", "rrn", "txn", "transaction", "reference", "ref no", "refno")
     private val NEGATIVE_STRONG = listOf(
