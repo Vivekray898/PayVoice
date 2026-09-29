@@ -35,7 +35,20 @@ abstract class BaseSmsParser : SmsPaymentParser {
     protected open fun displayLabel(bank: String?): String? = null
 
     final override fun parse(sender: String, body: String, receivedAtMs: Long): ParsedNotification? {
-        if (!SmsSenderHints.looksLikeTransactionSender(sender)) return null
+        if (!SmsSenderHints.looksLikeTransactionSender(sender)) {
+            // Reliability visibility: a whitelisted gap shows up as ignored
+            // senders instead of silent drops. Debug builds ONLY (flag is set
+            // once by the pipeline from its isDebugBuild param); never log
+            // the body, never log the raw sender on release builds.
+            if (SmsPaymentParserRegistry.debugLogging) {
+                android.util.Log.d(
+                    "PayVoiceSms",
+                    "ignored sender=<non-transactional> " +
+                        "alpha=${sender.count { it.isLetter() }} len=${sender.length}",
+                )
+            }
+            return null
+        }
         val bank = SmsSenderHints.resolveBank(sender, body)
         if (!matches(sender, body, bank)) return null
 
@@ -107,6 +120,14 @@ class GenericBankSmsParser : BaseSmsParser() {
 
 /** Picks the highest-priority parser that accepts the SMS. */
 object SmsPaymentParserRegistry {
+
+    /**
+     * Debug-gate for ignored-sender logging. Defaults false (release-safe);
+     * set once at pipeline construction from the build's debuggability.
+     */
+    @Volatile
+    var debugLogging: Boolean = false
+
     private val parsers: List<SmsPaymentParser> = listOf(
         KotakSmsParser(),
         GPaySmsParser(),

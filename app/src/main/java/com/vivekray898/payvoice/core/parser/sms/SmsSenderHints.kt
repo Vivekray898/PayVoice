@@ -11,19 +11,59 @@ object SmsSenderHints {
 
     /** Known sender-ID fragments → bank name. Matched case-insensitively. */
     private val SENDER_HINTS: Map<String, String> = mapOf(
+        // Kotak family
         "KKBK" to "Kotak",
         "KOTAK" to "Kotak",
         "KOTAK811" to "Kotak",
         "KTK" to "Kotak",
+        // Major private banks (prefix variants: VM-/AD-/AX-/BZ- DLT codes)
         "HDFC" to "HDFC",
+        "HDFCBK" to "HDFC",
         "ICICI" to "ICICI",
+        "ICICIB" to "ICICI",
+        "ICIC" to "ICICI",
+        // SBI family
         "SBI" to "SBI",
         "SBIN" to "SBI",
+        "SBIINB" to "SBI",
+        "STATEBK" to "SBI",
+        // Axis / Yes / IDFC
         "AXIS" to "Axis",
+        "UTIB" to "Axis",
+        "YESB" to "Yes Bank",
+        "IDFB" to "IDFC First",
+        "IDFC" to "IDFC First",
+        // Public-sector banks
+        "PNB" to "Punjab National Bank",
+        "PUNB" to "Punjab National Bank",
+        "BARB" to "Bank of Baroda",
+        "VIJAYA" to "Bank of Baroda",
+        "UCBA" to "UCO Bank",
+        "IOBA" to "Indian Overseas Bank",
+        "CBIN" to "Central Bank of India",
+        "BKID" to "Bank of India",
+        "MAHB" to "Bank of Maharashtra",
+        // Private / small-finance / foreign
+        "INDU" to "IndusInd Bank",
+        "FDRL" to "Federal Bank",
+        "RBLB" to "RBL Bank",
+        "CIUB" to "Citi Union",
+        "CITI" to "Citi Bank",
+        "HSBC" to "HSBC",
+        "SCBL" to "Standard Chartered",
+        "KVB" to "Karur Vysya",
+        "KARB" to "Karnataka Bank",
+        "JSFB" to "Jana Small Finance",
+        "AUFB" to "AU Small Finance",
+        "EQBL" to "Equitas",
+        "USFB" to "Ujjivan",
+        // Wallets / PSPs
         "PAYTM" to "Paytm",
         "AMZNP" to "Amazon Pay",
+        "PHONEP" to "PhonePe",
         "GPAY" to "Google Pay",
         "GOOGLE" to "Google Pay",
+        "NPCI" to "NPCI",
     )
 
     /** Body keywords → bank name (used when sender ID is generic/numeric). */

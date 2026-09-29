@@ -51,6 +51,11 @@ class PaymentPipeline(
     },
     private val remoteEnabledProvider: () -> Boolean = { true },
 ) {
+    init {
+        // Ignored-sender logging follows the build's debuggability (set once;
+        // parser objects are stateless beyond this flag).
+        com.vivekray898.payvoice.core.parser.sms.SmsPaymentParserRegistry.debugLogging = isDebugBuild
+    }
 
     private val _lastAnnouncement = MutableStateFlow<AnnouncementEntity?>(null)
     val lastAnnouncement: StateFlow<AnnouncementEntity?> = _lastAnnouncement
