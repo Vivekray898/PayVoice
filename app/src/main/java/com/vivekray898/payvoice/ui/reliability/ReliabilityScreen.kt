@@ -8,6 +8,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -19,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vivekray898.payvoice.service.setup.SetupNotifications
 import com.vivekray898.payvoice.service.tts.AnnouncementSpeaker
@@ -38,6 +43,15 @@ fun ReliabilityScreen(viewModel: MainViewModel, onBack: () -> Unit) {
     val fcm by viewModel.fcm.collectAsStateWithLifecycle()
     val tts by viewModel.ttsStatus.collectAsStateWithLifecycle()
     val runtime by viewModel.listenerRuntime.collectAsStateWithLifecycle()
+
+    // RECEIVE_SMS is a runtime permission: without the grant the SMS fallback
+    // never fires (offline payments are missed entirely). Request it in-place
+    // with an honest explanation; fall back to App Details when permanently
+    // denied (the OS returns denied with no dialog and the button must still
+    // lead somewhere useful).
+    val smsPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { _ -> viewModel.refreshStatus() }
 
     LazyColumn(
         Modifier
@@ -134,22 +148,31 @@ fun ReliabilityScreen(viewModel: MainViewModel, onBack: () -> Unit) {
         }
 
         item(key = "sms") {
-            SectionCard(title = "SMS Backup") {
+            SectionCard(title = "SMS Backup (offline payments)") {
                 StatusLine(
                     status?.smsPermissionGranted == true,
                     if (status?.smsPermissionGranted == true) "Enabled" else "Not granted",
                 )
                 Text(
-                    "PayVoice uses incoming bank SMS messages as a backup when " +
-                        "Google Pay or banking-app notifications are unavailable. " +
-                        "SMS contents are processed locally to identify payment " +
-                        "notifications — never uploaded, never read from your inbox.",
+                    "When Google Pay notifications don't arrive (offline, or " +
+                        "notifications suppressed), the bank's SMS still confirms the " +
+                        "payment. Grant SMS access to catch those payments. " +
+                        "SMS contents are processed locally to identify payments — " +
+                        "never uploaded, never read from your inbox.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 if (status?.smsPermissionGranted != true) {
-                    OutlinedButton(onClick = { viewModel.openAppDetailsSettings(context) }) {
-                        Text("Grant in settings")
+                    // Primary: the runtime dialog. If the user has permanently
+                    // denied, Android returns denied with no dialog — the status
+                    // stays honest and the settings link below still works.
+                    OutlinedButton(onClick = {
+                        smsPermissionLauncher.launch(Manifest.permission.RECEIVE_SMS)
+                    }) {
+                        Text("Allow SMS")
+                    }
+                    TextButton(onClick = { viewModel.openAppDetailsSettings(context) }) {
+                        Text("Or open App settings")
                     }
                 }
             }

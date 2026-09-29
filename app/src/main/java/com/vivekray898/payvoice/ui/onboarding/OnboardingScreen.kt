@@ -182,6 +182,35 @@ fun OnboardingScreen(viewModel: MainViewModel) {
                 }
             }
 
+            // ---- 5. SMS backup (optional, strongly recommended) ----
+            item(key = "step-sms") {
+                val smsPermissionLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.RequestPermission()
+                ) { _ -> viewModel.refreshStatus() }
+                SetupStep(
+                    number = 5,
+                    title = "Offline payment backup (SMS)",
+                    body = "When Google Pay notifications don't arrive (no internet, " +
+                        "notifications off), the bank's SMS still confirms the payment. " +
+                        "Read locally only — never uploaded.",
+                    ok = status?.smsPermissionGranted == true,
+                    okLabel = "Enabled",
+                    pendingLabel = "Recommended",
+                ) {
+                    if (status?.smsPermissionGranted == true) {
+                        OutlinedButton(onClick = { viewModel.refreshStatus() }) {
+                            Text("Review")
+                        }
+                    } else {
+                        OutlinedButton(onClick = {
+                            smsPermissionLauncher.launch(Manifest.permission.RECEIVE_SMS)
+                        }) {
+                            Text("Allow SMS")
+                        }
+                    }
+                }
+            }
+
             item(key = "finish") {
                 PvSection {
                     PvDivider()
