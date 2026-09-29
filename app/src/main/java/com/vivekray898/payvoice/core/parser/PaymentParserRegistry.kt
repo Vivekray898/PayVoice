@@ -1,5 +1,6 @@
 package com.vivekray898.payvoice.core.parser
 
+import com.vivekray898.payvoice.core.model.KnownPackages
 import com.vivekray898.payvoice.core.model.ParsedNotification
 import com.vivekray898.payvoice.core.model.PaymentSource
 
@@ -28,7 +29,13 @@ class PaymentParserRegistry(parsers: List<PaymentParser>) {
     private val byPackage: Map<String, PaymentParser> =
         parsers.associateBy { it.source.packageId }
 
-    fun parserForPackage(packageId: String): PaymentParser? = byPackage[packageId]
+    /**
+     * Routes by exact package, with GPay variant fallback (OEM/regional
+     * flavors reuse the GooglePayParser — same notification format).
+     */
+    fun parserForPackage(packageId: String): PaymentParser? =
+        byPackage[packageId]
+            ?: if (KnownPackages.isGooglePayPackage(packageId)) byPackage[KnownPackages.GOOGLE_PAY] else null
 
     companion object {
         fun withDefaults(): PaymentParserRegistry =

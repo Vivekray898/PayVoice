@@ -127,6 +127,9 @@ class PayVoiceNotificationListener : NotificationListenerService() {
         val summary = buildExtrasSummary(extras)
 
         if (source == null) {
+            // Missed-payment visibility: every ignored package is logged in
+            // debug builds so a whitelisted gap is diagnosable from logcat.
+            log("ignored package=$pkg id=${sbn.id}")
             // Opt-in local capture used to verify unknown packages. Off by default.
             if (settings.captureUnknownPackages) {
                 container.pipeline.captureOnly(

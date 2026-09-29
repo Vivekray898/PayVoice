@@ -72,7 +72,9 @@ class PaymentPipeline(
     ) {
         // Single notification gate: a bank app package (e.g. com.kotak811) can
         // never reach the pipeline as a payment — bank payments arrive via SMS.
-        if (packageName != KnownPackages.GOOGLE_PAY) return
+        // Recognized GPay package variants (OEM/regional flavors) pass the gate
+        // and parse with the same parser.
+        if (!KnownPackages.isGooglePayPackage(packageName)) return
         scope.launch {
             runCatching {
                 handleCapture(

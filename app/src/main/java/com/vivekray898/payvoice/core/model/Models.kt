@@ -7,6 +7,33 @@ package com.vivekray898.payvoice.core.model
  */
 object KnownPackages {
     const val GOOGLE_PAY = "com.google.android.apps.nbu.paisa.user"
+
+    /**
+     * Known GPay package variants. The canonical package is what Play ships
+     * in India; suffix variants have appeared on some OEM builds. Any
+     * variant must keep the SAME parser — the notification content format is
+     * identical.
+     */
+    private val GOOGLE_PAY_VARIANTS = listOf(
+        "com.google.android.apps.nbu.paisa.user.india",
+    )
+
+    /**
+     * True when [pkg] is a GPay notification source. Canonical package is an
+     * exact match; anything else must be an observed variant or a
+     * dot-suffix of the canonical package (future regional flavors), never a
+     * package that merely CONTAINS the name. Unknown packages always return
+     * false.
+     */
+    fun isGooglePayPackage(pkg: String): Boolean {
+        if (pkg == GOOGLE_PAY) return true
+        if (GOOGLE_PAY_VARIANTS.any { pkg == it }) return true
+        // Dot-boundary suffix of the canonical package only:
+        //  ✓ com.google.android.apps.nbu.paisa.user.india
+        //  ✗ evil.com.google.android.apps.nbu.paisa.user
+        //  ✗ com.google.android.apps.nbu.paisa.userimposter
+        return pkg.startsWith("$GOOGLE_PAY.")
+    }
 }
 
 /**
@@ -23,12 +50,15 @@ enum class PaymentSource(val packageId: String, val displayName: String) {
 
     companion object {
         /**
-         * Notification packages route by exact match. Deliberately contains no
-         * bank packages: a com.kotak811 (or any other bank app) notification
-         * must never become a payment event — only SMS carries bank payments.
+         * Notification packages route by exact match OR recognized GPay
+         * variant (all variants announce as Google Pay). Deliberately contains
+         * no bank packages: a com.kotak811 (or any other bank app)
+         * notification must never become a payment event — only SMS carries
+         * bank payments.
          */
         fun fromPackage(pkg: String): PaymentSource? =
             entries.firstOrNull { it.packageId == pkg }
+                ?: if (KnownPackages.isGooglePayPackage(pkg)) GOOGLE_PAY else null
     }
 }
 
