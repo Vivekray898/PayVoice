@@ -1,7 +1,6 @@
 package com.vivekray898.payvoice.core.remote
 
 import android.content.Context
-import android.util.Log
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -99,11 +98,11 @@ class SupabaseClient(private val context: Context) {
                 body = body,
             )
         }.getOrElse { e ->
-            Log.w(TAG, "anon sign-in network failure: ${e.javaClass.simpleName}")
+            com.vivekray898.payvoice.core.util.DebugLog.w(TAG, "anon sign-in network failure: ${e.javaClass.simpleName}")
             return null
         }
         val session = parseAuthResponse(response.body) ?: run {
-            Log.w(TAG, "anon sign-in failed: http=${response.code} ${response.body.take(120)}")
+            com.vivekray898.payvoice.core.util.DebugLog.w(TAG, "anon sign-in failed: http=${response.code} ${response.body.take(120)}")
             return null
         }
         storeSession(session.toStored())
@@ -140,7 +139,7 @@ class SupabaseClient(private val context: Context) {
                 )
             }.getOrNull() ?: return null
             val session = parseAuthResponse(response.body) ?: run {
-                Log.w(TAG, "session refresh failed: http=${response.code}")
+                com.vivekray898.payvoice.core.util.DebugLog.w(TAG, "session refresh failed: http=${response.code}")
                 return null
             }
             storeSession(session.toStored())
@@ -218,7 +217,7 @@ class SupabaseClient(private val context: Context) {
                 body.toString(),
             )
         }.getOrElse {
-            Log.w(TAG, "insert $table network failure: ${it.javaClass.simpleName}")
+            com.vivekray898.payvoice.core.util.DebugLog.w(TAG, "insert $table network failure: ${it.javaClass.simpleName}")
             return false
         }
         if (response.code == 401) {
@@ -234,7 +233,7 @@ class SupabaseClient(private val context: Context) {
             return retry.code in 200..299
         }
         if (response.code !in 200..299) {
-            Log.w(TAG, "insert $table failed: http=${response.code} ${response.body.take(120)}")
+            com.vivekray898.payvoice.core.util.DebugLog.w(TAG, "insert $table failed: http=${response.code} ${response.body.take(120)}")
         }
         return response.code in 200..299
     }
@@ -264,7 +263,7 @@ class SupabaseClient(private val context: Context) {
             }.getOrNull()?.body
         }
         if (response.code !in 200..299) {
-            Log.w(TAG, "select $table failed: http=${response.code} ${response.body.take(120)}")
+            com.vivekray898.payvoice.core.util.DebugLog.w(TAG, "select $table failed: http=${response.code} ${response.body.take(120)}")
             return null
         }
         return response.body
@@ -295,7 +294,7 @@ class SupabaseClient(private val context: Context) {
                 body.toString(),
             )
         }.getOrElse {
-            Log.w(TAG, "update $table network failure: ${it.javaClass.simpleName}")
+            com.vivekray898.payvoice.core.util.DebugLog.w(TAG, "update $table network failure: ${it.javaClass.simpleName}")
             return UpdateResult.Failed("network")
         }
         if (response.code == 401) {
@@ -319,7 +318,7 @@ class SupabaseClient(private val context: Context) {
         when {
             code in 200..299 -> UpdateResult.Updated(countRows(body))
             else -> {
-                Log.w(TAG, "$what failed: http=$code ${body.take(120)}")
+                com.vivekray898.payvoice.core.util.DebugLog.w(TAG, "$what failed: http=$code ${body.take(120)}")
                 UpdateResult.Failed("http-$code")
             }
         }
@@ -350,7 +349,7 @@ class SupabaseClient(private val context: Context) {
         val response = runCatching {
             postJson(url, session.accessToken, args.toString())
         }.getOrElse {
-            Log.w(TAG, "rpc $function network failure: ${it.javaClass.simpleName}")
+            com.vivekray898.payvoice.core.util.DebugLog.w(TAG, "rpc $function network failure: ${it.javaClass.simpleName}")
             return null
         }
         if (response.code == 401) {
@@ -360,7 +359,7 @@ class SupabaseClient(private val context: Context) {
             }.getOrNull()?.body
         }
         if (response.code !in 200..299) {
-            Log.w(TAG, "rpc $function failed: http=${response.code} ${response.body.take(120)}")
+            com.vivekray898.payvoice.core.util.DebugLog.w(TAG, "rpc $function failed: http=${response.code} ${response.body.take(120)}")
             return null
         }
         return response.body

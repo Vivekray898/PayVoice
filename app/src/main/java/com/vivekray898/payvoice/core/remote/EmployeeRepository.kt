@@ -47,6 +47,12 @@ class EmployeeRepository(
     private val realtime: SupabaseRealtime,
 ) {
 
+    /** Debug gate for the auth-fallback decision log (reliability-fix rule:
+     *  only FLAG_DEBUGGABLE builds log diagnostic decisions). */
+    private val isDebugBuild: Boolean =
+        (client.appContext.applicationInfo.flags and
+            android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+
     /** Live employee list for the Owner home card (spec §3). */
     fun observeEmployees(): Flow<List<EmployeeDevice>> = channelFlow {
         val uid = auth.ensureSignedIn()
@@ -205,24 +211,29 @@ class EmployeeRepository(
         // then the persisted snapshot — announce on last-known pairing rather
         // than dropping the event (dedup keeps FCM retries honest).
         cached?.let {
-            logFallback("stale in-memory pairing used (fetch failed)")
+            logFallback(kind = "stale-memory", snapshotAgeHours = 0L)
             return RemoteAuthorization.decide(eventOwnerUid, it.ownerUid, it.status)
         }
         val persisted = runCatching { persistedPairing.load() }.getOrNull()
         if (persisted != null) {
             logFallback(
-                "persisted pairing used (fetch failed, age=" +
-                    ((System.currentTimeMillis() - persisted.fetchedAtMs) / 3_600_000L) + "h)",
+                kind = "persisted-disk",
+                snapshotAgeHours =
+                    (System.currentTimeMillis() - persisted.fetchedAtMs) / 3_600_000L,
             )
             return RemoteAuthorization.decide(eventOwnerUid, persisted.ownerUid, persisted.status)
         }
         return RemoteAuthorization.Verdict.Deny("pairing-unknown")
     }
 
-    private fun logFallback(message: String) {
-        runCatching {
-            android.util.Log.d("EmployeeRepo", "auth-fallback: $message")
-        }
+    /**
+     * Debug-gated (finding C, adversarial audit): release logcat must stay
+     * silent about auth decisions. Args are already content-free (kind token
+     * + age in hours); the gate is defense-in-depth for the logging RULE.
+     */
+    private fun logFallback(kind: String, snapshotAgeHours: Long) {
+        if (!isDebugBuild) return
+        android.util.Log.d("EmployeeRepo", "auth-fallback: kind=$kind snapshotAge=${snapshotAgeHours}h")
     }
 
     // ---- Supabase REST (PostgREST) queries ----

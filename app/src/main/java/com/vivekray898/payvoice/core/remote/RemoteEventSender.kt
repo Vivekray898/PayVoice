@@ -1,6 +1,5 @@
 package com.vivekray898.payvoice.core.remote
 
-import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -77,14 +76,14 @@ class RemoteEventSender(
             }
             if (ok) {
                 _lastSendState.value = SendState.SENT(event.eventId, System.currentTimeMillis())
-                Log.d(
+                com.vivekray898.payvoice.core.util.DebugLog.d(
                     TAG,
                     "remote event accepted id=${event.eventId.take(12)}… " +
                         "capture→accepted=${System.currentTimeMillis() - timestampMs}ms",
                 )
             } else {
                 _lastSendState.value = SendState.FAILED("send-failed")
-                Log.w(TAG, "remote send failed (local announcement unaffected)")
+                com.vivekray898.payvoice.core.util.DebugLog.w(TAG, "remote send failed (local announcement unaffected)")
             }
         }
     }

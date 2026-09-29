@@ -74,7 +74,7 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
                     )
                 } }
                 .onFailure {
-                    android.util.Log.w(TAG, "settings read failed (defaults active): ${it.javaClass.simpleName}")
+                    com.vivekray898.payvoice.core.util.DebugLog.w(TAG, "settings read failed (defaults active): ${it.javaClass.simpleName}")
                 }
         }
     }
@@ -101,7 +101,7 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
                 prefs[Keys.REMOTE_ENABLED] = next.remoteAnnouncementsEnabled
             }
         }.onFailure {
-            android.util.Log.w(TAG, "settings write failed: ${it.javaClass.simpleName}")
+            com.vivekray898.payvoice.core.util.DebugLog.w(TAG, "settings write failed: ${it.javaClass.simpleName}")
         }
     }
 

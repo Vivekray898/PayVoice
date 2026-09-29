@@ -28,6 +28,11 @@ class PayVoiceApp : Application(), Configuration.Provider {
     override fun onCreate() {
         super.onCreate()
 
+        // Central debug-gate for all diagnostic logging (deliverable 1c):
+        // every DebugLog call becomes a no-op in release builds. Must be the
+        // first init so later singletons can log safely.
+        com.vivekray898.payvoice.core.util.DebugLog.init(this)
+
         // Create the silent "payment announced" notification channel up front.
         // It exists so the FCM high-priority channel is not downgraded to
         // normal priority by Google (which delays delivery in Doze). Cheap

@@ -1,6 +1,5 @@
 package com.vivekray898.payvoice.core.remote
 
-import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -98,7 +97,7 @@ class PayVoiceAuth(private val client: SupabaseClient) {
                     lastError = IllegalStateException("no-session")
                 } catch (e: Exception) {
                     lastError = e
-                    Log.w(
+                    com.vivekray898.payvoice.core.util.DebugLog.w(
                         TAG,
                         "anon sign-in attempt ${attempt + 1} failed: ${e.javaClass.simpleName} " +
                             e.message?.take(80).orEmpty(),

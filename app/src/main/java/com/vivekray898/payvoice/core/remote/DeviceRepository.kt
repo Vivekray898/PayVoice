@@ -1,6 +1,5 @@
 package com.vivekray898.payvoice.core.remote
 
-import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -62,7 +61,7 @@ class DeviceRepository(
         if (fcmToken.isNullOrBlank()) return
         scope.launch {
             runCatching { upsertDevice(fcmToken, deviceName, platform) }
-                .onFailure { Log.w(TAG, "registerDevice failed: ${it.javaClass.simpleName}") }
+                .onFailure { com.vivekray898.payvoice.core.util.DebugLog.w(TAG, "registerDevice failed: ${it.javaClass.simpleName}") }
         }
     }
 

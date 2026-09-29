@@ -2,9 +2,9 @@ package com.vivekray898.payvoice.service.messaging
 
 import android.content.Context
 import android.content.pm.ApplicationInfo
-import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import android.util.Log
 import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
 import com.google.firebase.messaging.FirebaseMessaging
@@ -103,7 +103,7 @@ class MessagingRepository(private val context: Context) {
                 .build()
             FirebaseApp.initializeApp(context, options) != null
         }.onFailure {
-            Log.w(TAG, "FirebaseApp init failed: ${it.javaClass.simpleName}")
+            com.vivekray898.payvoice.core.util.DebugLog.w(TAG, "FirebaseApp init failed: ${it.javaClass.simpleName}")
         }.getOrDefault(false).also { ok ->
             if (ok) _status.value = _status.value.copy(firebaseInitialized = true)
         }
@@ -140,7 +140,7 @@ class MessagingRepository(private val context: Context) {
                 return Result.success(token)
             } catch (e: Exception) {
                 lastError = e
-                Log.w(TAG, "FCM token fetch attempt ${attempt + 1} failed: ${e.message}")
+                com.vivekray898.payvoice.core.util.DebugLog.w(TAG, "FCM token fetch attempt ${attempt + 1} failed: ${e.message}")
             }
         }
         _status.value = FcmStatus(

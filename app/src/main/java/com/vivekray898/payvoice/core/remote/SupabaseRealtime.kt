@@ -1,6 +1,5 @@
 package com.vivekray898.payvoice.core.remote
 
-import android.util.Log
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -98,7 +97,7 @@ class SupabaseRealtime {
         accessTokenProvider: () -> String?,
     ): Flow<Change> = callbackFlow {
         if (!RemoteConfig.isConfigured()) {
-            Log.w(TAG, "Realtime unavailable: project not configured")
+            com.vivekray898.payvoice.core.util.DebugLog.w(TAG, "Realtime unavailable: project not configured")
             _status.value = Status(Status.State.CLOSED, "not-configured")
             close()
             return@callbackFlow
@@ -157,7 +156,7 @@ class SupabaseRealtime {
                                 _status.value = Status(Status.State.LIVE)
                             }
                             "error" -> {
-                                Log.w(TAG, "realtime join rejected")
+                                com.vivekray898.payvoice.core.util.DebugLog.w(TAG, "realtime join rejected")
                                 _status.value = Status(Status.State.RECONNECTING, "join-rejected")
                             }
                         }
@@ -175,7 +174,7 @@ class SupabaseRealtime {
                         Unit
                     }
                     else -> {
-                        Log.d(TAG, "realtime frame event=$event (ignored)")
+                        com.vivekray898.payvoice.core.util.DebugLog.d(TAG, "realtime frame event=$event (ignored)")
                     }
                 }
             }
