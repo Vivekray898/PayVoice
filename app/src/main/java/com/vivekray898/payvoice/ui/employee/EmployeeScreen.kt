@@ -45,6 +45,8 @@ import com.vivekray898.payvoice.ui.components.timeAgo
 fun EmployeeScreen(viewModel: MainViewModel, onBack: () -> Unit) {
     val ownDevice by viewModel.ownDevice.collectAsStateWithLifecycle()
     val joinState by viewModel.joinState.collectAsStateWithLifecycle()
+    val status by viewModel.status.collectAsStateWithLifecycle()
+    val context = androidx.compose.ui.platform.LocalContext.current
     var showJoinDialog by remember { mutableStateOf(false) }
     var code by remember { mutableStateOf("") }
     var confirmLeave by remember { mutableStateOf(false) }
@@ -98,6 +100,37 @@ fun EmployeeScreen(viewModel: MainViewModel, onBack: () -> Unit) {
             }
 
             if (paired) {
+                // Reliability visibility (reliability fix): Doze delays FCM by
+                // seconds-to-minutes on restricted devices. The employee never
+                // sees the owner's setup wizard, so the exemption state and its
+                // fix must live HERE.
+                item(key = "battery") {
+                    PvSection(title = "Reliability") {
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Row(
+                                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                com.vivekray898.payvoice.ui.components.StatusDot(status?.batteryExempt == true)
+                                Text(
+                                    if (status?.batteryExempt == true) "Battery optimization: off"
+                                    else "Battery optimization: on — payments may arrive late",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                            }
+                        }
+                        if (status?.batteryExempt != true) {
+                            OutlinedButton(onClick = { viewModel.fixBattery(context) }) {
+                                Text("Allow unrestricted battery")
+                            }
+                        }
+                    }
+                }
+
                 item(key = "test") {
                     PvSection(title = "Try it out") {
                         OutlinedButton(onClick = { viewModel.speakTest() }) {
