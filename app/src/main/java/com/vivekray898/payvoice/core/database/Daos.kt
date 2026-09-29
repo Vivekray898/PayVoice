@@ -19,6 +19,33 @@ interface ProcessedEventDao {
     @Query("DELETE FROM processed_events WHERE announcedAtMs < :cutoffMs")
     suspend fun deleteOlderThan(cutoffMs: Long)
 
+    /**
+     * Cross-channel dedup window (reliability fix): did a BANK-SMS event of
+     * [amountMinor] get announced in the last N seconds? Fingerprints of the
+     * same payment can differ across channels (GPay wording vs SMS wording,
+     * sender name present in one only), so the window is the safety net
+     * against double announcements when both channels carry the same payment.
+     */
+    @Query(
+        "SELECT EXISTS(SELECT 1 FROM processed_events " +
+            "WHERE sourcePackage LIKE 'SMS%' AND amountMinor = :amountMinor " +
+            "AND announcedAtMs >= :sinceMs)"
+    )
+    suspend fun recentSmsExists(amountMinor: Long, sinceMs: Long): Boolean
+
+    /**
+     * Cross-channel counterpart: did a NON-SMS event (GPay notification) of
+     * [amountMinor] get announced in the last N seconds? 'remote' rows are
+     * excluded — employee-side FCM dedup must never suppress a local
+     * capture on the same device.
+     */
+    @Query(
+        "SELECT EXISTS(SELECT 1 FROM processed_events " +
+            "WHERE sourcePackage NOT LIKE 'SMS%' AND sourcePackage != 'remote' " +
+            "AND amountMinor = :amountMinor AND announcedAtMs >= :sinceMs)"
+    )
+    suspend fun recentNonSmsExists(amountMinor: Long, sinceMs: Long): Boolean
+
     @Query("SELECT COUNT(*) FROM processed_events")
     suspend fun count(): Int
 }

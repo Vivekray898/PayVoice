@@ -246,6 +246,25 @@ class PaymentPipeline(
             diag("dedup", "duplicate suppressed: ${fingerprint.take(16)}")
             return
         }
+
+        // 4b. Cross-channel dedup window (reliability fix): the SAME payment
+        // can carry DIFFERENT fingerprints per channel (sender name parsed in
+        // one channel only, wording differs, exact-time buckets differ). If
+        // the other channel announced the same amount within the window, this
+        // capture is the second evidence of a payment already announced.
+        val isSmsCapture = event.captureSource.name.startsWith("SMS")
+        val otherChannelSeen = if (isSmsCapture) {
+            db.processedEventDao()
+                .recentNonSmsExists(amount, System.currentTimeMillis() - CROSS_CHANNEL_WINDOW_MS)
+        } else {
+            db.processedEventDao()
+                .recentSmsExists(amount, System.currentTimeMillis() - CROSS_CHANNEL_WINDOW_MS)
+        }
+        if (otherChannelSeen) {
+            _lastDedupWasDuplicate.value = true
+            diag("dedup", "cross-channel suppressed (${event.captureSource}) amount=$amount")
+            return
+        }
         _lastDedupWasDuplicate.value = false
         val dedupCheckedAt = System.currentTimeMillis()
 
@@ -253,7 +272,7 @@ class PaymentPipeline(
         // SMS events use the deterministic SMS format (spec §11/§13); sender
         // names are normalized for presentation only — identity is never
         // inferred, invented, or merged across sources (spec §12).
-        val isSms = event.captureSource.name.startsWith("SMS")
+        val isSms = isSmsCapture
         val announcement = if (isSms) {
             AnnouncementComposer.composeSms(
                 amountMinor = amount,
@@ -402,6 +421,14 @@ class PaymentPipeline(
     private companion object {
         /** Cheap "money was mentioned" marker for missed-payment diagnostics. */
         val MONEY_MARKER = Regex("[\\u20B9\\u20A8]|(?i)\\b(?:rs|inr)\\b")
+
+        /**
+         * Cross-channel dedup window: GPay notification vs bank SMS for one
+         * payment. SMS delivery commonly lags the notification by seconds;
+         * 30s is wide enough to catch that, narrow enough to never merge two
+         * genuinely separate payments of the same amount in one channel.
+         */
+        const val CROSS_CHANNEL_WINDOW_MS = 30_000L
     }
 
     private suspend fun diag(tag: String, message: String) {
