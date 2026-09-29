@@ -15,6 +15,7 @@ import com.vivekray898.payvoice.core.model.KnownPackages
 import com.vivekray898.payvoice.core.model.ParsedNotification
 import com.vivekray898.payvoice.core.model.PaymentSource
 import com.vivekray898.payvoice.core.parser.Fingerprinter
+import com.vivekray898.payvoice.core.parser.NotificationTextResolver
 import com.vivekray898.payvoice.core.parser.PaymentParserRegistry
 import com.vivekray898.payvoice.core.parser.sms.SmsNameNormalizer
 import com.vivekray898.payvoice.core.parser.sms.SmsPaymentParserRegistry
@@ -140,7 +141,10 @@ class PaymentPipeline(
     // ---- Core unified path ----
 
     private suspend fun processCapture(event: CaptureEvent, extrasSummary: String?) {
-        // 1. Parse by channel.
+        // 1. Parse by channel. GPay sometimes carries the payment line in
+        // EXTRA_BIG_TEXT or EXTRA_SUB_TEXT instead of EXTRA_TEXT (varies by
+        // app version) — try each candidate body, best first, so the payment
+        // is never silently dropped because of which extra held the text.
         val parsed: ParsedNotification? = when {
             event.captureSource.name.startsWith("SMS") -> {
                 val parserResult = SmsPaymentParserRegistry.parse(
@@ -150,7 +154,12 @@ class PaymentPipeline(
                 )
                 parserResult
             }
-            else -> parsers.parserForPackage(event.originId)?.parse(event.title, event.body)
+            else -> {
+                val parser = parsers.parserForPackage(event.originId)
+                NotificationTextResolver
+                    .candidates(event.title, event.body, event.bigText, event.subText)
+                    .firstNotNullOfOrNull { (t, body) -> parser?.parse(t, body) }
+            }
         }
 
         val parsedAt = System.currentTimeMillis()
@@ -174,7 +183,18 @@ class PaymentPipeline(
         }
 
         if (parsed == null) {
-            diag("parser", "no payment in capture from ${event.originId} (${event.captureSource})")
+            // Reliability visibility: a whitelisted capture that CONTAINS a
+            // currency marker but parsed to nothing is the signature of an
+            // unknown GPay/bank wording — surface it in Diagnostics (tag only;
+            // the raw content stays in the local capture store, never logs).
+            val currencyLike = MONEY_MARKER.containsMatchIn(event.body) ||
+                MONEY_MARKER.containsMatchIn(event.bigText.orEmpty()) ||
+                MONEY_MARKER.containsMatchIn(event.subText.orEmpty())
+            diag(
+                "parser",
+                (if (currencyLike) "MISSED-PAYMENT? " else "no payment in capture from ") +
+                    "${event.originId} (${event.captureSource})",
+            )
             return
         }
 
@@ -372,6 +392,11 @@ class PaymentPipeline(
         Confidence.HIGH -> 3
         Confidence.MEDIUM -> 2
         Confidence.LOW -> 1
+    }
+
+    private companion object {
+        /** Cheap "money was mentioned" marker for missed-payment diagnostics. */
+        val MONEY_MARKER = Regex("[\\u20B9\\u20A8]|(?i)\\b(?:rs|inr)\\b")
     }
 
     private suspend fun diag(tag: String, message: String) {
