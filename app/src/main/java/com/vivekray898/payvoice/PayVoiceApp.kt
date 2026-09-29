@@ -60,6 +60,18 @@ class PayVoiceApp : Application(), Configuration.Provider {
             }
             // Device heartbeat: keep last_seen fresh for the owner card.
             runCatching { container.devices.touch() }
+            // Token freshness (reliability fix): a stale FCM token means the
+            // gateway dials a dead registration and employees silently stop
+            // hearing payments. This runs at PROCESS start — the FCM-delivery
+            // cold-start path never opens an Activity, so MainViewModel's
+            // UI-open registration does not cover it. Bounded, fire-and-forget.
+            if (container.messaging.ensureFirebaseInitialized()) {
+                runCatching { refreshStaleFcmToken() }.onFailure {
+                    if (isDebugBuild()) {
+                        Log.d("PayVoiceApp", "token freshness check skipped: ${it.javaClass.simpleName}")
+                    }
+                }
+            }
             // Async TTS engine warm-up — never blocks startup, never blocks TTS.
             runCatching {
                 container.speaker.warmUp()
@@ -75,4 +87,39 @@ class PayVoiceApp : Application(), Configuration.Provider {
         get() = Configuration.Builder()
             .setMinimumLoggingLevel(android.util.Log.INFO)
             .build()
+
+    private fun isDebugBuild(): Boolean =
+        (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+
+    /**
+     * If this device's registry row was token-refreshed more than
+     * [STALE_TOKEN_MS] ago (or has no row yet), force an FCM token fetch and
+     * re-register. Network-less starts fail softly (getOrNull → return).
+     */
+    private suspend fun refreshStaleFcmToken() {
+        val lastRefresh = runCatching {
+            container.devices.ownDevice()?.tokenRefreshedAtMs ?: 0L
+        }.getOrDefault(0L)
+        val ageMs = System.currentTimeMillis() - lastRefresh
+        if (lastRefresh > 0L && ageMs <= STALE_TOKEN_MS) return
+        if (isDebugBuild()) {
+            Log.d(
+                "PayVoiceApp",
+                if (lastRefresh == 0L) "token freshness unknown (no devices row) — refreshing"
+                else "FCM token stale (${ageMs / 3_600_000L}h) — refreshing",
+            )
+        }
+        val token = runCatching { container.messaging.refreshToken().getOrNull() }
+            .getOrNull() ?: return
+        container.devices.registerDevice(
+            fcmToken = token,
+            deviceName = container.settings.settings.value.deviceName
+                .ifBlank { android.os.Build.MODEL ?: "Device" },
+        )
+    }
+
+    private companion object {
+        /** Re-register when the stored token is older than 7 days. */
+        const val STALE_TOKEN_MS = 7 * 24 * 3_600_000L
+    }
 }
