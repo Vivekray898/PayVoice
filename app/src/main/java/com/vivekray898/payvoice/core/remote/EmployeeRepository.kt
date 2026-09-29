@@ -1,5 +1,6 @@
 package com.vivekray898.payvoice.core.remote
 
+import android.content.Context
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
@@ -169,13 +170,23 @@ class EmployeeRepository(
     private var cachedPairing: PairedSnapshot? = null
 
     /**
+     * Process-death fallback (reliability fix): the in-memory cache dies with
+     * the process. When FCM spawns a COLD employee process while offline
+     * (killed app, reboot), the fresh fetch fails and the in-memory cache is
+     * empty — without a persisted snapshot every such event was denied as
+     * `pairing-unknown` and the payment was never announced. The snapshot is
+     * written on EVERY successful own-row read (EncryptedSharedPreferences).
+     */
+    private val persistedPairing by lazy { PersistedPairingStore(client.appContext) }
+
+    /**
      * Authorize an incoming remote event BEFORE the announcement pipeline
      * (spec §5): own row must exist, be ACTIVE, and its `owner_uid` must
-     * match the event's owner. Cache-first with a short TTL; on cache miss a
-     * bounded fetch runs (the FCM path must not hang the announcement for
-     * more than [AUTH_FETCH_TIMEOUT_MS]). If the fetch fails/times out, the
-     * last known snapshot decides — the backend's ACTIVE-only fan-out stays
-     * the PRIMARY enforcement, this is the client safety layer.
+     * match the event's owner. Decision order: fresh cache (TTL) → bounded
+     * network fetch → stale in-memory cache → persisted snapshot. Each
+     * fallback is logged (debug) so the decision is visible. The backend's
+     * ACTIVE-only fan-out stays the PRIMARY enforcement — this is the client
+     * safety layer, and its offline behavior is announce-once-dedup-guarded.
      */
     suspend fun authorizeRemoteEvent(eventOwnerUid: String?): RemoteAuthorization.Verdict {
         val cached = cachedPairing
@@ -187,12 +198,30 @@ class EmployeeRepository(
         val fresh = withTimeoutOrNull(AUTH_FETCH_TIMEOUT_MS) {
             runCatching { fetchOwnPairing() }.getOrNull()
         }
-        return when {
-            fresh != null ->
-                RemoteAuthorization.decide(eventOwnerUid, fresh.ownerUid, fresh.status)
-            cached != null ->
-                RemoteAuthorization.decide(eventOwnerUid, cached.ownerUid, cached.status)
-            else -> RemoteAuthorization.Verdict.Deny("pairing-unknown")
+        if (fresh != null) {
+            return RemoteAuthorization.decide(eventOwnerUid, fresh.ownerUid, fresh.status)
+        }
+        // Network fetch failed/timed out. Prefer the stale in-memory cache,
+        // then the persisted snapshot — announce on last-known pairing rather
+        // than dropping the event (dedup keeps FCM retries honest).
+        cached?.let {
+            logFallback("stale in-memory pairing used (fetch failed)")
+            return RemoteAuthorization.decide(eventOwnerUid, it.ownerUid, it.status)
+        }
+        val persisted = runCatching { persistedPairing.load() }.getOrNull()
+        if (persisted != null) {
+            logFallback(
+                "persisted pairing used (fetch failed, age=" +
+                    ((System.currentTimeMillis() - persisted.fetchedAtMs) / 3_600_000L) + "h)",
+            )
+            return RemoteAuthorization.decide(eventOwnerUid, persisted.ownerUid, persisted.status)
+        }
+        return RemoteAuthorization.Verdict.Deny("pairing-unknown")
+    }
+
+    private fun logFallback(message: String) {
+        runCatching {
+            android.util.Log.d("EmployeeRepo", "auth-fallback: $message")
         }
     }
 
@@ -201,12 +230,16 @@ class EmployeeRepository(
     private fun employeeFrom(row: JsonObject): EmployeeDevice? {
         val status = RestJson.str(row, "status") ?: return null
         // Keep the authorization cache fresh with every read (owner_uid is
-        // selected alongside the display fields for exactly this purpose).
-        cachedPairing = PairedSnapshot(
+        // selected alongside the display fields for exactly this purpose)
+        // AND persist it for the offline cold-start fallback.
+        PairedSnapshot(
             ownerUid = RestJson.str(row, "owner_uid"),
             status = status,
             fetchedAtMs = System.currentTimeMillis(),
-        )
+        ).also {
+            cachedPairing = it
+            runCatching { persistedPairing.save(it) }
+        }
         return EmployeeDevice(
             uid = RestJson.str(row, "id") ?: return null,
             name = RestJson.str(row, "name") ?: "Employee Device",
@@ -275,7 +308,10 @@ class EmployeeRepository(
             ownerUid = RestJson.str(row, "owner_uid"),
             status = RestJson.str(row, "status"),
             fetchedAtMs = System.currentTimeMillis(),
-        ).also { cachedPairing = it }
+        ).also {
+            cachedPairing = it
+            runCatching { persistedPairing.save(it) }
+        }
     }
 
     /**
@@ -396,5 +432,54 @@ class EmployeeRepository(
         const val POLL_IDLE_WHEN_LIVE_MS = 60_000L
         const val AUTH_CACHE_TTL_MS = 30_000L
         const val AUTH_FETCH_TIMEOUT_MS = 5_000L
+    }
+}
+
+/**
+ * Encrypted on-disk copy of the last-known pairing snapshot. Keys/values are
+ * opaque uid/status strings — no secrets, but encrypted anyway because the
+ * device pairing state is identity material. All failures are soft: a broken
+ * store degrades to the pre-fix behavior (deny when offline), never a crash.
+ */
+private class PersistedPairingStore(context: Context) {
+
+    private val prefs by lazy {
+        val masterKey = androidx.security.crypto.MasterKey.Builder(context)
+            .setKeyScheme(androidx.security.crypto.MasterKey.KeyScheme.AES256_GCM)
+            .build()
+        androidx.security.crypto.EncryptedSharedPreferences.create(
+            context,
+            "payvoice_pairing_snapshot",
+            masterKey,
+            androidx.security.crypto.EncryptedSharedPreferences
+                .PrefKeyEncryptionScheme.AES256_SIV,
+            androidx.security.crypto.EncryptedSharedPreferences
+                .PrefValueEncryptionScheme.AES256_GCM,
+        )
+    }
+
+    fun save(snapshot: EmployeeRepository.PairedSnapshot) {
+        runCatching {
+            prefs.edit()
+                .putString(KEY_OWNER, snapshot.ownerUid)
+                .putString(KEY_STATUS, snapshot.status)
+                .putLong(KEY_FETCHED_AT, snapshot.fetchedAtMs)
+                .apply()
+        }
+    }
+
+    fun load(): EmployeeRepository.PairedSnapshot? = runCatching {
+        val owner = prefs.getString(KEY_OWNER, null) ?: return null
+        EmployeeRepository.PairedSnapshot(
+            ownerUid = owner,
+            status = prefs.getString(KEY_STATUS, null),
+            fetchedAtMs = prefs.getLong(KEY_FETCHED_AT, 0L),
+        )
+    }.getOrNull()
+
+    private companion object {
+        const val KEY_OWNER = "owner_uid"
+        const val KEY_STATUS = "status"
+        const val KEY_FETCHED_AT = "fetched_at_ms"
     }
 }

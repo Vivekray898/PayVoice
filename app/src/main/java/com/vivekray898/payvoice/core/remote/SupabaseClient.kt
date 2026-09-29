@@ -52,6 +52,9 @@ class SupabaseClient(private val context: Context) {
     private val json = RemoteConfig.json
     private val sessionStore = SessionStore(context)
 
+    /** Application context for small on-disk stores (e.g. pairing snapshot). */
+    internal val appContext: Context get() = context.applicationContext
+
     @Volatile
     private var cached: Session? = sessionStore.load()?.toSession()
 
