@@ -1,6 +1,7 @@
 package com.vivekray898.payvoice
 
 import android.app.Application
+import android.content.Context
 import android.util.Log
 import androidx.work.Configuration
 import com.vivekray898.payvoice.service.messaging.PaymentNotification
@@ -32,6 +33,19 @@ class PayVoiceApp : Application(), Configuration.Provider {
         // every DebugLog call becomes a no-op in release builds. Must be the
         // first init so later singletons can log safely.
         com.vivekray898.payvoice.core.util.DebugLog.init(this)
+
+        // Firebase init at PROCESS start, synchronously, BEFORE any component
+        // (Activity/Service/receiver) or coroutine can touch FirebaseMessaging.
+        // The FirebaseInitProvider "initialization unsuccessful" warning is
+        // EXPECTED here: manual init from assets/google-services.json replaces
+        // the google-services plugin, so the provider's default-app init fails
+        // by design and this call registers [DEFAULT] itself. The previous
+        // lazy init (first token fetch, inside the startup coroutine) raced
+        // FCM-delivery cold starts — onMessageReceived can fire before the
+        // coroutine schedules, the app was not yet initialized, the token
+        // never refreshed, and the gateway kept dialing the stale
+        // devices.fcm_token (delivered=0).
+        initFirebase(this)
 
         // Create the silent "payment announced" notification channel up front.
         // It exists so the FCM high-priority channel is not downgraded to
@@ -95,6 +109,53 @@ class PayVoiceApp : Application(), Configuration.Provider {
 
     private fun isDebugBuild(): Boolean =
         (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+
+    /**
+     * Manual Firebase init from assets/google-services.json (the
+     * google-services Gradle plugin is intentionally absent). Synchronous and
+     * idempotent — safe on every cold start; MessagingRepository's lazy
+     * [com.vivekray898.payvoice.service.messaging.MessagingRepository.ensureFirebaseInitialized]
+     * becomes a no-op after this (it stays as a defensive fallback for callers
+     * that could theoretically run before Application.onCreate completes).
+     *
+     * Field placement follows the real google-services.json shape:
+     *  - project_id / project_number / storage_bucket → project_info
+     *  - mobilesdk_app_id / api_key[0].current_key   → client[0]
+     * (Reading mobilesdk_app_id from project_info — as some reference
+     * snippets do — throws JSONObject$NOVALUE and kills init silently.)
+     */
+    private fun initFirebase(context: Context) {
+        if (com.google.firebase.FirebaseApp.getApps(context).isNotEmpty()) return
+        try {
+            val json = context.assets.open("google-services.json")
+                .bufferedReader().use { it.readText() }
+            val root = org.json.JSONObject(json)
+            val projectInfo = root.getJSONObject("project_info")
+            val client = root.getJSONArray("client").getJSONObject(0)
+            val clientInfo = client.getJSONObject("client_info")
+            val apiKey = client.getJSONArray("api_key").getJSONObject(0)
+                .getString("current_key")
+
+            val options = com.google.firebase.FirebaseOptions.Builder()
+                .setApplicationId(clientInfo.getString("mobilesdk_app_id"))
+                .setApiKey(apiKey)
+                .setProjectId(projectInfo.getString("project_id"))
+                .setGcmSenderId(projectInfo.getString("project_number"))
+                .setStorageBucket(projectInfo.optString("storage_bucket"))
+                .build()
+
+            val app = com.google.firebase.FirebaseApp.initializeApp(context, options)
+            com.vivekray898.payvoice.core.util.DebugLog.d(
+                "PayVoiceApp",
+                "Firebase initialized: project=${app?.options?.projectId} app=${app?.name}",
+            )
+        } catch (e: Exception) {
+            // Log.e is intentional — a Firebase init failure is a real error
+            // that must surface in release builds too (DebugLog.e contract).
+            // No token will EVER be available until this succeeds.
+            android.util.Log.e("PayVoiceApp", "Firebase init failed — FCM unavailable", e)
+        }
+    }
 
     /**
      * If this device's registry row was token-refreshed more than

@@ -125,9 +125,14 @@ class MessagingRepository(private val context: Context) {
         delays.forEachIndexed { attempt, delayMs ->
             if (delayMs > 0) kotlinx.coroutines.delay(delayMs)
             try {
+                com.vivekray898.payvoice.core.util.DebugLog.d("TokenRefresh", "requesting FCM token…")
                 val token = withContext(Dispatchers.IO) {
                     FirebaseMessaging.getInstance().token.await()
                 }
+                com.vivekray898.payvoice.core.util.DebugLog.d(
+                    "TokenRefresh",
+                    "token=${token.take(12)}… len=${token.length}",
+                )
                 securePrefs.edit().putString(KEY_TOKEN, token).apply()
                 _status.value = FcmStatus(
                     firebaseInitialized = true,
