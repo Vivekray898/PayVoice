@@ -20,31 +20,31 @@ interface ProcessedEventDao {
     suspend fun deleteOlderThan(cutoffMs: Long)
 
     /**
-     * Cross-channel dedup window (reliability fix): did a BANK-SMS event of
-     * [amountMinor] get announced in the last N seconds? Fingerprints of the
-     * same payment can differ across channels (GPay wording vs SMS wording,
-     * sender name present in one only), so the window is the safety net
-     * against double announcements when both channels carry the same payment.
+     * Cross-channel dedup (deliverable 2c): did a channel-TAGGED SMS event of
+     * [amountMinor] get announced in the last N seconds? Rows carry a
+     * `SMS:`/`NOTIF:` prefix in sourcePackage (written by the pipeline), so
+     * this is an exact channel match — never a heuristic over sender IDs —
+     * and pre-tag legacy/remote rows can never collide.
      */
     @Query(
         "SELECT EXISTS(SELECT 1 FROM processed_events " +
-            "WHERE sourcePackage LIKE 'SMS%' AND amountMinor = :amountMinor " +
-            "AND announcedAtMs >= :sinceMs)"
-    )
-    suspend fun recentSmsExists(amountMinor: Long, sinceMs: Long): Boolean
-
-    /**
-     * Cross-channel counterpart: did a NON-SMS event (GPay notification) of
-     * [amountMinor] get announced in the last N seconds? 'remote' rows are
-     * excluded — employee-side FCM dedup must never suppress a local
-     * capture on the same device.
-     */
-    @Query(
-        "SELECT EXISTS(SELECT 1 FROM processed_events " +
-            "WHERE sourcePackage NOT LIKE 'SMS%' AND sourcePackage != 'remote' " +
+            "WHERE sourcePackage LIKE '" + CrossChannelTags.SMS_LIKE + "' " +
             "AND amountMinor = :amountMinor AND announcedAtMs >= :sinceMs)"
     )
-    suspend fun recentNonSmsExists(amountMinor: Long, sinceMs: Long): Boolean
+    suspend fun recentSmsTaggedExists(amountMinor: Long, sinceMs: Long): Boolean
+
+    /**
+     * Cross-channel counterpart: did a channel-TAGGED NOTIFICATION (GPay)
+     * of [amountMinor] get announced in the last N seconds? 'remote' rows
+     * (employee-side FCM dedup) and legacy untagged rows never match, so a
+     * local capture can never be suppressed by a remote announcement.
+     */
+    @Query(
+        "SELECT EXISTS(SELECT 1 FROM processed_events " +
+            "WHERE sourcePackage LIKE '" + CrossChannelTags.NOTIF_LIKE + "' " +
+            "AND amountMinor = :amountMinor AND announcedAtMs >= :sinceMs)"
+    )
+    suspend fun recentNotificationExists(amountMinor: Long, sinceMs: Long): Boolean
 
     @Query("SELECT COUNT(*) FROM processed_events")
     suspend fun count(): Int

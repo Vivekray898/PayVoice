@@ -6,6 +6,7 @@ import com.vivekray898.payvoice.core.database.AnnouncementEntity
 import com.vivekray898.payvoice.core.database.CapturedNotificationEntity
 import com.vivekray898.payvoice.core.database.DiagnosticEntity
 import com.vivekray898.payvoice.core.database.ProcessedEventEntity
+import com.vivekray898.payvoice.core.database.CrossChannelTags
 import com.vivekray898.payvoice.core.database.PayVoiceDatabase
 import com.vivekray898.payvoice.core.model.CaptureEvent
 import com.vivekray898.payvoice.core.model.CaptureSource
@@ -232,11 +233,16 @@ class PaymentPipeline(
             referenceId = parsed.referenceId,
             senderName = parsed.senderName,
         )
+        val isSmsCapture = event.captureSource.name.startsWith("SMS")
         val dedupInsert = db.processedEventDao().insert(
             ProcessedEventEntity(
                 fingerprint = fingerprint,
                 eventId = fingerprint,
-                sourcePackage = event.originId,
+                // Channel-tagged (deliverable 2c): the tag makes the
+                // cross-channel suppression queries EXACT instead of
+                // heuristically matching sender IDs vs package names.
+                // Diagnostics still show the raw origin via event.originId.
+                sourcePackage = CrossChannelTags.tag(isSmsCapture, event.originId),
                 amountMinor = amount,
                 announcedAtMs = System.currentTimeMillis(),
             )
@@ -252,17 +258,22 @@ class PaymentPipeline(
         // one channel only, wording differs, exact-time buckets differ). If
         // the other channel announced the same amount within the window, this
         // capture is the second evidence of a payment already announced.
-        val isSmsCapture = event.captureSource.name.startsWith("SMS")
+        val sinceMs = System.currentTimeMillis() - CROSS_CHANNEL_WINDOW_MS
         val otherChannelSeen = if (isSmsCapture) {
-            db.processedEventDao()
-                .recentNonSmsExists(amount, System.currentTimeMillis() - CROSS_CHANNEL_WINDOW_MS)
+            db.processedEventDao().recentNotificationExists(amount, sinceMs)
         } else {
-            db.processedEventDao()
-                .recentSmsExists(amount, System.currentTimeMillis() - CROSS_CHANNEL_WINDOW_MS)
+            db.processedEventDao().recentSmsTaggedExists(amount, sinceMs)
         }
         if (otherChannelSeen) {
             _lastDedupWasDuplicate.value = true
-            diag("dedup", "cross-channel suppressed (${event.captureSource}) amount=$amount")
+            // User-visible audit trail (deliverable 2b): "why wasn't this
+            // announced?" must be answerable from the Diagnostics screen.
+            // Content-free: channel, amount in paise (integer), window in s.
+            diag(
+                "CROSS_CHANNEL_SUPPRESSED",
+                "${event.captureSource} for ${amount / 100} — opposite channel " +
+                    "seen within ${CROSS_CHANNEL_WINDOW_MS / 1000}s",
+            )
             return
         }
         _lastDedupWasDuplicate.value = false
@@ -418,19 +429,6 @@ class PaymentPipeline(
         Confidence.LOW -> 1
     }
 
-    private companion object {
-        /** Cheap "money was mentioned" marker for missed-payment diagnostics. */
-        val MONEY_MARKER = Regex("[\\u20B9\\u20A8]|(?i)\\b(?:rs|inr)\\b")
-
-        /**
-         * Cross-channel dedup window: GPay notification vs bank SMS for one
-         * payment. SMS delivery commonly lags the notification by seconds;
-         * 30s is wide enough to catch that, narrow enough to never merge two
-         * genuinely separate payments of the same amount in one channel.
-         */
-        const val CROSS_CHANNEL_WINDOW_MS = 30_000L
-    }
-
     private suspend fun diag(tag: String, message: String) {
         runCatching {
             db.diagnosticDao().insert(
@@ -439,4 +437,26 @@ class PaymentPipeline(
             db.diagnosticDao().trim()
         }
     }
+
+    companion object {
+        /** Cheap "money was mentioned" marker for missed-payment diagnostics. */
+        val MONEY_MARKER = Regex("[\\u20B9\\u20A8]|(?i)\\b(?:rs|inr)\\b")
+
+        /**
+         * Cross-channel dedup window (deliverable 2a: was 30s). A GPay
+         * notification and the matching bank SMS for the SAME payment
+         * typically arrive within a few seconds; 10s covers that with
+         * margin while keeping genuinely separate same-amount payments
+         * (20s apart) from being conflated.
+         */
+        const val CROSS_CHANNEL_WINDOW_MS = 10_000L
+    }
+}
+
+/**
+ * Public window constant so the contract test can pin the value without
+ * reaching into the pipeline's private companion.
+ */
+object CrossChannelWindow {
+    const val WINDOW_MS = PaymentPipeline.CROSS_CHANNEL_WINDOW_MS
 }
