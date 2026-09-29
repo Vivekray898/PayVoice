@@ -48,6 +48,16 @@ class PayVoiceApp : Application(), Configuration.Provider {
             // Anonymous auth warm-up (device identity for the remote layer).
             // Fire-and-forget: remote features degrade gracefully offline.
             runCatching { container.auth.warmUp() }
+            // Doze visibility: log (debug builds only) when battery optimization
+            // is still active — the #1 silent cause of delayed listener
+            // callbacks and FCM delivery on stock Android.
+            if ((applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
+                val pm = getSystemService(android.os.PowerManager::class.java)
+                val exempt = pm?.isIgnoringBatteryOptimizations(packageName) == true
+                if (!exempt) {
+                    Log.d("PayVoiceApp", "battery optimization ACTIVE (exemption missing) — background delivery may be delayed")
+                }
+            }
             // Device heartbeat: keep last_seen fresh for the owner card.
             runCatching { container.devices.touch() }
             // Async TTS engine warm-up — never blocks startup, never blocks TTS.

@@ -43,6 +43,7 @@ data class ListenerRuntime(
 
 class ListenerRuntimeState(
     private val componentName: ComponentName,
+    private val isDebugBuild: Boolean = false,
 ) {
 
     private val _state = MutableStateFlow(ListenerRuntime())
@@ -105,20 +106,39 @@ class ListenerRuntimeState(
      * Called once at process start (PayVoiceApp.onCreate, background thread).
      * If the grant exists but the binding has not come up within a grace
      * period, request exactly one rebind. One-shot — not a retry loop.
+     * Debug builds log every decision point so the repair path is visible
+     * ("repair ran but did nothing" must be distinguishable from "repair
+     * never ran").
      */
     fun scheduleStartupRepair(context: Context) {
         refreshSystemGrant(context)
-        if (!_state.value.systemGrant) return
+        if (!_state.value.systemGrant) {
+            debugLog("startup-repair skipped (no system grant)")
+            return
+        }
+        debugLog("startup-repair scheduled (grant present, connected=" + _state.value.connected + ")")
         Handler(Looper.getMainLooper()).postDelayed(
             {
                 refreshSystemGrant(context)
                 val st = _state.value
                 if (st.systemGrant && !st.connected) {
-                    requestRebind(context)
+                    val ok = requestRebind(context)
+                    debugLog("startup-repair FIRED grant=true connected=false rebind=$ok")
+                } else {
+                    debugLog(
+                        "startup-repair no-op grant=" + st.systemGrant +
+                            " connected=" + st.connected,
+                    )
                 }
             },
             STARTUP_REPAIR_GRACE_MS,
         )
+    }
+
+    private fun debugLog(message: String) {
+        if (isDebugBuild) {
+            android.util.Log.d("ListenerRuntime", message)
+        }
     }
 
     companion object {
@@ -149,6 +169,8 @@ class ListenerRuntimeState(
 
         fun forThisApp(context: Context): ListenerRuntimeState = ListenerRuntimeState(
             ComponentName(context, PayVoiceNotificationListener::class.java),
+            isDebugBuild = (context.applicationInfo.flags and
+                android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0,
         )
     }
 }
