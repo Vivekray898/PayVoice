@@ -191,7 +191,11 @@ fun EmployeeScreen(viewModel: MainViewModel, onBack: () -> Unit) {
 
                 item(key = "last-payment") {
                     SectionCard(title = "Last payment announced") {
-                        val last = viewModel.history.value.firstOrNull()
+                        // Observe, don't .value-read: StateFlow.value inside
+                        // composition skips recomposition on updates (lint
+                        // StateFlowValueCalledInComposition).
+                        val history by viewModel.history.collectAsStateWithLifecycle()
+                        val last = history.firstOrNull()
                         if (last == null) {
                             Text(
                                 "Nothing yet — payments announced here appear below.",
