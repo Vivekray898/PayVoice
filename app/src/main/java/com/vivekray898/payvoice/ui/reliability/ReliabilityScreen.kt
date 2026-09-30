@@ -29,6 +29,7 @@ import com.vivekray898.payvoice.core.analytics.PayVoiceAnalytics
 import com.vivekray898.payvoice.service.setup.SetupNotifications
 import com.vivekray898.payvoice.service.tts.AnnouncementSpeaker
 import com.vivekray898.payvoice.ui.MainViewModel
+import com.vivekray898.payvoice.ui.components.PvScaffold
 import com.vivekray898.payvoice.ui.components.SectionCard
 import com.vivekray898.payvoice.ui.components.StatusLine
 
@@ -62,23 +63,15 @@ fun ReliabilityScreen(viewModel: MainViewModel, onBack: () -> Unit) {
         viewModel.refreshStatus()
     }
 
-    LazyColumn(
-        Modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        item(key = "header") {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text("PayVoice Reliability", style = MaterialTheme.typography.headlineSmall)
-                TextButton(onClick = onBack) { Text("Close") }
-            }
-        }
-
-        item(key = "listener") {
+    // UI overhaul Phase 3g: real screen chrome (title + back, safeDrawing
+    // insets) — this screen previously rendered its first card UNDER the
+    // status bar with only a Close text button.
+    PvScaffold(title = "Reliability", onBack = onBack) {
+        LazyColumn(
+            Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            item(key = "listener") {
             SectionCard(title = "Notification Access") {
                 // The grant (persisted system setting) and the live binding are
                 // different states — both are shown so the post-Clear-Data
@@ -245,6 +238,7 @@ fun ReliabilityScreen(viewModel: MainViewModel, onBack: () -> Unit) {
             }
         }
 
-        item(key = "footer") { Spacer(Modifier.height(24.dp)) }
+            item(key = "footer") { Spacer(Modifier.height(24.dp)) }
+        }
     }
 }
