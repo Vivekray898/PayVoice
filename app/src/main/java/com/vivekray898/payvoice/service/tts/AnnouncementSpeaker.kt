@@ -15,6 +15,7 @@ import com.vivekray898.payvoice.core.settings.SettingsRepository
 import com.vivekray898.payvoice.core.util.DebugLog
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -109,12 +110,25 @@ class AnnouncementSpeaker(
                     if (id == utteranceId) done.complete(false)
                 }
             })
+            val startBaseline = lastStartAtMs
             val started = withContext(Dispatchers.Main) {
                 current.setSpeechRate(s.speechRate)
                 val params = Bundle().apply {
                     putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, s.speechVolume)
                 }
                 current.speak(text, TextToSpeech.QUEUE_FLUSH, params, utteranceId) >= 0
+            }
+            // Verify onStart actually fired: if not within 2s, the engine is silent.
+            if (started) {
+                val startFired = withTimeoutOrNull(2_000L) {
+                    while (lastStartAtMs <= startBaseline) delay(50)
+                    true
+                } ?: false
+                if (!startFired) {
+                    android.util.Log.e(TAG, "TTS onStart never fired; engine silent — treating as failure")
+                    // Fall through to the ok computation, which will time out; the retry
+                    // path in Layer 2 will then fire.
+                }
             }
             val ok = if (!started) false
             else withTimeoutOrNull(WAKE_LOCK_CAP_MS - 2_000) { done.await() } ?: false
