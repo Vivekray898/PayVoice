@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Warning
@@ -355,4 +356,78 @@ fun PvDivider(modifier: Modifier = Modifier) {
             .height(1.dp)
             .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
     )
+}
+
+// ---------------------------------------------------------------------------
+// Action cards & the single primary action (UI overhaul Phase 4)
+// ---------------------------------------------------------------------------
+
+/**
+ * Tappable action card (GPay-style): leading icon, title, one-line subtitle,
+ * trailing chevron. 48dp+ target via the full-card click surface. The whole
+ * card is the tap target — no inner buttons.
+ */
+@Composable
+fun PvActionCard(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    iconTint: Color = MaterialTheme.colorScheme.primary,
+) {
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.large)
+            .clickable(onClick = onClick),
+        color = MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        shape = MaterialTheme.shapes.large,
+        tonalElevation = 1.dp,
+    ) {
+        Row(
+            Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Icon(icon, contentDescription = null, tint = iconTint)
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Icon(
+                Icons.AutoMirrored.Filled.ArrowForward,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/**
+ * The ONE primary action per screen: full-width, 56dp tall. Screens place it
+ * bottom-anchored (outside scrollable content) so it is always visible
+ * without scrolling.
+ */
+@Composable
+fun PvPrimaryButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier
+            .fillMaxWidth()
+            .height(56.dp),
+    ) {
+        Text(text)
+    }
 }
