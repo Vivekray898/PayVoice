@@ -43,9 +43,9 @@ pairing flow in the earlier device-matrix sessions; its redesign commit is
 1. Settings pre-existed the redesign's structure (sectioned cards, sliders
    with values) — no separate 3e commit was needed beyond the global
    PvScaffold inset fix.
-2. material-icons-core (the only icon artifact present) lacks Group/Link;
-   Person/Add are used instead. Extended icon set remains a no-new-deps
-   follow-up.
+2. RESOLVED (commit `91709a8`): material-icons-extended added (user-approved);
+   Home cards use Group/Link. Cost with R8 off: release APK 12MB → 17MB.
+   See phase6-home-extended-icons.png.
 3. Employee "Supabase reachable" is not a live check on any screen (would
    require a new ViewModel flow — out of scope per the no-API-change rule).
 4. Real-payment screenshots in this doc come from the GPay simulator
