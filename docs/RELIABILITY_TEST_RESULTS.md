@@ -4,6 +4,43 @@ Corrected for this codebase where the generic template diverged (see
 "Corrections vs the generic template" at the bottom). Fill in on your two
 real devices. Code state under test: post-deliverables commits on `main`.
 
+---
+
+## ⚠️ PARTIAL EMULATOR RUN — 2026-09-30 (NOT the physical matrix)
+
+**Build:** debug @ `9cda32c` (includes the remote-delivery fix below) on
+clean installs; emulator-5554 = owner, emulator-5556 = employee; paired
+for real (`PAY-2AT8X7` claimed; owner UI: "1 connected"; employee:
+"Connected"). POST_NOTIFICATIONS + RECEIVE_SMS granted, battery whitelisted,
+listener bound — Reliability all-green on the owner.
+
+**REAL BUG FOUND AND FIXED by this run** (`9cda32c`): every
+`payment_events` insert failed RLS 403/42501 because the owner sent the raw
+64-hex dedup fingerprint as the id while RLS (0001), the fcm-gateway, and
+the employee validator all require `evt_`-prefixed ids — **remote delivery
+had never worked from the app on any device.** Fix + contract tests:
+`RemoteEventValidator.prefixEventId` (155/155 tests).
+
+| Scenario | Result (emulator run) | Evidence |
+|---|---|---|
+| 1 — Owner online, GPay (simulated) | **PARTIAL** | Owner local announce PASS (`capture→ttsRequested=6–12ms`, `ttsStart=143–150ms`); remote insert now ACCEPTED (test-send returns Sent; pre-fix log: `insert payment_events failed: http=403 42501`). Employee receive **NOT VERIFIED** — blocked on the Supabase Database-Webhook → fcm-gateway leg (dashboard logs only). Employee had a live process, fresh FCM token registered, ACTIVE pairing. |
+| 2 — Owner offline, SMS | SKIPPED | Emulator cannot receive a real bank SMS. |
+| 3 — Dual-channel dedup | SKIPPED | Requires a real notification+SMS pair. (Dedup logic itself exercised incidentally: two identical sims 5min apart → second silently suppressed by fingerprint — correct.) |
+| 4–8 | NOT RUN | All measure employee DELIVERY; running them while the gateway hop is unverified would yield meaningless results. (Accidental S6 datapoint: `adb install -r` puts the app in stopped-state and FCM is deferred until first launch — matching the documented force-stop semantics.) |
+
+**Verdict for this run: FIX-FIRST → the insert-layer bug is FIXED; the
+delivery chain is BLOCKED on the owner pasting from the Supabase dashboard:**
+1. Database Webhooks: is a hook attached to `payment_events` INSERT?
+2. Edge Function `fcm-gateway` logs for the test events at 15:54–16:12
+   (expect `fanout_started` / `fcm_accepted`, or the failing stage).
+3. `select user_id, is_active, length(fcm_token), token_refreshed_at from
+   devices order by token_refreshed_at desc limit 5;` (employee row fresh?)
+
+**Then re-run this matrix on the two physical phones** (release build must
+be rebuilt to include `9cda32c`).
+
+---
+
 **Test date:** ____________
 **Owner device:** ____________ (model, Android version)
 **Employee device:** ____________ (model, Android version)
