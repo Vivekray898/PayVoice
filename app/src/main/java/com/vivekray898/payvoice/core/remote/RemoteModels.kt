@@ -122,6 +122,16 @@ data class RemotePaymentEvent(
 object RemoteEventValidator {
 
     private const val EVENT_ID_PREFIX = "evt_"
+
+    /**
+     * Guarantees the backend contract shape: `evt_`-prefixed, ≤64 chars.
+     * Idempotent — already-prefixed ids pass through untouched (TEST events
+     * from newEventId() are unaffected). Deterministic: the same input
+     * fingerprint always yields the same payment_events.id, so duplicate
+     * inserts collapse on the server-side unique constraint.
+     */
+    fun prefixEventId(raw: String): String =
+        if (raw.startsWith(EVENT_ID_PREFIX)) raw else "evt_" + raw.take(MAX_FIELD_LEN - 4)
     private const val MAX_FIELD_LEN = 64
     private const val MAX_AMOUNT_MINOR = 100_000_000_000L // ₹1e9 guard
     private const val MAX_AGE_MS = 24 * 60 * 60_000L
@@ -230,7 +240,14 @@ fun RemotePaymentEvent.toPayload(
 ): kotlinx.serialization.json.JsonObject {
     val base = RemotePaymentEvent.toDataMap(this)
     return kotlinx.serialization.json.buildJsonObject {
-        put("id", eventId)
+        // Backend contract (0001 RLS + gateway parseEvent + employee validator
+        // ALL require "evt_"-prefixed, ≤64 chars). Callers previously sent the
+        // raw 64-hex dedup fingerprint here, which failed RLS on EVERY insert
+        // — remote delivery was silently dead. Deterministic evt_ prefix of
+        // the SAME fingerprint keeps idempotency: duplicate FCM retries and
+        // re-inserts still collapse on the server-side unique id, and the
+        // employee-side dedup key matches what the local pipeline stores.
+        put("id", RemoteEventValidator.prefixEventId(eventId))
         put("owner_uid", ownerUid)
         put("type", type.name)
         if (type == RemoteEventType.PAYMENT_RECEIVED) {
