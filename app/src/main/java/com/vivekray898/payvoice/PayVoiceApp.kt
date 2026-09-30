@@ -47,6 +47,12 @@ class PayVoiceApp : Application(), Configuration.Provider {
         // devices.fcm_token (delivered=0).
         initFirebase(this)
 
+        // Analytics AFTER Firebase (user-approved scope): reads the [DEFAULT]
+        // app registered by initFirebase. Disabled in debug builds at init;
+        // structural-only events per docs/ANALYTICS.md. Fire-and-forget —
+        // never blocks the payment path and never races Firebase init.
+        com.vivekray898.payvoice.core.analytics.PayVoiceAnalytics.init(this)
+
         // Create the silent "payment announced" notification channel up front.
         // It exists so the FCM high-priority channel is not downgraded to
         // normal priority by Google (which delays delivery in Doze). Cheap
@@ -57,6 +63,8 @@ class PayVoiceApp : Application(), Configuration.Provider {
         // initialized, so this must run after onCreate starts). No other startup
         // work happens here — the notification path never pays UI-startup cost.
         CoroutineScope(Dispatchers.Default).launch {
+            // Analytics app-open signal (structural only; no-op in debug).
+            com.vivekray898.payvoice.core.analytics.PayVoiceAnalytics.appOpened()
             runCatching {
                 com.vivekray898.payvoice.core.database.RetentionWorker.schedule(this@PayVoiceApp)
             }

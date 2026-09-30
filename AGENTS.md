@@ -39,9 +39,17 @@ with this file or with old tutorials, the CURRENT official documentation wins.
 
 ## Firebase scope
 
-- Firebase exists in this project ONLY as FCM transport (free tier).
+- Firebase provides FCM transport (free tier) AND Analytics — and nothing
+  else. Analytics events are structural-only (never payment content), the
+  catalog lives in `docs/ANALYTICS.md`, and debug builds disable collection
+  at init (`PayVoiceAnalytics.init`, called AFTER manual `FirebaseApp`
+  init in `PayVoiceApp.onCreate`).
+- The Firebase Android BOM (`firebase-bom`) pins the analytics version;
+  `firebase-messaging` keeps its explicit version pin and overrides the
+  BOM so the FCM path cannot drift.
 - NO Firebase Cloud Functions (no `functions/` directory), NO Firestore,
-  NO Firebase Auth. The backend is Supabase Free.
+  NO Firebase Auth, NO Crashlytics/Remote Config/AB Testing/Performance.
+  The backend is Supabase Free.
 
 ## Android
 

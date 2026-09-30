@@ -2,6 +2,7 @@ package com.vivekray898.payvoice.ui.onboarding
 
 import android.Manifest
 import android.content.pm.PackageManager
+import com.vivekray898.payvoice.core.analytics.PayVoiceAnalytics
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -186,7 +187,13 @@ fun OnboardingScreen(viewModel: MainViewModel) {
             item(key = "step-sms") {
                 val smsPermissionLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.RequestPermission()
-                ) { _ -> viewModel.refreshStatus() }
+                ) { granted ->
+                    PayVoiceAnalytics.smsPermission(
+                        if (granted) PayVoiceAnalytics.PermissionResult.GRANTED
+                        else PayVoiceAnalytics.PermissionResult.DENIED,
+                    )
+                    viewModel.refreshStatus()
+                }
                 SetupStep(
                     number = 5,
                     title = "Offline payment backup (SMS)",

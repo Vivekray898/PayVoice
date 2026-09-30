@@ -25,6 +25,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.vivekray898.payvoice.core.analytics.PayVoiceAnalytics
 import com.vivekray898.payvoice.service.setup.SetupNotifications
 import com.vivekray898.payvoice.service.tts.AnnouncementSpeaker
 import com.vivekray898.payvoice.ui.MainViewModel
@@ -51,7 +52,15 @@ fun ReliabilityScreen(viewModel: MainViewModel, onBack: () -> Unit) {
     // lead somewhere useful).
     val smsPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { _ -> viewModel.refreshStatus() }
+    ) { granted ->
+        PayVoiceAnalytics.smsPermission(
+            // This retry flow cannot distinguish a soft denial from a
+            // permanent one (no shouldShowRationale probe) — report honestly.
+            if (granted) PayVoiceAnalytics.PermissionResult.GRANTED
+            else PayVoiceAnalytics.PermissionResult.DENIED,
+        )
+        viewModel.refreshStatus()
+    }
 
     LazyColumn(
         Modifier

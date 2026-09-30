@@ -59,6 +59,8 @@ class PayVoiceMessagingService : FirebaseMessagingService() {
                         eid, stage = "denied",
                         reason = (verdict as? RemoteAuthorization.Verdict.Deny)?.reason ?: "unknown",
                     )
+                    com.vivekray898.payvoice.core.analytics.PayVoiceAnalytics
+                        .remoteDeliveryFailed("denied")
                     return@launch
                 }
                 stageLog(eid, stage = "authorized")
@@ -88,6 +90,8 @@ class PayVoiceMessagingService : FirebaseMessagingService() {
                 )
                 if (claimed == -1L) {
                     stageLog(eid, stage = "dedup", reason = "duplicate — not announced")
+                    com.vivekray898.payvoice.core.analytics.PayVoiceAnalytics
+                        .remoteDeliveryFailed("dedup")
                     return@launch
                 }
                 stageLog(eid, stage = "dedup", extra = "first-seen")
@@ -117,12 +121,15 @@ class PayVoiceMessagingService : FirebaseMessagingService() {
                         announcedAtMs = ttsRequestedAt,
                         captureSource = "REMOTE",
                         parserName = "RemoteFcm",
-                    )
-                )
+                    )                    )
                 stageLog(
                     eid, stage = "tts_started",
                     extra = "fcm→ttsRequest=${ttsRequestedAt - receivedAt}ms",
                 )
+                // Analytics (docs/ANALYTICS.md): remote delivery success,
+                // latency = FCM receipt → TTS request. Structural only.
+                com.vivekray898.payvoice.core.analytics.PayVoiceAnalytics
+                    .remoteDeliverySucceeded(ttsRequestedAt - receivedAt)
                 // The speaker is async (speakWhenReady returns immediately). Cancel on a
                 // short delay — long enough for FCM to register the notification, short
                 // enough that the user never sees it linger.
@@ -132,6 +139,8 @@ class PayVoiceMessagingService : FirebaseMessagingService() {
                 )
             }.onFailure {
                 stageLog(eid, stage = "failed", reason = it.javaClass.simpleName)
+                com.vivekray898.payvoice.core.analytics.PayVoiceAnalytics
+                    .remoteDeliveryFailed("failed")
             }
         }
     }

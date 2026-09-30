@@ -157,6 +157,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun joinOwner(code: String) {
         if (_joinState.value is JoinState.Joining) return
+        com.vivekray898.payvoice.core.analytics.PayVoiceAnalytics.pairingStarted()
+        val joinStartedAt = System.currentTimeMillis()
         viewModelScope.launch {
             _joinState.value = JoinState.Joining
             _joinResultAlias.value = null
@@ -171,6 +173,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     _joinState.value = JoinState.Success(result.ownerUid)
                     _joinResultAlias.value = true
                     container.pairing.touchDevice(container.messaging.cachedToken())
+                    com.vivekray898.payvoice.core.analytics.PayVoiceAnalytics.pairingCompleted(
+                        System.currentTimeMillis() - joinStartedAt,
+                    )
                 }
                 is PairingRepository.ClaimResult.Rejected -> {
                     _joinState.value = JoinState.Failed(
@@ -185,9 +190,24 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             else -> "Pairing rejected (${result.reason})."
                         },
                     )
+                    com.vivekray898.payvoice.core.analytics.PayVoiceAnalytics.pairingFailed(
+                        when (result.reason) {
+                            PairingRepository.ClaimResult.Rejected.EXPIRED ->
+                                com.vivekray898.payvoice.core.analytics.PayVoiceAnalytics.PairingFailure.EXPIRED
+                            PairingRepository.ClaimResult.Rejected.ALREADY_USED ->
+                                com.vivekray898.payvoice.core.analytics.PayVoiceAnalytics.PairingFailure.ALREADY_USED
+                            PairingRepository.ClaimResult.Rejected.INVALID,
+                            PairingRepository.ClaimResult.Rejected.UNAUTHENTICATED,
+                            -> com.vivekray898.payvoice.core.analytics.PayVoiceAnalytics.PairingFailure.INVALID
+                            else -> com.vivekray898.payvoice.core.analytics.PayVoiceAnalytics.PairingFailure.INVALID
+                        },
+                    )
                     _joinResultAlias.value = false
                 }
                 PairingRepository.ClaimResult.SessionNotReady -> {
+                    com.vivekray898.payvoice.core.analytics.PayVoiceAnalytics.pairingFailed(
+                        com.vivekray898.payvoice.core.analytics.PayVoiceAnalytics.PairingFailure.UNAUTHENTICATED,
+                    )
                     _joinState.value = JoinState.Failed(
                         "Still connecting securely — check internet, then try again.",
                     )
@@ -196,8 +216,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 PairingRepository.ClaimResult.InvalidCode -> {
                     _joinState.value = JoinState.Failed("Invalid pairing code format.")
                     _joinResultAlias.value = false
+                    com.vivekray898.payvoice.core.analytics.PayVoiceAnalytics.pairingFailed(
+                        com.vivekray898.payvoice.core.analytics.PayVoiceAnalytics.PairingFailure.INVALID,
+                    )
                 }
                 PairingRepository.ClaimResult.NetworkError -> {
+                    com.vivekray898.payvoice.core.analytics.PayVoiceAnalytics.pairingFailed(
+                        com.vivekray898.payvoice.core.analytics.PayVoiceAnalytics.PairingFailure.NETWORK,
+                    )
                     _joinState.value = JoinState.Failed(
                         "Network problem reaching the server — try again.",
                     )
@@ -232,8 +258,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun revokeEmployee(employeeUid: String) {
         viewModelScope.launch {
             when (val r = container.employees.revoke(employeeUid)) {
-                is EmployeeRepository.RevokeResult.Success ->
+                is EmployeeRepository.RevokeResult.Success -> {
                     _revokeState.value = RevokeState.Success(employeeUid)
+                    com.vivekray898.payvoice.core.analytics.PayVoiceAnalytics.employeeRevoked()
+                }
                 EmployeeRepository.RevokeResult.NotFound ->
                     _revokeState.value = RevokeState.Failed(
                         "Device not removed — it may already be removed, or you no longer own it.",
@@ -366,6 +394,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** C: tiered battery fix; never a dead button. */
     fun fixBattery(context: Context): String = monitor.launchBatteryFix().also {
+        com.vivekray898.payvoice.core.analytics.PayVoiceAnalytics.batteryExempt(
+            alreadyExempt = status.value?.batteryExempt == true,
+        )
         viewModelScope.launch {
             container.diagnosticDaoSafe()?.insert(
                 com.vivekray898.payvoice.core.database.DiagnosticEntity(

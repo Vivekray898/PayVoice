@@ -25,3 +25,6 @@ keystore.properties
 *.jks
 *.keystore
 app/google-services.json
+
+# Generated from gitignored app/google-services.json by copyGoogleServicesJson.
+app/src/main/res/values/payvoice_firebase.xml

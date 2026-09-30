@@ -266,6 +266,11 @@ class PaymentPipeline(
         }
         if (otherChannelSeen) {
             _lastDedupWasDuplicate.value = true
+            // Analytics (docs/ANALYTICS.md): structural only — channel enum,
+            // no amount, no sender, no body. Fired AFTER the state change.
+            com.vivekray898.payvoice.core.analytics.PayVoiceAnalytics.crossChannelSuppressed(
+                event.captureSource.name,
+            )
             // User-visible audit trail (deliverable 2b): "why wasn't this
             // announced?" must be answerable from the Diagnostics screen.
             // Content-free: channel, amount in paise (integer), window in s.
@@ -277,6 +282,9 @@ class PaymentPipeline(
             return
         }
         _lastDedupWasDuplicate.value = false
+        // Analytics (docs/ANALYTICS.md): capture cleared all gates + dedup.
+        // Structural only; fired AFTER the state change, off the TTS path.
+        com.vivekray898.payvoice.core.analytics.PayVoiceAnalytics.paymentCapturedLocal()
         val dedupCheckedAt = System.currentTimeMillis()
 
         // 5. Announce. Text composed locally; Phase 3 sends it inside FCM.
@@ -353,6 +361,10 @@ class PaymentPipeline(
                 "ref=${parsed.referenceId?.take(8) ?: "-"} conf=${parsed.confidence} " +
                 "parser=${entity.parserName} announced=queued " +
                 "detToAnnounceMs=${announcedAt - event.postedAtMs}",
+        )
+        // Analytics (docs/ANALYTICS.md): capture→tts-request latency integer.
+        com.vivekray898.payvoice.core.analytics.PayVoiceAnalytics.paymentAnnouncedLocal(
+            announcedAt - event.postedAtMs,
         )
         // Complete the timing timeline in the background (diagnostics only).
         scope.launch {

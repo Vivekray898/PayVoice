@@ -48,6 +48,9 @@ class MainActivity : ComponentActivity() {
 
     private val viewModel: MainViewModel by viewModels()
 
+    /** Wall-clock at process-visible onCreate start — cold-start measurement anchor. */
+    private var onCreateAtMs: Long = 0L
+
     /**
      * One-shot POST_NOTIFICATIONS request (Android 13+). Required for the
      * silent "payment announced" receipt that keeps the FCM high-priority
@@ -55,10 +58,19 @@ class MainActivity : ComponentActivity() {
      * NotificationManagerCompat.notify() silently no-ops on API 33+.
      */
     private val requestNotificationPermission =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* no-op */ }
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            com.vivekray898.payvoice.core.analytics.PayVoiceAnalytics.notificationPermission(
+                if (granted) {
+                    com.vivekray898.payvoice.core.analytics.PayVoiceAnalytics.PermissionResult.GRANTED
+                } else {
+                    com.vivekray898.payvoice.core.analytics.PayVoiceAnalytics.PermissionResult.DENIED
+                },
+            )
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        onCreateAtMs = System.currentTimeMillis()
         enableEdgeToEdge()
         ensureNotificationPermission()
         setContent {
@@ -68,6 +80,19 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+        // Structural perf signal (docs/ANALYTICS.md): measured after setContent,
+        // off the critical path, no payment content. Debug builds no-op.
+        reportColdStart()
+    }
+
+    /** Reports pv_app_cold_started once, shortly after the first frame is drawn. */
+    private fun reportColdStart() {
+        if (onCreateAtMs == 0L) return
+        val durationMs = System.currentTimeMillis() - onCreateAtMs
+        onCreateAtMs = 0L
+        window?.decorView?.postDelayed({
+            com.vivekray898.payvoice.core.analytics.PayVoiceAnalytics.appColdStarted(durationMs)
+        }, 150L)
     }
 
     /**
