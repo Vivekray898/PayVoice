@@ -3,18 +3,9 @@ package com.vivekray898.payvoice.ui.parenthome
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.only
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
@@ -29,11 +20,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -44,7 +33,7 @@ import com.vivekray898.payvoice.ui.components.PvActionCard
 import com.vivekray898.payvoice.ui.components.PvDivider
 import com.vivekray898.payvoice.ui.components.PvEmptyState
 import com.vivekray898.payvoice.ui.components.PvPaymentRow
-import com.vivekray898.payvoice.ui.components.PvRow
+import com.vivekray898.payvoice.ui.components.PvScaffold
 import com.vivekray898.payvoice.ui.components.PvSection
 import com.vivekray898.payvoice.ui.components.PvStatusHero
 import com.vivekray898.payvoice.ui.components.statusNegative
@@ -53,11 +42,11 @@ import com.vivekray898.payvoice.ui.components.timeAgo
 import java.util.Calendar
 
 /**
- * Home (UI overhaul Phase 3b): GPay-Business-style — calm header, one hero
- * status card, recent payments, then tappable action cards. Own Scaffold
- * with safeDrawing insets: the header clears the status bar, the list's
- * bottom contentPadding includes the nav bar (last card never hides under
- * it). ViewModel wiring untouched.
+ * Home (insets-hardening pass): now on the SHARED [PvScaffold] chrome —
+ * title/subtitle/actions in the topBar slot (status bar handled once,
+ * centrally), body already inset by the scaffold (nav bar included), so
+ * the list needs only aesthetic padding. No screen-local Scaffold or
+ * inset math remains anywhere in the app. ViewModel wiring untouched.
  */
 @Composable
 fun ParentHomeScreen(
@@ -78,40 +67,18 @@ fun ParentHomeScreen(
     val needsAttention = !ready
     val isEmployee = settings.role == DeviceRole.EMPLOYEE
 
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        contentWindowInsets = WindowInsets.safeDrawing,
-        topBar = {
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
-                    .padding(start = 20.dp, end = 8.dp)
-                    .heightIn(min = 56.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column {
-                    Text("PayVoice", style = MaterialTheme.typography.headlineMedium)
-                    Text(
-                        greeting(),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                IconButton(onClick = onOpenSettings) {
-                    Icon(Icons.Filled.Settings, contentDescription = "Settings")
-                }
+    PvScaffold(
+        title = "PayVoice",
+        subtitle = greeting(),
+        actions = {
+            IconButton(onClick = onOpenSettings) {
+                Icon(Icons.Filled.Settings, contentDescription = "Settings")
             }
         },
-    ) { innerPadding ->
+    ) {
         LazyColumn(
             Modifier.fillMaxSize(),
-            // Bottom padding INCLUDES the nav bar so the last card clears it.
-            contentPadding = PaddingValues(
-                top = 4.dp,
-                bottom = innerPadding.calculateBottomPadding() + 24.dp,
-            ),
+            contentPadding = PaddingValues(top = 4.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             item(key = "hero") {
@@ -174,7 +141,9 @@ fun ParentHomeScreen(
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        androidx.compose.foundation.layout.Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
                             Button(onClick = { viewModel.setRole(DeviceRole.OWNER, Build.MODEL ?: "Owner") }) {
                                 Text("I'm the owner")
                             }

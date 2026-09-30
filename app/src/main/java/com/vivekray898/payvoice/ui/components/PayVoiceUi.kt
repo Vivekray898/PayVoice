@@ -71,6 +71,8 @@ import androidx.compose.ui.unit.dp
 fun PvScaffold(
     title: String,
     onBack: (() -> Unit)? = null,
+    subtitle: String? = null,
+    actions: (@Composable RowScope.() -> Unit)? = null,
     snackbarHostState: SnackbarHostState? = null,
     bottomBar: (@Composable () -> Unit)? = null,
     floatingActionButton: (@Composable () -> Unit)? = null,
@@ -100,11 +102,28 @@ fun PvScaffold(
                         )
                     }
                 }
-                Text(
-                    title,
-                    style = MaterialTheme.typography.headlineSmall,
-                    modifier = Modifier.padding(start = if (onBack != null) 4.dp else 16.dp),
-                )
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .padding(start = if (onBack != null) 4.dp else 16.dp),
+                ) {
+                    Text(
+                        title,
+                        style = if (subtitle == null) {
+                            MaterialTheme.typography.headlineSmall
+                        } else {
+                            MaterialTheme.typography.headlineMedium
+                        },
+                    )
+                    if (subtitle != null) {
+                        Text(
+                            subtitle,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                actions?.invoke(this)
             }
         },
     ) { innerPadding ->
