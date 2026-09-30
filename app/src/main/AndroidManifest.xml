@@ -85,6 +85,7 @@
         <receiver
             android:name=".service.sms.PayVoiceSmsReceiver"
             android:exported="false"
+            android:permission="android.permission.BROADCAST_SMS"
             android:label="PayVoice bank SMS receiver">
             <intent-filter android:priority="0">
                 <action android:name="android.provider.Telephony.SMS_RECEIVED" />
