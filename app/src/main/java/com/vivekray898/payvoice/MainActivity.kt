@@ -10,9 +10,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -75,9 +72,11 @@ class MainActivity : ComponentActivity() {
         ensureNotificationPermission()
         setContent {
             PayVoiceTheme {
-                Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    PayVoiceNavHost(viewModel)
-                }
+                // No root Surface/fillMaxSize: every screen owns its own
+                // Scaffold + background + safeDrawing insets (UI overhaul,
+                // Phase 2). A full-bleed wrapper is how content ends up
+                // ignoring the status/nav bars.
+                PayVoiceNavHost(viewModel)
             }
         }
         // Structural perf signal (docs/ANALYTICS.md): measured after setContent,

@@ -97,11 +97,11 @@ val Typography = Typography(
     ),
 )
 
-/** One consistent corner-radius story across the app. */
+/** One consistent corner-radius story across the app (GPay-style: 8/12/16/28). */
 val PayVoiceShapes = Shapes(
     extraSmall = RoundedCornerShape(8.dp),
-    small = RoundedCornerShape(10.dp),
+    small = RoundedCornerShape(8.dp),
     medium = RoundedCornerShape(12.dp),
-    large = RoundedCornerShape(20.dp),
-    extraLarge = RoundedCornerShape(24.dp),
+    large = RoundedCornerShape(16.dp),
+    extraLarge = RoundedCornerShape(28.dp),
 )

@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
@@ -33,6 +34,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -55,8 +57,14 @@ import androidx.compose.ui.unit.dp
 
 /**
  * Standard screen chrome: title + optional back navigation, body insets.
- * Handles status-bar inset for edge-to-edge; the top bar keeps a stable
- * 56dp+ touch-target row so screens never need their own Close-button hacks.
+ *
+ * UI-overhaul Phase 2: a real Material3 [Scaffold] with
+ * `contentWindowInsets = WindowInsets.safeDrawing` — content NEVER draws
+ * under the status bar, navigation bar, display cutout, or IME. The title
+ * row clears the status bar via its own top-inset padding (the topBar slot
+ * is placed at the window edge); the body receives [Scaffold] innerPadding
+ * (nav bar + IME included), which screens forward to LazyColumn
+ * contentPadding so the last item never hides behind the nav bar.
  */
 @Composable
 fun PvScaffold(
@@ -65,39 +73,43 @@ fun PvScaffold(
     snackbarHostState: SnackbarHostState? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Column(
-        Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal))
-            .statusBarsPadding(),
-    ) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(start = 4.dp, end = 16.dp, top = 4.dp)
-                .heightIn(min = 56.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (onBack != null) {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
-                        tint = MaterialTheme.colorScheme.onSurface,
-                    )
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets.safeDrawing,
+        snackbarHost = { snackbarHostState?.let { SnackbarHost(it) } },
+        topBar = {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
+                    .padding(start = 4.dp, end = 16.dp)
+                    .heightIn(min = 56.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (onBack != null) {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
                 }
+                Text(
+                    title,
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.padding(start = if (onBack != null) 4.dp else 16.dp),
+                )
             }
-            Text(
-                title,
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.padding(start = if (onBack != null) 4.dp else 16.dp),
-            )
+        },
+    ) { innerPadding ->
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(innerPadding),
+        ) {
+            content()
         }
-        if (snackbarHostState != null) {
-            SnackbarHost(snackbarHostState)
-        }
-        content()
     }
 }
 
