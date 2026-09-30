@@ -149,6 +149,13 @@ class PayVoiceApp : Application(), Configuration.Provider {
                 "PayVoiceApp",
                 "Firebase initialized: project=${app?.options?.projectId} app=${app?.name}",
             )
+            // TEMPORARY (Phase 1 Check 3): release-visible DIAG — remove after
+            // the verdict. DebugLog.d is debug-gated by design, so this ungated
+            // line is the only release-proof that init actually ran.
+            android.util.Log.i(
+                "PayVoiceApp",
+                "DIAG: Firebase initialized (release-visible): project=${app?.options?.projectId}",
+            )
         } catch (e: Exception) {
             // Log.e is intentional — a Firebase init failure is a real error
             // that must surface in release builds too (DebugLog.e contract).

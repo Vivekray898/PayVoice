@@ -129,6 +129,12 @@ class MessagingRepository(private val context: Context) {
                 val token = withContext(Dispatchers.IO) {
                     FirebaseMessaging.getInstance().token.await()
                 }
+                // TEMPORARY (Phase 1 Check 3): release-visible DIAG — remove
+                // after the verdict. Masked preview only (12 chars + length).
+                android.util.Log.i(
+                    "TokenRefresh",
+                    "DIAG: token=${token.take(12)}… len=${token.length}",
+                )
                 com.vivekray898.payvoice.core.util.DebugLog.d(
                     "TokenRefresh",
                     "token=${token.take(12)}… len=${token.length}",
@@ -145,6 +151,13 @@ class MessagingRepository(private val context: Context) {
                 return Result.success(token)
             } catch (e: Exception) {
                 lastError = e
+                // TEMPORARY (Phase 1 Check 3): release-visible DIAG — remove
+                // after the verdict. The DebugLog.w below is release-gated,
+                // which would make a release-side token failure invisible.
+                android.util.Log.e(
+                    "TokenRefresh",
+                    "DIAG: token fetch failed: ${e.javaClass.simpleName} ${e.message}",
+                )
                 com.vivekray898.payvoice.core.util.DebugLog.w(TAG, "FCM token fetch attempt ${attempt + 1} failed: ${e.message}")
             }
         }
