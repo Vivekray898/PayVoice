@@ -5,15 +5,23 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
@@ -21,8 +29,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -32,6 +40,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.os.Build
 import com.vivekray898.payvoice.core.remote.DeviceRole
 import com.vivekray898.payvoice.ui.MainViewModel
+import com.vivekray898.payvoice.ui.components.PvActionCard
 import com.vivekray898.payvoice.ui.components.PvDivider
 import com.vivekray898.payvoice.ui.components.PvEmptyState
 import com.vivekray898.payvoice.ui.components.PvPaymentRow
@@ -44,10 +53,11 @@ import com.vivekray898.payvoice.ui.components.timeAgo
 import java.util.Calendar
 
 /**
- * Home (production redesign): one calm status block in human language, the
- * recent payments list, and a single entry per device role. All technical
- * detail lives behind Settings → Advanced. Existing ViewModel wiring is
- * untouched — presentation only.
+ * Home (UI overhaul Phase 3b): GPay-Business-style — calm header, one hero
+ * status card, recent payments, then tappable action cards. Own Scaffold
+ * with safeDrawing insets: the header clears the status bar, the list's
+ * bottom contentPadding includes the nav bar (last card never hides under
+ * it). ViewModel wiring untouched.
  */
 @Composable
 fun ParentHomeScreen(
@@ -68,17 +78,16 @@ fun ParentHomeScreen(
     val needsAttention = !ready
     val isEmployee = settings.role == DeviceRole.EMPLOYEE
 
-    LazyColumn(
-        Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 32.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        item(key = "header") {
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets.safeDrawing,
+        topBar = {
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .statusBarsPadding()
-                    .padding(start = 20.dp, end = 8.dp, top = 12.dp),
+                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
+                    .padding(start = 20.dp, end = 8.dp)
+                    .heightIn(min = 56.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -94,117 +103,132 @@ fun ParentHomeScreen(
                     Icon(Icons.Filled.Settings, contentDescription = "Settings")
                 }
             }
-        }
-
-        item(key = "hero") {
-            if (isEmployee) {
-                EmployeeHero(viewModel, onOpen = onOpenEmployeeRemote)
-            } else {
-                if (ready) {
-                    PvStatusHero(
-                        icon = Icons.Filled.CheckCircle,
-                        tint = statusPositive(),
-                        title = "Payment announcements",
-                        headline = "ON",
-                        body = "You're ready to announce payments.",
-                    )
+        },
+    ) { innerPadding ->
+        LazyColumn(
+            Modifier.fillMaxSize(),
+            // Bottom padding INCLUDES the nav bar so the last card clears it.
+            contentPadding = PaddingValues(
+                top = 4.dp,
+                bottom = innerPadding.calculateBottomPadding() + 24.dp,
+            ),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            item(key = "hero") {
+                if (isEmployee) {
+                    EmployeeHero(viewModel, onOpen = onOpenEmployeeRemote)
                 } else {
-                    PvStatusHero(
-                        icon = Icons.Filled.Warning,
-                        tint = statusNegative(),
-                        title = "Payment announcements",
-                        headline = "Action needed",
-                        body = "Allow notification access so PayVoice can hear your payments.",
-                        actionLabel = "Fix this",
-                        onAction = onOpenReliability,
-                    )
+                    if (ready) {
+                        PvStatusHero(
+                            icon = Icons.Filled.CheckCircle,
+                            tint = statusPositive(),
+                            title = "Payment announcements",
+                            headline = "ON",
+                            body = "You're ready to announce payments.",
+                        )
+                    } else {
+                        PvStatusHero(
+                            icon = Icons.Filled.Warning,
+                            tint = statusNegative(),
+                            title = "Payment announcements",
+                            headline = "Action needed",
+                            body = "Allow notification access so PayVoice can hear your payments.",
+                            actionLabel = "Fix this",
+                            onAction = onOpenReliability,
+                        )
+                    }
                 }
             }
-        }
 
-        item(key = "payments") {
-            PvSection(title = if (history.isEmpty()) null else "Recent payments") {
-                when {
-                    history.isEmpty() -> PvEmptyState(
-                        title = "No payments yet",
-                        body = "Payments will appear here when they are detected.",
-                        actionLabel = if (needsAttention) "Check setup" else null,
-                        onAction = if (needsAttention) onOpenReliability else null,
-                    )
-                    else -> {
-                        history.take(6).forEachIndexed { index, entry ->
-                            if (index > 0) PvDivider()
-                            PvPaymentRow(
-                                amountText = com.vivekray898.payvoice.core.parser.AmountExtractor
-                                    .formatMinor(entry.amountMinor, entry.currency),
-                                source = entry.sourceName,
-                                sender = entry.senderName,
-                                timeText = timeAgo(entry.announcedAtMs),
-                            )
+            item(key = "payments") {
+                PvSection(title = if (history.isEmpty()) null else "Recent payments") {
+                    when {
+                        history.isEmpty() -> PvEmptyState(
+                            title = "No payments yet",
+                            body = "Payments will appear here when they are detected.",
+                            actionLabel = if (needsAttention) "Check setup" else null,
+                            onAction = if (needsAttention) onOpenReliability else null,
+                        )
+                        else -> {
+                            history.take(6).forEachIndexed { index, entry ->
+                                if (index > 0) PvDivider()
+                                PvPaymentRow(
+                                    amountText = com.vivekray898.payvoice.core.parser.AmountExtractor
+                                        .formatMinor(entry.amountMinor, entry.currency),
+                                    source = entry.sourceName,
+                                    sender = entry.senderName,
+                                    timeText = timeAgo(entry.announcedAtMs),
+                                )
+                            }
                         }
                     }
                 }
             }
-        }
 
-        item(key = "role-entry") {
-            when (settings.role) {
-                DeviceRole.OWNER -> {
-                    val employees by viewModel.employees.collectAsStateWithLifecycle()
-                    val active = employees.count { it.isActive }
-                    PvSection(title = "Employees") {
+            item(key = "role-entry") {
+                when (settings.role) {
+                    DeviceRole.UNSET -> PvSection(title = "Announce on more devices") {
                         Text(
-                            if (active == 1) "1 device connected"
-                            else "$active devices connected",
+                            "Let another phone announce the same payments — for a shop " +
+                                "counter or another staff member.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        OutlinedButton(onClick = onOpenOwnerRemote) {
-                            Text("Manage employees")
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = { viewModel.setRole(DeviceRole.OWNER, Build.MODEL ?: "Owner") }) {
+                                Text("I'm the owner")
+                            }
+                            OutlinedButton(onClick = { viewModel.setRole(DeviceRole.EMPLOYEE, Build.MODEL ?: "Employee") }) {
+                                Text("I'm an employee")
+                            }
                         }
                     }
-                }
-                DeviceRole.EMPLOYEE -> Unit // hero covers it; deep link below
-                DeviceRole.UNSET -> PvSection(title = "Announce on more devices") {
-                    Text(
-                        "Let another phone announce the same payments — for a shop " +
-                            "counter or another staff member.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = { viewModel.setRole(DeviceRole.OWNER, Build.MODEL ?: "Owner") }) {
-                            Text("I'm the owner")
-                        }
-                        OutlinedButton(onClick = { viewModel.setRole(DeviceRole.EMPLOYEE, Build.MODEL ?: "Employee") }) {
-                            Text("I'm an employee")
-                        }
-                    }
+                    else -> Unit // hero covers the role entry point via the cards below
                 }
             }
-        }
 
-        item(key = "settings-entry") {
-            PvSection {
-                PvRow(onClick = onOpenSettings) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Settings", style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            "Voice, announcements & more",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            item(key = "cards") {
+                PvSection(title = "Manage") {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        when (settings.role) {
+                            DeviceRole.OWNER -> PvActionCard(
+                                icon = Icons.Filled.Person,
+                                title = "Employees",
+                                subtitle = "Devices that hear your payment announcements",
+                                onClick = onOpenOwnerRemote,
+                            )
+                            DeviceRole.EMPLOYEE -> PvActionCard(
+                                icon = Icons.Filled.Add,
+                                title = "Pair this device",
+                                subtitle = "Join a business with a pairing code",
+                                onClick = onOpenEmployeeRemote,
+                            )
+                            DeviceRole.UNSET -> Unit
+                        }
+                        PvActionCard(
+                            icon = Icons.Filled.Info,
+                            title = "Diagnostics",
+                            subtitle = "Technical logs and captured notifications",
+                            onClick = onOpenDiagnostics,
+                        )
+                        PvActionCard(
+                            icon = Icons.Filled.Build,
+                            title = "Reliability",
+                            subtitle = "Permissions, battery and connection repair",
+                            onClick = onOpenReliability,
+                        )
+                        PvActionCard(
+                            icon = Icons.Filled.Settings,
+                            title = "Settings",
+                            subtitle = "Voice, announcements & more",
+                            onClick = onOpenSettings,
                         )
                     }
-                    Icon(
-                        Icons.AutoMirrored.Filled.ArrowForward,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
                 }
             }
-        }
 
-        item(key = "footer") { Spacer(Modifier.height(16.dp)) }
+            item(key = "footer") { Spacer(Modifier.height(8.dp)) }
+        }
     }
 }
 
