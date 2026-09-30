@@ -89,7 +89,10 @@ class AnnouncementSpeaker(
             PowerManager.PARTIAL_WAKE_LOCK, "payvoice:announce"
         ).apply { acquire(WAKE_LOCK_CAP_MS) }
         try {
-            withContext(Dispatchers.Main) { requestFocus() }
+            val focusGranted = withContext(Dispatchers.Main) { requestFocus() }
+            if (!focusGranted) {
+                DebugLog.d(TAG, "audio focus not granted — will still attempt TTS with ducking")
+            }
             val s = settings.settings.value
             val done = CompletableDeferred<Boolean>()
             current.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
@@ -291,7 +294,7 @@ class AnnouncementSpeaker(
     private fun currentLocaleTag(): String =
         settings.settings.value.language.ttsLocaleTag
 
-    private fun requestFocus() {
+    private fun requestFocus(): Boolean {
         val attrs = AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_MEDIA)
             .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
@@ -300,7 +303,11 @@ class AnnouncementSpeaker(
             .setAudioAttributes(attrs)
             .build()
         focusRequest = request
-        audioManager.requestAudioFocus(request)
+        val result = audioManager.requestAudioFocus(request)
+        if (result != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+            android.util.Log.w(TAG, "audio focus denied: $result")
+        }
+        return result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
     }
 
     private fun abandonFocus() {
