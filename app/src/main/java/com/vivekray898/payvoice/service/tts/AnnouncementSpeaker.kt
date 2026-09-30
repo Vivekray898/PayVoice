@@ -12,6 +12,7 @@ import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import com.vivekray898.payvoice.core.announce.AnnouncementLanguage
 import com.vivekray898.payvoice.core.settings.SettingsRepository
+import com.vivekray898.payvoice.core.util.DebugLog
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -117,6 +118,43 @@ class AnnouncementSpeaker(
             }
             val ok = if (!started) false
             else withTimeoutOrNull(WAKE_LOCK_CAP_MS - 2_000) { done.await() } ?: false
+            if (!ok) {
+                android.util.Log.w(TAG, "speak() failed; attempting one engine restart + retry")
+                runCatching { engine?.shutdown() }
+                engine = null
+                engineReady = false
+                initAttempts = 0
+                val restarted = ensureEngine()
+                if (restarted == null) {
+                    android.util.Log.e(TAG, "TTS engine could not restart after failure; posting fallback")
+                    TtsFallbackNotifier.notify(context, text)
+                    return false
+                }
+                val retryId = "pv_retry_${System.nanoTime()}"
+                val retryDone = CompletableDeferred<Boolean>()
+                restarted.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                    override fun onStart(id: String?) { lastStartAtMs = System.currentTimeMillis() }
+                    override fun onDone(id: String?) { if (id == retryId) retryDone.complete(true) }
+                    @Deprecated("deprecated") override fun onError(id: String?) {
+                        if (id == retryId) retryDone.complete(false)
+                    }
+                    override fun onError(id: String?, code: Int) {
+                        if (id == retryId) retryDone.complete(false)
+                    }
+                })
+                val retryStarted = withContext(Dispatchers.Main) {
+                    restarted.speak(text, TextToSpeech.QUEUE_FLUSH, null, retryId) >= 0
+                }
+                val retryOk = if (!retryStarted) false
+                    else withTimeoutOrNull(WAKE_LOCK_CAP_MS - 2_000) { retryDone.await() } ?: false
+                if (!retryOk) {
+                    android.util.Log.e(TAG, "TTS retry also failed; posting fallback")
+                    TtsFallbackNotifier.notify(context, text)
+                } else {
+                    DebugLog.d(TAG, "TTS retry succeeded")
+                }
+                return retryOk
+            }
             return ok
         } finally {
             withContext(Dispatchers.Main) { abandonFocus() }
