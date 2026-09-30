@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vivekray898.payvoice.ui.MainViewModel
+import com.vivekray898.payvoice.ui.components.PvScaffold
 import com.vivekray898.payvoice.ui.components.SectionCard
 import com.vivekray898.payvoice.ui.components.StatusLine
 import com.vivekray898.payvoice.ui.components.SwitchRow
@@ -39,23 +40,15 @@ fun DiagnosticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
     val captured by viewModel.captured.collectAsStateWithLifecycle()
     val logs by viewModel.diagnostics.collectAsStateWithLifecycle()
 
-    LazyColumn(
-        Modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        item(key = "header") {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text("Diagnostics", style = MaterialTheme.typography.headlineSmall)
-                TextButton(onClick = onBack) { Text("Close") }
-            }
-        }
-
-        item(key = "status") {
+    // UI overhaul Phase 3f: real screen chrome (title + back, safeDrawing
+    // insets) — this screen previously rendered its first card UNDER the
+    // status bar with only a Close text button.
+    PvScaffold(title = "Diagnostics", onBack = onBack) {
+        LazyColumn(
+            Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            item(key = "status") {
             SectionCard(title = "Live status") {
                 StatusLine(status?.listenerEnabled == true, "Notification listener")
                 StatusLine(status?.notificationsEnabled == true, "App notifications")
@@ -222,6 +215,7 @@ fun DiagnosticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
             }
         }
 
-        item(key = "footer") { Spacer(Modifier.height(24.dp)) }
+            item(key = "footer") { Spacer(Modifier.height(24.dp)) }
+        }
     }
 }
