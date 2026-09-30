@@ -138,14 +138,27 @@ class AnnouncementSpeaker(
             containerLaunch { speak(text) }
             return
         }
-        // Latest-wins: a newer payment replaces an older parked one (spec §8
-        // caps queued announcements at the most recent). Immediate flush if
-        // init already completed in the gap.
+        // Latest-wins parking (unchanged behavior).
         pendingSlot.set(text)
         if (engineReady) {
             if (flushPending()) return
         }
-        containerLaunch { ensureEngine() }
+        containerLaunch {
+            val engine = ensureEngine()
+            if (engine == null) {
+                // Init failed entirely — never lose the announcement.
+                val parked = pendingSlot.getAndSet(null)
+                if (parked != null) {
+                    android.util.Log.e(
+                        TAG,
+                        "TTS engine unavailable after $initAttempts attempts; posting fallback notification"
+                    )
+                    TtsFallbackNotifier.notify(context, parked)
+                }
+            } else {
+                flushPending()
+            }
+        }
     }
 
     private fun containerLaunch(block: suspend () -> Unit) {
@@ -251,6 +264,7 @@ class AnnouncementSpeaker(
     private val idleReleaseRunnable = Runnable { release() }
 
     companion object {
+        private const val TAG = "PayVoiceTTS"
         private const val WAKE_LOCK_CAP_MS = 45_000L
         private const val IDLE_RELEASE_MS = 5 * 60_000L
         private const val MAX_INIT_ATTEMPTS = 3
