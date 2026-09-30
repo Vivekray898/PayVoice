@@ -1,5 +1,6 @@
 package com.vivekray898.payvoice.ui.owner
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -14,12 +15,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -41,15 +42,19 @@ import com.vivekray898.payvoice.ui.components.PvEmptyState
 import com.vivekray898.payvoice.ui.components.PvLoadingRow
 import com.vivekray898.payvoice.ui.components.PvScaffold
 import com.vivekray898.payvoice.ui.components.PvSection
+import com.vivekray898.payvoice.ui.components.PvStatusHero
 import com.vivekray898.payvoice.ui.components.StatusPill
 import com.vivekray898.payvoice.ui.components.timeAgo
+import com.vivekray898.payvoice.ui.components.statusPositive
 
 /**
- * Employees (production redesign): a normal consumer feature — people who
- * hear the payments. Pairing via a big shareable code, removal behind a
- * confirmation dialog, honest outcomes via snackbar-style status lines.
- * All backend operations flow through the EXISTING ViewModel calls.
+ * Employees (UI overhaul Phase 3c): counter hero, employee rows that open a
+ * ModalBottomSheet with actions, and an ExtendedFloatingActionButton to add.
+ * Pairing-code display and destructive confirms are bottom sheets, not
+ * AlertDialogs (design spec). All backend operations stay the EXISTING
+ * ViewModel calls.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OwnerRemoteScreen(viewModel: MainViewModel, onBack: () -> Unit) {
     val employees by viewModel.employees.collectAsStateWithLifecycle()
@@ -57,21 +62,56 @@ fun OwnerRemoteScreen(viewModel: MainViewModel, onBack: () -> Unit) {
     val sendState by viewModel.remoteSendState.collectAsStateWithLifecycle()
     val testSendState by viewModel.testSendState.collectAsStateWithLifecycle()
     val revokeState by viewModel.revokeState.collectAsStateWithLifecycle()
-    var showAddDialog by remember { mutableStateOf(false) }
-    var pendingRemoval by remember { mutableStateOf<EmployeeDevice?>(null) }
+    var showAddSheet by remember { mutableStateOf(false) }
+    var sheetEmployee by remember { mutableStateOf<EmployeeDevice?>(null) }
 
-    PvScaffold(title = "Employees", onBack = onBack) {
+    PvScaffold(
+        title = "Employees",
+        onBack = onBack,
+        floatingActionButton = {
+            ExtendedFloatingActionButton(
+                onClick = {
+                    showAddSheet = true
+                    viewModel.generatePairingCode()
+                },
+                icon = { Icon(Icons.Filled.Add, contentDescription = null) },
+                text = { Text("Add employee") },
+            )
+        },
+    ) {
         LazyColumn(
             Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 32.dp),
+            // FAB overlaps content: leave room at the bottom.
+            contentPadding = PaddingValues(bottom = 96.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            item(key = "intro") {
-                PvSection {
-                    Text(
-                        "People who hear your payment announcements.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+            item(key = "counter") {
+                val active = employees.count { it.isActive }
+                val revoked = employees.size - active
+                if (employees.isEmpty()) {
+                    PvSection {
+                        PvEmptyState(
+                            icon = Icons.Filled.Person,
+                            title = "No employees yet",
+                            body = "Add an employee so another phone can announce your payments.",
+                            actionLabel = "Generate pairing code",
+                            onAction = {
+                                showAddSheet = true
+                                viewModel.generatePairingCode()
+                            },
+                        )
+                    }
+                } else {
+                    PvStatusHero(
+                        icon = Icons.Filled.CheckCircle,
+                        tint = statusPositive(),
+                        title = "Connected devices",
+                        headline = if (active == 1) "1 connected" else "$active connected",
+                        body = if (revoked > 0) {
+                            "$revoked removed · they no longer receive announcements"
+                        } else {
+                            "They hear your payment announcements"
+                        },
                     )
                 }
             }
@@ -96,155 +136,167 @@ fun OwnerRemoteScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                 }
             }
 
-            item(key = "list") {
-                PvSection(title = "Connected devices") {
-                    when {
-                        employees.isEmpty() -> PvEmptyState(
-                            title = "No employees yet",
-                            body = "Add an employee so another phone can announce your payments.",
-                            actionLabel = "Add employee",
-                            onAction = {
-                                showAddDialog = true
-                                viewModel.generatePairingCode()
-                            },
-                        )
-                        else -> Column {
+            if (employees.isNotEmpty()) {
+                item(key = "list") {
+                    PvSection(title = "Devices") {
+                        Column {
                             employees.forEachIndexed { index, emp ->
                                 if (index > 0) PvDivider()
-                                EmployeeRow(
-                                    emp = emp,
-                                    onRemove = { pendingRemoval = emp },
-                                )
+                                EmployeeRow(emp = emp, onClick = { sheetEmployee = emp })
                             }
                         }
                     }
                 }
+
+                item(key = "test") {
+                    PvSection(title = "Try it out") {
+                        Button(
+                            onClick = { viewModel.sendTestToEmployees() },
+                            enabled = testSendState !is MainViewModel.TestSendState.Sending,
+                        ) {
+                            Text(
+                                if (testSendState is MainViewModel.TestSendState.Sending) "Sending…"
+                                else "Send test announcement",
+                            )
+                        }
+                        Text(
+                            when (val s = testSendState) {
+                                is MainViewModel.TestSendState.Sent ->
+                                    "Sent — connected devices will announce it shortly."
+                                is MainViewModel.TestSendState.Failed ->
+                                    s.message
+                                MainViewModel.TestSendState.Sending ->
+                                    "Sending…"
+                                MainViewModel.TestSendState.Idle ->
+                                    when (val r = sendState) {
+                                        is RemoteEventSender.SendState.SENT ->
+                                            "Last event sent ${timeAgo(r.atMs)}."
+                                        is RemoteEventSender.SendState.FAILED ->
+                                            "Last send failed — your local announcements are unaffected."
+                                        else ->
+                                            "Connected devices hear: \"PayVoice test announcement.\""
+                                    }
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
             }
 
-            if (employees.isNotEmpty()) {
-                item(key = "add") {
-                    PvSection {
-                        OutlinedButton(onClick = {
-                            showAddDialog = true
-                            viewModel.generatePairingCode()
-                        }) {
-                            Icon(Icons.Filled.Add, contentDescription = null)
-                            Spacer(Modifier.height(0.dp))
-                            Text("  Add employee")
+            item(key = "footer") { Spacer(Modifier.height(8.dp)) }
+        }
+    }
+
+    // ---- Add / pairing sheet (bottom sheet, not AlertDialog) ----------------
+    if (showAddSheet) {
+        ModalBottomSheet(onDismissRequest = { showAddSheet = false }) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+                    .padding(bottom = 32.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text("Add employee", style = MaterialTheme.typography.titleLarge)
+                val code = pairingCode?.code
+                if (code == null) {
+                    PvLoadingRow("Preparing your code…")
+                } else {
+                    Text(
+                        "Ask your employee to enter this code in their PayVoice app.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        code,
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        "Expires in 10 minutes · works once",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = { viewModel.generatePairingCode() }) {
+                            Text("New code")
+                        }
+                        OutlinedButton(onClick = { showAddSheet = false }) {
+                            Text("Done")
                         }
                     }
                 }
             }
-
-            item(key = "test") {
-                PvSection(title = "Try it out") {
-                    Button(
-                        onClick = { viewModel.sendTestToEmployees() },
-                        enabled = testSendState !is MainViewModel.TestSendState.Sending,
-                    ) {
-                        Text(
-                            if (testSendState is MainViewModel.TestSendState.Sending) "Sending…"
-                            else "Send test announcement",
-                        )
-                    }
-                    Text(
-                        when (val s = testSendState) {
-                            is MainViewModel.TestSendState.Sent ->
-                                "Sent — connected devices will announce it shortly."
-                            is MainViewModel.TestSendState.Failed ->
-                                s.message
-                            MainViewModel.TestSendState.Sending ->
-                                "Sending…"
-                            MainViewModel.TestSendState.Idle ->
-                                when (val r = sendState) {
-                                    is RemoteEventSender.SendState.SENT ->
-                                        "Last event sent ${timeAgo(r.atMs)}."
-                                    is RemoteEventSender.SendState.FAILED ->
-                                        "Last send failed — your local announcements are unaffected."
-                                    else ->
-                                        "Connected devices hear: \"PayVoice test announcement.\""
-                                }
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-
-            item(key = "footer") { Spacer(Modifier.height(16.dp)) }
         }
     }
 
-    // ---- Add / pairing sheet -----------------------------------------------
-    if (showAddDialog) {
-        AlertDialog(
-            onDismissRequest = { showAddDialog = false },
-            title = { Text("Add employee") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    val code = pairingCode?.code
-                    if (code == null) {
-                        PvLoadingRow("Preparing your code…")
-                    } else {
-                        Text("Ask your employee to enter this code in their PayVoice app.")
+    // ---- Employee detail sheet: details + actions ---------------------------
+    sheetEmployee?.let { emp ->
+        ModalBottomSheet(onDismissRequest = { sheetEmployee = null }) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+                    .padding(bottom = 32.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(emp.name, style = MaterialTheme.typography.titleLarge)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    StatusPill(
+                        text = if (emp.isActive) "Connected"
+                        else emp.status.lowercase().replaceFirstChar { it.uppercase() },
+                        ok = emp.isActive,
+                    )
+                    if (emp.lastSeenAtMs > 0) {
                         Text(
-                            code,
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                        Text(
-                            "Expires in 10 minutes · works once",
+                            "Active ${timeAgo(emp.lastSeenAtMs)}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
-            },
-            confirmButton = {
-                TextButton(onClick = { showAddDialog = false }) { Text("Done") }
-            },
-            dismissButton = {
-                TextButton(onClick = { viewModel.generatePairingCode() }) { Text("New code") }
-            },
-        )
-    }
-
-    // ---- Remove confirmation (spec §9) --------------------------------------
-    pendingRemoval?.let { emp ->
-        AlertDialog(
-            onDismissRequest = { pendingRemoval = null },
-            title = { Text("Remove employee?") },
-            text = {
-                Text(
-                    "${emp.name} will no longer receive payment announcements " +
-                        "from this device.",
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.revokeEmployee(emp.uid)
-                    pendingRemoval = null
+                Button(onClick = {
+                    viewModel.sendTestToEmployees()
+                    sheetEmployee = null
                 }) {
-                    Text("Remove", color = MaterialTheme.colorScheme.error)
+                    Text("Send test announcement")
                 }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingRemoval = null }) { Text("Cancel") }
-            },
-        )
+                OutlinedButton(onClick = {
+                    viewModel.revokeEmployee(emp.uid)
+                    sheetEmployee = null
+                }) {
+                    Text("Remove employee", color = MaterialTheme.colorScheme.error)
+                }
+                Text(
+                    "Removing stops announcements on that phone. The owner phone is unaffected.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 }
 
 @Composable
-private fun EmployeeRow(emp: EmployeeDevice, onRemove: () -> Unit) {
+private fun EmployeeRow(emp: EmployeeDevice, onClick: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(vertical = 10.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        Icon(
+            Icons.Filled.Person,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+        )
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(emp.name, style = MaterialTheme.typography.titleMedium)
             Row(
@@ -264,9 +316,6 @@ private fun EmployeeRow(emp: EmployeeDevice, onRemove: () -> Unit) {
                     )
                 }
             }
-        }
-        TextButton(onClick = onRemove) {
-            Text("Remove", color = MaterialTheme.colorScheme.error)
         }
     }
 }

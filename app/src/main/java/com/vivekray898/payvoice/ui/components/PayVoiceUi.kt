@@ -73,6 +73,7 @@ fun PvScaffold(
     onBack: (() -> Unit)? = null,
     snackbarHostState: SnackbarHostState? = null,
     bottomBar: (@Composable () -> Unit)? = null,
+    floatingActionButton: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Scaffold(
@@ -80,6 +81,7 @@ fun PvScaffold(
         contentWindowInsets = WindowInsets.safeDrawing,
         snackbarHost = { snackbarHostState?.let { SnackbarHost(it) } },
         bottomBar = { bottomBar?.invoke() },
+        floatingActionButton = { floatingActionButton?.invoke() },
         topBar = {
             Row(
                 Modifier
