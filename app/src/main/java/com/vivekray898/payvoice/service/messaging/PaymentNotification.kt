@@ -1,13 +1,16 @@
 package com.vivekray898.payvoice.service.messaging
 
+import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import com.vivekray898.payvoice.MainActivity
 import com.vivekray898.payvoice.R
 
@@ -81,8 +84,19 @@ object PaymentNotification {
             .setContentIntent(pending)
             .build()
 
-        runCatching {
+        // POST_NOTIFICATIONS is a runtime permission on API 33+. If denied, notify()
+        // is a no-op and can throw SecurityException. Never let a notification
+        // failure crash the caller — this is a best-effort receipt.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+        try {
             NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification)
+        } catch (e: SecurityException) {
+            // Permission revoked between the check above and notify() — swallow.
         }
     }
 

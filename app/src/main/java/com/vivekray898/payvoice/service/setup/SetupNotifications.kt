@@ -83,9 +83,21 @@ object SetupNotifications {
             .setContentIntent(pending)
             .build()
 
-        return runCatching {
+        // Explicit runtime-permission check (lint MissingPermission): the
+        // canPostNotifications() gate above is not recognized by lint, and
+        // POST_NOTIFICATIONS can be revoked between that check and notify().
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED
+        ) {
+            return false
+        }
+        return try {
             NotificationManagerCompat.from(context).notify(1001, notification)
             true
-        }.getOrDefault(false)
+        } catch (e: SecurityException) {
+            // Permission revoked between the check above and notify() — swallow.
+            false
+        }
     }
 }
