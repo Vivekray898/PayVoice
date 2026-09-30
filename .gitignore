@@ -21,6 +21,7 @@ local.properties
 
 payment-announcer-43071-firebase-adminsdk-fbsvc-f06cdcb325.json
 
-keystore/
+keystore.properties
 *.jks
 *.keystore
+app/google-services.json

@@ -1,5 +1,6 @@
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
@@ -8,10 +9,36 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+// ---------------------------------------------------------------------------
+// Release signing config.
+//
+// keystore.properties lives at the repo root and is GITIGNORED — it holds the
+// plaintext password for the release keystore. If the file is missing (fresh
+// clone, CI without secrets), release falls back to the debug key so the build
+// still succeeds; only the signing identity changes.
+// ---------------------------------------------------------------------------
+val keystorePropsFile = rootProject.file("keystore.properties")
+val keystoreProps = Properties().apply {
+    if (keystorePropsFile.exists()) {
+        keystorePropsFile.inputStream().use { load(it) }
+    }
+}
+
 android {
     namespace = "com.vivekray898.payvoice"
     compileSdk {
         version = release(37)
+    }
+
+    signingConfigs {
+        if (keystorePropsFile.exists()) {
+            create("release") {
+                storeFile = file(keystoreProps.getProperty("storeFile"))
+                storePassword = keystoreProps.getProperty("storePassword")
+                keyAlias = keystoreProps.getProperty("keyAlias")
+                keyPassword = keystoreProps.getProperty("keyPassword")
+            }
+        }
     }
 
     defaultConfig {
@@ -31,9 +58,14 @@ android {
             optimization {
                 enable = false
             }
-            // Phase-1 perf verification only: lets us install a locally AOT-compiled
-            // release build with the debug key to measure real startup cost.
-            signingConfig = signingConfigs.getByName("debug")
+            // Sign with the real release keystore when keystore.properties exists;
+            // otherwise fall back to the debug key so a fresh clone / CI without
+            // secrets can still `assembleRelease` for perf verification.
+            signingConfig = if (keystorePropsFile.exists()) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
     compileOptions {

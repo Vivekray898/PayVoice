@@ -1,6 +1,7 @@
 package com.vivekray898.payvoice
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -31,6 +32,18 @@ import com.vivekray898.payvoice.ui.reliability.ReliabilityScreen
 import com.vivekray898.payvoice.ui.settings.SettingsScreen
 import com.vivekray898.payvoice.ui.theme.PayVoiceTheme
 
+/**
+ * Lint's InvalidFragmentVersionForActivityResult check fires because
+ * registerForActivityResult's contract historically required Fragment 1.3+
+ * to avoid a lifecycle bug in the Fragment-based ActivityResultRegistry.
+ *
+ * PayVoice uses NO fragments — this is a pure Compose app on
+ * androidx.activity:activity-compose, where the registry is owned by
+ * ComponentActivity itself and the Fragment-version hazard does not apply.
+ * The suppression is class-scoped (not file-scoped) so a real fragment
+ * usage elsewhere in this file would still be caught.
+ */
+@SuppressLint("InvalidFragmentVersionForActivityResult")
 class MainActivity : ComponentActivity() {
 
     private val viewModel: MainViewModel by viewModels()
