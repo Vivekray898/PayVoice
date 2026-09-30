@@ -177,8 +177,8 @@ fun StatusPill(text: String, ok: Boolean?, modifier: Modifier = Modifier) {
  */
 @Composable
 fun PvSection(
-    title: String? = null,
     modifier: Modifier = Modifier,
+    title: String? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Column(
