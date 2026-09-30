@@ -51,7 +51,31 @@ val SurfaceContainerHighDark = Color(0xFF262B29)
 val OutlineDark = Color(0xFF89938F)
 val OutlineVariantDark = Color(0xFF3F4946)
 
-// ---- Google baseline (GPay-style overhaul, 2026-09) ----
+// ---- Stripe reference (DESIGN.md, adopted 2026-09-30 — visual source of truth) ----
+// Hex values come verbatim from DESIGN.md; dark-scheme values marked (derived)
+// follow the reference's "dark-app dashboard track" navy polarity.
+val StripePrimary = Color(0xFF533AFD) // colors.primary
+val StripePrimaryDeep = Color(0xFF4434D4) // colors.primary-deep
+val StripePrimaryPress = Color(0xFF2E2B8C) // colors.primary-press
+val StripePrimarySoft = Color(0xFF665EFD) // colors.primary-soft
+val StripePrimarySubdued = Color(0xFFB9B9F9) // colors.primary-bg-subdued-hover
+val StripeBrandDark = Color(0xFF1C1E54) // colors.brand-dark-900
+val StripeInk = Color(0xFF0D253D) // colors.ink — body text, never pure black
+val StripeInkSecondary = Color(0xFF273951) // colors.ink-secondary
+val StripeInkMute = Color(0xFF64748D) // colors.ink-mute
+val StripeOnPrimary = Color(0xFFFFFFFF) // colors.on-primary
+val StripeCanvas = Color(0xFFFFFFFF) // colors.canvas
+val StripeCanvasSoft = Color(0xFFF6F9FC) // colors.canvas-soft
+val StripeHairline = Color(0xFFE3E8EE) // colors.hairline
+val StripeHairlineInput = Color(0xFFA8C3DE) // colors.hairline-input
+val StripeRuby = Color(0xFFEA2261) // colors.ruby — errors only
+// Dark scheme (derived from the reference's navy polarity):
+val StripeDarkBackground = Color(0xFF0D1024) // (derived)
+val StripeDarkSurface = Color(0xFF14173A) // (derived)
+val StripeDarkOnSurface = Color(0xFFE8EEF5) // (derived)
+val StripeDarkOnSurfaceVariant = Color(0xFFA5AEC6) // (derived)
+
+// ---- Google baseline (superseded palette, kept for status semantics) ----
 // One strong primary (Google Blue), restrained grey secondary, green used
 // only for success, red only for error. Off-white background keeps cards
 // visible without heavy elevation.

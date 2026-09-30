@@ -353,7 +353,10 @@ fun PvPaymentRow(amountText: String, source: String?, sender: String?, timeText:
             )
         }
         Column(Modifier.weight(1f)) {
-            Text(amountText, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+            MoneyText(
+                text = amountText,
+                fontWeight = FontWeight.SemiBold,
+            )
             val secondary = buildString {
                 if (!sender.isNullOrBlank()) append("from $sender")
                 else if (!source.isNullOrBlank()) append(source)
@@ -430,6 +433,27 @@ fun PvActionCard(
             )
         }
     }
+}
+
+/**
+ * Money/numeric text with tabular figures — the DESIGN.md `body-tabular`
+ * rule ("tnum on every money cell"). All amounts render through this.
+ */
+@Composable
+fun MoneyText(
+    text: String,
+    modifier: Modifier = Modifier,
+    style: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.titleLarge,
+    fontWeight: FontWeight? = null,
+    color: Color = Color.Unspecified,
+) {
+    Text(
+        text,
+        modifier = modifier,
+        style = style.copy(fontFeatureSettings = "tnum"),
+        fontWeight = fontWeight,
+        color = color,
+    )
 }
 
 /**
