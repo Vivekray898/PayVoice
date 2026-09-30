@@ -72,12 +72,14 @@ fun PvScaffold(
     title: String,
     onBack: (() -> Unit)? = null,
     snackbarHostState: SnackbarHostState? = null,
+    bottomBar: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets.safeDrawing,
         snackbarHost = { snackbarHostState?.let { SnackbarHost(it) } },
+        bottomBar = { bottomBar?.invoke() },
         topBar = {
             Row(
                 Modifier

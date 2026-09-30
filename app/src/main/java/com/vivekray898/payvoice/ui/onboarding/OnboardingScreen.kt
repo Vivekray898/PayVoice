@@ -12,11 +12,15 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -28,6 +32,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -39,19 +44,22 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vivekray898.payvoice.service.setup.SetupNotifications
 import com.vivekray898.payvoice.service.tts.AnnouncementSpeaker
 import com.vivekray898.payvoice.ui.MainViewModel
-import com.vivekray898.payvoice.ui.components.PvDivider
-import com.vivekray898.payvoice.ui.components.PvRow
+import com.vivekray898.payvoice.ui.components.PvPrimaryButton
 import com.vivekray898.payvoice.ui.components.PvScaffold
 import com.vivekray898.payvoice.ui.components.PvSection
 import com.vivekray898.payvoice.ui.components.StatusDot
-import com.vivekray898.payvoice.ui.components.statusNegative
 import com.vivekray898.payvoice.ui.components.statusPositive
 
 /**
- * Setup (production redesign): the same four setup mechanisms and statuses,
- * presented as a calm checklist in human language. Statuses refresh on
- * return from system settings (Activity.onResume). All actions call the
- * existing ViewModel methods.
+ * Setup (UI overhaul Phase 3a): ONE primary action, always visible at the
+ * bottom (never needs scrolling) + the checklist above it. Statuses refresh
+ * on return from system settings (Activity.onResume). All actions call the
+ * existing ViewModel methods — no behavior change.
+ *
+ * Insets: PvScaffold owns the status bar (topBar slot); this screen declares
+ * a bottomBar with BOTTOM-only safeDrawing padding so the nav-bar/IME inset
+ * is consumed exactly once — the top is already handled by PvScaffold and
+ * would double-pad.
  */
 @Composable
 fun OnboardingScreen(viewModel: MainViewModel) {
@@ -63,13 +71,54 @@ fun OnboardingScreen(viewModel: MainViewModel) {
     val notifOk = status?.notificationsEnabled == true
     val batteryOk = status?.batteryExempt == true
     val ttsOk = tts == AnnouncementSpeaker.Status.READY || tts == AnnouncementSpeaker.Status.SPEAKING
+    val smsOk = status?.smsPermissionGranted == true
     val done = listOf(listenerOk, notifOk, batteryOk, ttsOk).count { it }
+    val allDone = done == 4
+    // The current step is the first incomplete one (SMS drifts to "current"
+    // only when everything else is done). Drives "Step X of 5" + highlight.
+    val currentStep = when {
+        !listenerOk -> 1
+        !notifOk -> 2
+        !batteryOk -> 3
+        !ttsOk -> 4
+        !smsOk -> 5
+        else -> 5
+    }
 
-    PvScaffold(title = "Welcome to PayVoice") {
+    PvScaffold(
+        title = "Welcome to PayVoice",
+        // Bottom bar = the screen's single primary action + skip. Declared
+        // here (not inside PvScaffold) because only some screens have a
+        // persistent action row.
+        bottomBar = {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                PvPrimaryButton(
+                    text = if (allDone) "Finish setup" else "Continue — finish later",
+                    onClick = { viewModel.completeOnboarding() },
+                )
+                if (!allDone) {
+                    TextButton(
+                        onClick = { viewModel.completeOnboarding() },
+                        modifier = Modifier.align(Alignment.CenterHorizontally),
+                    ) {
+                        Text(
+                            "Skip for now",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        },
+    ) {
         LazyColumn(
-            Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            contentPadding = PaddingValues(bottom = 12.dp),
+            modifier = Modifier.fillMaxWidth(),
         ) {
             item(key = "intro") {
                 PvSection {
@@ -87,7 +136,7 @@ fun OnboardingScreen(viewModel: MainViewModel) {
                             modifier = Modifier.weight(1f),
                         )
                         Text(
-                            "$done of 4",
+                            "Step $currentStep of 5",
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -105,6 +154,7 @@ fun OnboardingScreen(viewModel: MainViewModel) {
                     ok = listenerOk,
                     okLabel = "Enabled",
                     pendingLabel = "Not set up",
+                    isCurrent = currentStep == 1,
                 ) {
                     Button(onClick = { viewModel.openListenerSettings(context) }) {
                         Text(if (listenerOk) "Review" else "Allow access")
@@ -124,6 +174,7 @@ fun OnboardingScreen(viewModel: MainViewModel) {
                     ok = notifOk,
                     okLabel = "Enabled",
                     pendingLabel = "Not set up",
+                    isCurrent = currentStep == 2,
                 ) {
                     Button(onClick = {
                         SetupNotifications.ensureChannels(context)
@@ -150,6 +201,7 @@ fun OnboardingScreen(viewModel: MainViewModel) {
                         ok = batteryOk,
                         okLabel = "Unrestricted",
                         pendingLabel = "Restricted",
+                        isCurrent = currentStep == 3,
                     ) {
                         Button(onClick = { viewModel.fixBattery(context) }) {
                             Text(if (batteryOk) "Review" else "Allow")
@@ -176,6 +228,7 @@ fun OnboardingScreen(viewModel: MainViewModel) {
                     ok = ttsOk,
                     okLabel = "Ready",
                     pendingLabel = "Preparing…",
+                    isCurrent = currentStep == 4,
                 ) {
                     OutlinedButton(onClick = { viewModel.speakTest() }) {
                         Text("Hear a test")
@@ -200,11 +253,12 @@ fun OnboardingScreen(viewModel: MainViewModel) {
                     body = "When Google Pay notifications don't arrive (no internet, " +
                         "notifications off), the bank's SMS still confirms the payment. " +
                         "Read locally only — never uploaded.",
-                    ok = status?.smsPermissionGranted == true,
+                    ok = smsOk,
                     okLabel = "Enabled",
                     pendingLabel = "Recommended",
+                    isCurrent = currentStep == 5,
                 ) {
-                    if (status?.smsPermissionGranted == true) {
+                    if (smsOk) {
                         OutlinedButton(onClick = { viewModel.refreshStatus() }) {
                             Text("Review")
                         }
@@ -218,26 +272,16 @@ fun OnboardingScreen(viewModel: MainViewModel) {
                 }
             }
 
-            item(key = "finish") {
-                PvSection {
-                    PvDivider()
-                    Spacer(Modifier.height(8.dp))
-                    Button(
-                        onClick = { viewModel.completeOnboarding() },
-                        enabled = done >= 3,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(if (done == 4) "Finish setup" else "Continue — finish later")
-                    }
-                }
-            }
-
-            item(key = "footer") { Spacer(Modifier.height(16.dp)) }
+            item(key = "footer") { Spacer(Modifier.height(8.dp)) }
         }
     }
 }
 
-/** One setup checklist step: number/check marker, copy, status, and action. */
+/**
+ * One setup checklist step: number/check marker, copy, status, and action,
+ * grouped in a card. The CURRENT step gets a subtle primary tint so "what
+ * am I doing now?" is answerable at a glance.
+ */
 @Composable
 private fun SetupStep(
     number: Int,
@@ -246,54 +290,70 @@ private fun SetupStep(
     ok: Boolean,
     okLabel: String,
     pendingLabel: String,
+    isCurrent: Boolean,
     action: @Composable () -> Unit,
 ) {
     PvSection {
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.Top,
-        ) {
-            if (ok) {
-                Icon(
-                    imageVector = Icons.Filled.CheckCircle,
-                    contentDescription = null,
-                    tint = statusPositive(),
-                    modifier = Modifier.padding(top = 2.dp),
-                )
+        Surface(
+            shape = MaterialTheme.shapes.large,
+            color = if (isCurrent && !ok) {
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.06f)
             } else {
-                // Pending: a numbered outline circle — NOT a checkmark, which
-                // would read as "done" (accessibility/honesty fix).
-                Surface(
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(26.dp),
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text("$number", style = MaterialTheme.typography.labelMedium)
+                MaterialTheme.colorScheme.surface
+            },
+            tonalElevation = if (isCurrent && !ok) 0.dp else 1.dp,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Row(
+                Modifier.padding(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.Top,
+            ) {
+                if (ok) {
+                    Icon(
+                        imageVector = Icons.Filled.CheckCircle,
+                        contentDescription = null,
+                        tint = statusPositive(),
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                } else {
+                    // Pending: a numbered circle — NOT a checkmark, which would
+                    // read as "done" (accessibility/honesty fix).
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(26.dp),
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text("$number", style = MaterialTheme.typography.labelMedium)
+                        }
                     }
                 }
-            }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(title, style = MaterialTheme.typography.titleMedium)
-                Text(
-                    body,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    StatusDot(ok)
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(title, style = MaterialTheme.typography.titleMedium)
                     Text(
-                        if (ok) okLabel else pendingLabel,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (ok) statusPositive() else MaterialTheme.colorScheme.onSurfaceVariant,
+                        body,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        StatusDot(ok)
+                        Text(
+                            if (ok) okLabel else pendingLabel,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (ok) {
+                                statusPositive()
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                        )
+                    }
+                    action()
                 }
-                action()
             }
         }
     }
