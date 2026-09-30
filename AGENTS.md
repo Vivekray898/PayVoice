@@ -4,6 +4,38 @@ Rules for any AI agent or contributor touching this repository. These encode
 the CURRENT (2026) Supabase + FCM architecture. When official docs conflict
 with this file or with old tutorials, the CURRENT official documentation wins.
 
+## UI/UX rules
+
+Before generating or modifying any UI, read `DESIGN.md` at the project root.
+Treat it as the visual source of truth for:
+
+- Colors (use semantic tokens from `DESIGN.md` via `MaterialTheme.colorScheme`,
+  never hard-coded hex in composables)
+- Typography (use the scale in `DESIGN.md` mapped to `MaterialTheme.typography`;
+  money/amounts render through `MoneyText` — tabular figures)
+- Spacing (use `com.vivekray898.payvoice.ui.theme.Spacing` — never `13.dp`
+  or `7.dp` inline)
+- Component rules (buttons, cards, inputs follow `docs/DESIGN_SYSTEM.md`:
+  `PvPrimaryButton`, `PvActionCard`, `StatusPill`, …)
+- Do's and Don'ts (respect the anti-patterns list in `DESIGN.md`)
+
+The token→Compose mapping lives in `docs/DESIGN_SYSTEM.md`.
+
+## Layout rules
+
+- Every top-level screen MUST use `PvScaffold`
+  (`contentWindowInsets = WindowInsets.safeDrawing` is built in). No screen
+  creates its own `Scaffold` or applies its own status/navigation-bar padding.
+- Every screen MUST consume the scaffold body padding (PvScaffold does this
+  centrally; screens pass scroll contentPadding only for aesthetics).
+- Content MUST NOT overlap the status bar or the gesture/navigation bar.
+- Every screen MUST have one primary action, always visible without scrolling
+  (bottom-anchored via the `bottomBar` slot when the action is global).
+- Tap targets MUST be >= 48dp (shared rows/cards are 56dp minimum).
+- Verify insets on a cold start with a UI dump when touching chrome:
+  header top edge must be below the status-bar inset, and the last content
+  node must end above the navigation-bar inset.
+
 ## Supabase API keys
 
 - The Android app uses ONLY: `SUPABASE_URL` + a `sb_publishable_...` key
