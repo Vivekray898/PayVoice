@@ -18,10 +18,10 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
@@ -192,13 +192,13 @@ fun ParentHomeScreen(
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         when (settings.role) {
                             DeviceRole.OWNER -> PvActionCard(
-                                icon = Icons.Filled.Person,
+                                icon = Icons.Filled.Group,
                                 title = "Employees",
                                 subtitle = "Devices that hear your payment announcements",
                                 onClick = onOpenOwnerRemote,
                             )
                             DeviceRole.EMPLOYEE -> PvActionCard(
-                                icon = Icons.Filled.Add,
+                                icon = Icons.Filled.Link,
                                 title = "Pair this device",
                                 subtitle = "Join a business with a pairing code",
                                 onClick = onOpenEmployeeRemote,

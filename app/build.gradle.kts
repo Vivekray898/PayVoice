@@ -173,6 +173,10 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons.core)
+    // User-approved (2026-09-30): full Material icon set for Group/Link etc.
+    // NOTE: R8 is intentionally OFF this release, so the whole artifact
+    // ships — APK size grows by tens of MB; enabling R8 later strips it.
+    implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
