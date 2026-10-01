@@ -1,5 +1,6 @@
 package com.vivekray898.payvoice.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -178,30 +179,56 @@ fun StatusPill(text: String, ok: Boolean?, modifier: Modifier = Modifier) {
 // ---------------------------------------------------------------------------
 
 /**
- * A clean section: optional title OUTSIDE any card, content below. Uses a
- * subtle surface only when [tinted] is set; plain sections keep the airy
- * look (spec: reduce cards).
+ * A section: title + content. With [carded] the content sits in a
+ * hairline-bordered surface card (fintech settings pattern); plain
+ * sections keep the airy look.
  */
 @Composable
 fun PvSection(
     modifier: Modifier = Modifier,
     title: String? = null,
+    carded: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Column(
         modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+            .padding(horizontal = Spacing.lg, vertical = Spacing.sm),
+        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
         if (title != null) {
             Text(
                 title,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
+                style = if (carded) {
+                    MaterialTheme.typography.labelLarge
+                } else {
+                    MaterialTheme.typography.titleMedium
+                },
+                color = if (carded) {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
             )
         }
-        content()
+        if (carded) {
+            Surface(
+                color = MaterialTheme.colorScheme.surface,
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                shape = MaterialTheme.shapes.large,
+                tonalElevation = 1.dp,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+            ) {
+                Column(
+                    Modifier.padding(Spacing.lg),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.md),
+                ) {
+                    content()
+                }
+            }
+        } else {
+            content()
+        }
     }
 }
 
@@ -449,6 +476,7 @@ fun PvActionCard(
         contentColor = MaterialTheme.colorScheme.onSurface,
         shape = MaterialTheme.shapes.large,
         tonalElevation = 1.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
     ) {
         Row(
             Modifier.padding(Spacing.lg),
