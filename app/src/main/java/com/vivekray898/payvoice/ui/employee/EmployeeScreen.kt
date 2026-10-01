@@ -1,16 +1,11 @@
 package com.vivekray898.payvoice.ui.employee
 
-import android.Manifest
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
@@ -18,7 +13,6 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -32,24 +26,23 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.vivekray898.payvoice.core.analytics.PayVoiceAnalytics
+import com.vivekray898.payvoice.core.parser.AmountExtractor
 import com.vivekray898.payvoice.service.setup.SetupNotifications
 import com.vivekray898.payvoice.ui.MainViewModel
 import com.vivekray898.payvoice.ui.components.PvPaymentRow
 import com.vivekray898.payvoice.ui.components.PvScaffold
 import com.vivekray898.payvoice.ui.components.PvSection
 import com.vivekray898.payvoice.ui.components.PvStatusHero
-import com.vivekray898.payvoice.ui.components.SectionCard
 import com.vivekray898.payvoice.ui.components.StatusLine
 import com.vivekray898.payvoice.ui.components.statusCaution
 import com.vivekray898.payvoice.ui.components.statusPositive
 import com.vivekray898.payvoice.ui.components.timeAgo
+import com.vivekray898.payvoice.ui.theme.Spacing
 
 /**
- * This device (UI overhaul Phase 3d): one hero for pairing state, then
- * status cards with INLINE fix actions (battery / notifications).
+ * This device (premium pass, Phase 4d): hero with status chip, carded
+ * status sections with INLINE fix actions (battery / notifications).
  * Join and leave run in ModalBottomSheets. All backend operations remain
  * the existing ViewModel calls.
  */
@@ -69,8 +62,8 @@ fun EmployeeScreen(viewModel: MainViewModel, onBack: () -> Unit) {
     PvScaffold(title = "This device", onBack = onBack) {
         LazyColumn(
             Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            contentPadding = PaddingValues(top = Spacing.xs, bottom = Spacing.xxxl),
+            verticalArrangement = Arrangement.spacedBy(Spacing.xs),
         ) {
             item(key = "hero") {
                 if (paired) {
@@ -86,6 +79,8 @@ fun EmployeeScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                             }
                             append(".")
                         },
+                        chip = "Live",
+                        chipOk = true,
                     )
                 } else {
                     PvStatusHero(
@@ -94,6 +89,8 @@ fun EmployeeScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                         title = "Not paired",
                         headline = "Not connected",
                         body = "Ask the business owner for a code, then enter it below.",
+                        chip = "Not connected",
+                        chipOk = null,
                         actionLabel = "Enter code",
                         onAction = { showJoinSheet = true },
                     )
@@ -101,7 +98,7 @@ fun EmployeeScreen(viewModel: MainViewModel, onBack: () -> Unit) {
             }
 
             item(key = "connection") {
-                SectionCard(title = "Connection") {
+                PvSection(title = "Connection", carded = true) {
                     StatusLine(paired, if (paired) "Connected" else "Degraded — not paired")
                     Text(
                         if (paired) {
@@ -116,7 +113,7 @@ fun EmployeeScreen(viewModel: MainViewModel, onBack: () -> Unit) {
             }
 
             item(key = "battery") {
-                SectionCard(title = "Battery optimization") {
+                PvSection(title = "Battery optimization", carded = true) {
                     val exempt = status?.batteryExempt == true
                     StatusLine(exempt, if (exempt) "Unrestricted" else "Restricted — payments may arrive late")
                     if (!exempt) {
@@ -128,7 +125,7 @@ fun EmployeeScreen(viewModel: MainViewModel, onBack: () -> Unit) {
             }
 
             item(key = "notifications") {
-                SectionCard(title = "Notifications") {
+                PvSection(title = "Notifications", carded = true) {
                     val granted = status?.notificationsEnabled == true
                     StatusLine(granted, if (granted) "Allowed" else "Not allowed")
                     if (!granted) {
@@ -142,10 +139,9 @@ fun EmployeeScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                 }
             }
 
-
             if (paired) {
                 item(key = "test") {
-                    SectionCard(title = "Try it out") {
+                    PvSection(title = "Try it out", carded = true) {
                         OutlinedButton(onClick = { viewModel.speakTest() }) {
                             Text("Hear a test announcement")
                         }
@@ -158,7 +154,7 @@ fun EmployeeScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                 }
 
                 item(key = "last-payment") {
-                    SectionCard(title = "Last payment announced") {
+                    PvSection(title = "Last payment announced", carded = true) {
                         // Observe, don't .value-read: StateFlow.value inside
                         // composition skips recomposition on updates (lint
                         // StateFlowValueCalledInComposition).
@@ -172,8 +168,7 @@ fun EmployeeScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                             )
                         } else {
                             PvPaymentRow(
-                                amountText = com.vivekray898.payvoice.core.parser.AmountExtractor
-                                    .formatMinor(last.amountMinor, last.currency),
+                                amountText = AmountExtractor.formatMinor(last.amountMinor, last.currency),
                                 source = last.sourceName,
                                 sender = last.senderName,
                                 timeText = timeAgo(last.announcedAtMs),
@@ -184,7 +179,7 @@ fun EmployeeScreen(viewModel: MainViewModel, onBack: () -> Unit) {
             }
 
             item(key = "leave") {
-                SectionCard(title = if (paired) "Remove pairing" else "Have a code?") {
+                PvSection(title = if (paired) "Remove pairing" else "Have a code?", carded = true) {
                     if (paired) {
                         OutlinedButton(onClick = { confirmLeave = true }) {
                             Text("Leave this business", color = MaterialTheme.colorScheme.error)
@@ -202,8 +197,6 @@ fun EmployeeScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                     }
                 }
             }
-
-            item(key = "footer") { Spacer(Modifier.height(8.dp)) }
         }
     }
 
@@ -220,9 +213,9 @@ fun EmployeeScreen(viewModel: MainViewModel, onBack: () -> Unit) {
             Column(
                 Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 24.dp)
-                    .padding(bottom = 32.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                    .padding(horizontal = Spacing.xl)
+                    .padding(bottom = Spacing.xxl),
+                verticalArrangement = Arrangement.spacedBy(Spacing.md),
             ) {
                 Text("Join an owner", style = MaterialTheme.typography.titleLarge)
                 Text(
@@ -256,7 +249,7 @@ fun EmployeeScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                     )
                     MainViewModel.JoinState.Idle -> Unit
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     Button(
                         onClick = { viewModel.joinOwner(code) },
                         enabled = joinState !is MainViewModel.JoinState.Joining && code.isNotBlank(),
@@ -279,9 +272,9 @@ fun EmployeeScreen(viewModel: MainViewModel, onBack: () -> Unit) {
             Column(
                 Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 24.dp)
-                    .padding(bottom = 32.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                    .padding(horizontal = Spacing.xl)
+                    .padding(bottom = Spacing.xxl),
+                verticalArrangement = Arrangement.spacedBy(Spacing.md),
             ) {
                 Text("Leave this business?", style = MaterialTheme.typography.titleLarge)
                 Text(
@@ -289,7 +282,7 @@ fun EmployeeScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                     OutlinedButton(onClick = {
                         viewModel.leaveOwner()
                         confirmLeave = false

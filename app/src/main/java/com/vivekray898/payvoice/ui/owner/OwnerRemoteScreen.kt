@@ -1,7 +1,9 @@
 package com.vivekray898.payvoice.ui.owner
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -10,7 +12,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
@@ -31,6 +35,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -46,13 +51,14 @@ import com.vivekray898.payvoice.ui.components.PvStatusHero
 import com.vivekray898.payvoice.ui.components.StatusPill
 import com.vivekray898.payvoice.ui.components.timeAgo
 import com.vivekray898.payvoice.ui.components.statusPositive
+import com.vivekray898.payvoice.ui.theme.Spacing
 
 /**
- * Employees (UI overhaul Phase 3c): counter hero, employee rows that open a
- * ModalBottomSheet with actions, and an ExtendedFloatingActionButton to add.
- * Pairing-code display and destructive confirms are bottom sheets, not
- * AlertDialogs (design spec). All backend operations stay the EXISTING
- * ViewModel calls.
+ * Employees (premium pass, Phase 4d): counter hero, employee rows with
+ * avatar circles inside a carded list, ModalBottomSheet actions, and an
+ * ExtendedFloatingActionButton to add. Pairing-code display and destructive
+ * confirms are bottom sheets, not AlertDialogs (design spec). All backend
+ * operations stay the EXISTING ViewModel calls.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -81,9 +87,9 @@ fun OwnerRemoteScreen(viewModel: MainViewModel, onBack: () -> Unit) {
     ) {
         LazyColumn(
             Modifier.fillMaxSize(),
-            // FAB overlaps content: leave room at the bottom.
-            contentPadding = PaddingValues(bottom = 96.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            // FAB overlaps content: leave room at the bottom (footer + padding).
+            contentPadding = PaddingValues(top = Spacing.xs, bottom = Spacing.huge),
+            verticalArrangement = Arrangement.spacedBy(Spacing.xs),
         ) {
             item(key = "counter") {
                 val active = employees.count { it.isActive }
@@ -138,7 +144,7 @@ fun OwnerRemoteScreen(viewModel: MainViewModel, onBack: () -> Unit) {
 
             if (employees.isNotEmpty()) {
                 item(key = "list") {
-                    PvSection(title = "Devices") {
+                    PvSection(title = "Devices", carded = true) {
                         Column {
                             employees.forEachIndexed { index, emp ->
                                 if (index > 0) PvDivider()
@@ -149,7 +155,7 @@ fun OwnerRemoteScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                 }
 
                 item(key = "test") {
-                    PvSection(title = "Try it out") {
+                    PvSection(title = "Try it out", carded = true) {
                         Button(
                             onClick = { viewModel.sendTestToEmployees() },
                             enabled = testSendState !is MainViewModel.TestSendState.Sending,
@@ -184,7 +190,7 @@ fun OwnerRemoteScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                 }
             }
 
-            item(key = "footer") { Spacer(Modifier.height(8.dp)) }
+            item(key = "footer") { Spacer(Modifier.height(Spacing.xxl)) }
         }
     }
 
@@ -194,9 +200,9 @@ fun OwnerRemoteScreen(viewModel: MainViewModel, onBack: () -> Unit) {
             Column(
                 Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 24.dp)
-                    .padding(bottom = 32.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                    .padding(horizontal = Spacing.xl)
+                    .padding(bottom = Spacing.xxl),
+                verticalArrangement = Arrangement.spacedBy(Spacing.md),
             ) {
                 Text("Add employee", style = MaterialTheme.typography.titleLarge)
                 val code = pairingCode?.code
@@ -219,7 +225,7 @@ fun OwnerRemoteScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                         Button(onClick = { viewModel.generatePairingCode() }) {
                             Text("New code")
                         }
@@ -238,14 +244,14 @@ fun OwnerRemoteScreen(viewModel: MainViewModel, onBack: () -> Unit) {
             Column(
                 Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 24.dp)
-                    .padding(bottom = 32.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                    .padding(horizontal = Spacing.xl)
+                    .padding(bottom = Spacing.xxl),
+                verticalArrangement = Arrangement.spacedBy(Spacing.md),
             ) {
                 Text(emp.name, style = MaterialTheme.typography.titleLarge)
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     StatusPill(
                         text = if (emp.isActive) "Connected"
@@ -288,20 +294,29 @@ private fun EmployeeRow(emp: EmployeeDevice, onClick: () -> Unit) {
         Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(vertical = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+            .padding(vertical = Spacing.md),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(
-            Icons.Filled.Person,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-        )
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Box(
+            Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Filled.Person,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.xxs)) {
             Text(emp.name, style = MaterialTheme.typography.titleMedium)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
             ) {
                 StatusPill(
                     text = if (emp.isActive) "Connected"
