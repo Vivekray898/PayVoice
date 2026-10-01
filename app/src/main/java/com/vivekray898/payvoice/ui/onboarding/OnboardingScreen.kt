@@ -17,6 +17,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vivekray898.payvoice.core.remote.DeviceRole
 import com.vivekray898.payvoice.ui.MainViewModel
 import com.vivekray898.payvoice.ui.theme.Spacing
@@ -25,18 +26,22 @@ import com.vivekray898.payvoice.ui.theme.Spacing
  * Setup wizard (premium UI v2, Phase 2): ONE decision per screen, a progress
  * bar + back arrow, and a final ready screen. Replaces the flat checklist.
  *
- * State is screen-local [rememberSaveable]; no new ViewModel fields. Every
- * action calls the EXISTING ViewModel methods (openListenerSettings,
- * fixBattery, speakTest, setRole, joinOwner, completeOnboarding) — the
- * completion path (onboardingComplete flag → NavHost navigation) is
- * unchanged. Grant detection: MainActivity.refreshStatus() on every ON_RESUME
- * feeds the status flows this screen already observes, so steps auto-advance
- * on return from system settings.
+ * State: step + local role copy are screen-local [rememberSaveable]; the
+ * ROLE SELECTION ITSELF is persisted through the EXISTING ViewModel methods
+ * (setRole at the Role step, completeOnboarding at Done) — the same settings
+ * store Home reads, so the wizard's choice sticks. Grant detection:
+ * MainActivity.refreshStatus() on every ON_RESUME feeds the status flows this
+ * screen observes, and the shared PermissionAutoAdvance fires each step's
+ * false→true grant transition exactly once.
  */
 @Composable
 fun OnboardingScreen(viewModel: MainViewModel) {
     var step by rememberSaveable { mutableIntStateOf(WizardStep.WELCOME) }
     var role by rememberSaveable { mutableStateOf<DeviceRole?>(null) }
+
+    // Read-only view of the persisted settings: used for defaults (device
+    // name) and to steer the wizard when a role already exists.
+    val settings by viewModel.settings.collectAsStateWithLifecycle()
 
     val onBack: () -> Unit = {
         step = (step - 1).coerceAtLeast(WizardStep.WELCOME)
@@ -51,7 +56,16 @@ fun OnboardingScreen(viewModel: MainViewModel) {
             WizardStep.WELCOME -> WelcomeStep(onNext = onNext)
             WizardStep.ROLE -> RoleStep(
                 onRole = { chosen ->
+                    // Bug 2 fix: persist through the ViewModel (same settings
+                    // store Home reads) so the role survives onboarding; the
+                    // driver-local copy only steers wizard branching.
                     role = chosen
+                    viewModel.setRole(
+                        chosen,
+                        settings.deviceName.ifBlank {
+                            android.os.Build.MODEL ?: if (chosen == DeviceRole.OWNER) "Owner" else "Employee"
+                        },
+                    )
                     onNext()
                 },
             )
