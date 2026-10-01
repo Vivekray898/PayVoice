@@ -131,6 +131,7 @@ fun DiagnosticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                     val authState by viewModel.authState.collectAsStateWithLifecycle()
                     val employees by viewModel.employees.collectAsStateWithLifecycle()
                     val sendState by viewModel.remoteSendState.collectAsStateWithLifecycle()
+                    val dup by viewModel.lastRemoteDuplicate.collectAsStateWithLifecycle()
                     InfoRow("Role", settingsState.role.label.lowercase())
                     InfoRow(
                         "Auth",
@@ -147,7 +148,7 @@ fun DiagnosticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                             is RemoteEventSender.SendState.SENT -> "accepted"
                             is RemoteEventSender.SendState.FAILED -> "failed"
                             else -> "idle"
-                        } + " · dup-ignored: ${viewModel.lastRemoteDuplicate.value == true}",
+                        } + " · dup-ignored: ${dup == true}",
                     )
                 }
             }
