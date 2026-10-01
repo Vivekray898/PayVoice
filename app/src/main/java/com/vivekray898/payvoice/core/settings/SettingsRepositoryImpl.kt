@@ -28,7 +28,6 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
         val ONBOARDED = booleanPreferencesKey("onboarding_complete")
         val GPAY = booleanPreferencesKey("gpay_enabled")
         val CAPTURE_UNKNOWN = booleanPreferencesKey("capture_unknown_packages")
-        val SMS_CAPTURE = booleanPreferencesKey("sms_capture_enabled")
         val HIGH_ONLY = booleanPreferencesKey("announce_high_only")
         val STYLE = stringPreferencesKey("announcement_style")
         val LANGUAGE = stringPreferencesKey("announcement_language")
@@ -60,7 +59,6 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
                         onboardingComplete = prefs[Keys.ONBOARDED] ?: false,
                         gpayEnabled = prefs[Keys.GPAY] ?: true,
                         captureUnknownPackages = prefs[Keys.CAPTURE_UNKNOWN] ?: false,
-                        smsCaptureEnabled = prefs[Keys.SMS_CAPTURE] ?: true,
                         announceHighConfidenceOnly = prefs[Keys.HIGH_ONLY] ?: true,
                         style = enumOrDefault(prefs[Keys.STYLE], AnnouncementStyle.AMOUNT_SENDER),
                         language = enumOrDefault(prefs[Keys.LANGUAGE], AnnouncementLanguage.ENGLISH),
@@ -88,7 +86,6 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
                 prefs[Keys.ONBOARDED] = next.onboardingComplete
                 prefs[Keys.GPAY] = next.gpayEnabled
                 prefs[Keys.CAPTURE_UNKNOWN] = next.captureUnknownPackages
-                prefs[Keys.SMS_CAPTURE] = next.smsCaptureEnabled
                 prefs[Keys.HIGH_ONLY] = next.announceHighConfidenceOnly
                 prefs[Keys.STYLE] = next.style.name
                 prefs[Keys.LANGUAGE] = next.language.name

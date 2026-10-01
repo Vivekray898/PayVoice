@@ -12,23 +12,14 @@
          to reading GPay payment notifications — that is Notification Listener
          access, and GPay is the only notification source. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <!-- SMS backup capture path: react to newly arrived bank SMS only.
-         READ_SMS is intentionally NOT requested — PayVoice never reads the
-         inbox; it only receives broadcast delivery of new messages and
-         processes them locally (minimum permission necessary). -->
-    <uses-permission android:name="android.permission.RECEIVE_SMS" />
     <!-- Restore the daily retention job after reboot (smallest supported
          mechanism). NotificationListenerService re-binds via the OS; the boot
          receiver only re-primes pipeline state. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
-    <!-- RECEIVE_SMS is optional: the SMS backup path degrades gracefully on
-         non-telephony devices (lint: PermissionImpliesUnsupportedChromeOsHardware). -->
-    <uses-feature android:name="android.hardware.telephony" android:required="false" />
-
     <!-- Package visibility (API 30+): detect the installed payment app for the
          diagnostics/reliability screens without broad QUERY_ALL_PACKAGES.
-         No bank-app entries by design: bank payments arrive via SMS only. -->
+         UPI apps only — GPay is the only capture source. -->
     <queries>
         <package android:name="com.google.android.apps.nbu.paisa.user" />
     </queries>
@@ -79,18 +70,6 @@
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
         </service>
-
-        <!-- SMS backup capture: fires only while RECEIVE_SMS is granted.
-             The receiver does no long-running work (goAsync + pipeline scope). -->
-        <receiver
-            android:name=".service.sms.PayVoiceSmsReceiver"
-            android:exported="false"
-            android:permission="android.permission.BROADCAST_SMS"
-            android:label="PayVoice bank SMS receiver">
-            <intent-filter android:priority="0">
-                <action android:name="android.provider.Telephony.SMS_RECEIVED" />
-            </intent-filter>
-        </receiver>
 
         <!-- Boot: re-prime pipeline state + re-schedule retention. The
              notification listener re-binds via the OS without this. -->

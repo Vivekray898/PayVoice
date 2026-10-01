@@ -49,7 +49,7 @@ import com.vivekray898.payvoice.ui.components.timeAgo
 
 /**
  * This device (UI overhaul Phase 3d): one hero for pairing state, then
- * status cards with INLINE fix actions (battery / notifications / SMS).
+ * status cards with INLINE fix actions (battery / notifications).
  * Join and leave run in ModalBottomSheets. All backend operations remain
  * the existing ViewModel calls.
  */
@@ -65,16 +65,6 @@ fun EmployeeScreen(viewModel: MainViewModel, onBack: () -> Unit) {
     var confirmLeave by remember { mutableStateOf(false) }
 
     val paired = ownDevice?.isActive == true
-
-    val smsPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        PayVoiceAnalytics.smsPermission(
-            if (granted) PayVoiceAnalytics.PermissionResult.GRANTED
-            else PayVoiceAnalytics.PermissionResult.DENIED,
-        )
-        viewModel.refreshStatus()
-    }
 
     PvScaffold(title = "This device", onBack = onBack) {
         LazyColumn(
@@ -152,28 +142,6 @@ fun EmployeeScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                 }
             }
 
-            item(key = "sms") {
-                SectionCard(title = "SMS backup") {
-                    val granted = status?.smsPermissionGranted == true
-                    StatusLine(granted, if (granted) "Enabled" else "Not granted")
-                    Text(
-                        "When data is off, the bank's SMS still confirms the payment. " +
-                            "Processed locally — never uploaded.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    if (!granted) {
-                        OutlinedButton(onClick = {
-                            smsPermissionLauncher.launch(Manifest.permission.RECEIVE_SMS)
-                        }) {
-                            Text("Fix")
-                        }
-                        TextButton(onClick = { viewModel.openAppDetailsSettings(context) }) {
-                            Text("Or open App settings")
-                        }
-                    }
-                }
-            }
 
             if (paired) {
                 item(key = "test") {

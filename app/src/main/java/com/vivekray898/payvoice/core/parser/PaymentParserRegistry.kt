@@ -10,7 +10,8 @@ import com.vivekray898.payvoice.core.model.PaymentSource
  * side-effect free so they are trivially unit-testable.
  *
  * GPay is the ONLY notification source: bank payments (Kotak and others)
- * arrive exclusively via bank SMS, handled by `SmsPaymentParserRegistry`.
+ * arrive exclusively via UPI-app notifications (GPay), handled by the
+ * notification-listener path.
  */
 interface PaymentParser {
     val source: PaymentSource

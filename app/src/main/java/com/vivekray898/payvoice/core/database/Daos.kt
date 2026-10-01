@@ -19,33 +19,6 @@ interface ProcessedEventDao {
     @Query("DELETE FROM processed_events WHERE announcedAtMs < :cutoffMs")
     suspend fun deleteOlderThan(cutoffMs: Long)
 
-    /**
-     * Cross-channel dedup (deliverable 2c): did a channel-TAGGED SMS event of
-     * [amountMinor] get announced in the last N seconds? Rows carry a
-     * `SMS:`/`NOTIF:` prefix in sourcePackage (written by the pipeline), so
-     * this is an exact channel match — never a heuristic over sender IDs —
-     * and pre-tag legacy/remote rows can never collide.
-     */
-    @Query(
-        "SELECT EXISTS(SELECT 1 FROM processed_events " +
-            "WHERE sourcePackage LIKE '" + CrossChannelTags.SMS_LIKE + "' " +
-            "AND amountMinor = :amountMinor AND announcedAtMs >= :sinceMs)"
-    )
-    suspend fun recentSmsTaggedExists(amountMinor: Long, sinceMs: Long): Boolean
-
-    /**
-     * Cross-channel counterpart: did a channel-TAGGED NOTIFICATION (GPay)
-     * of [amountMinor] get announced in the last N seconds? 'remote' rows
-     * (employee-side FCM dedup) and legacy untagged rows never match, so a
-     * local capture can never be suppressed by a remote announcement.
-     */
-    @Query(
-        "SELECT EXISTS(SELECT 1 FROM processed_events " +
-            "WHERE sourcePackage LIKE '" + CrossChannelTags.NOTIF_LIKE + "' " +
-            "AND amountMinor = :amountMinor AND announcedAtMs >= :sinceMs)"
-    )
-    suspend fun recentNotificationExists(amountMinor: Long, sinceMs: Long): Boolean
-
     @Query("SELECT COUNT(*) FROM processed_events")
     suspend fun count(): Int
 }

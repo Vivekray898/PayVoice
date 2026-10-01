@@ -118,7 +118,7 @@ fun SettingsScreen(
                         label = "Google Pay notifications",
                         checked = settings.gpayEnabled,
                         onCheckedChange = viewModel::setGpayEnabled,
-                        supporting = "Bank payments arrive automatically by SMS",
+                        supporting = "Payments announced as Google Pay notifies you",
                     )
                     SwitchRow(
                         label = "Only confident detections",

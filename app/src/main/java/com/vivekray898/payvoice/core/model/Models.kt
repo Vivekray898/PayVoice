@@ -2,8 +2,7 @@ package com.vivekray898.payvoice.core.model
 
 /**
  * Package IDs for payment apps. GPay's package is stable and verified on
- * device. No bank-app packages exist here by design: bank payments (Kotak and
- * others) arrive exclusively via bank SMS, never via app notifications.
+ * device — the only UPI-app capture source.
  */
 object KnownPackages {
     const val GOOGLE_PAY = "com.google.android.apps.nbu.paisa.user"
@@ -39,11 +38,8 @@ object KnownPackages {
 /**
  * Human-readable label for where a payment came from.
  *
- * Architecture (post-cleanup): GPay is the ONLY UPI-app notification source.
- * Bank payments — including Kotak — arrive exclusively via bank SMS
- * ([CaptureSource.SMS_KOTAK] / [CaptureSource.SMS_BANK]). There is no Kotak
- * app-notification source and no bank-app package matcher anywhere in the
- * notification path.
+ * Architecture: GPay is the ONLY UPI-app notification source. No bank-app
+ * package matcher exists anywhere in the notification path.
  */
 enum class PaymentSource(val packageId: String, val displayName: String) {
     GOOGLE_PAY(KnownPackages.GOOGLE_PAY, "Google Pay");
@@ -52,9 +48,8 @@ enum class PaymentSource(val packageId: String, val displayName: String) {
         /**
          * Notification packages route by exact match OR recognized GPay
          * variant (all variants announce as Google Pay). Deliberately contains
-         * no bank packages: a com.kotak811 (or any other bank app)
-         * notification must never become a payment event — only SMS carries
-         * bank payments.
+         * no other packages: a com.kotak811 (or any other app) notification
+         * must never become a payment event.
          */
         fun fromPackage(pkg: String): PaymentSource? =
             entries.firstOrNull { it.packageId == pkg }

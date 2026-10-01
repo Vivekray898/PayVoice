@@ -67,7 +67,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      */
     val listenerRuntime: StateFlow<ListenerRuntime> = container.listenerRuntime.state
 
-    /** True when running a debug build (gates SMS test tool UI). */
+    /** True when running a debug build (gates debug test tool UI). */
     val isDebugBuild: Boolean
         get() = (getApplication<Application>().applicationInfo.flags and
             android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
@@ -414,7 +414,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun openAppNotificationSettings(context: Context) =
         launch(context, monitor.appNotificationSettingsIntent())
 
-    /** SMS permission lives in app details on modern Android (dangerous permission). */
     fun openAppDetailsSettings(context: Context) =
         launch(context, monitor.appDetailsIntent())
 
@@ -464,21 +463,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             container.settings.update { it.copy(captureUnknownPackages = enabled) }
         }
-    }
-
-    fun setSmsCaptureEnabled(enabled: Boolean) {
-        viewModelScope.launch { container.settings.update { it.copy(smsCaptureEnabled = enabled) } }
-    }
-
-    /** Phase 19 tool: push a sample SMS through the real pipeline (debug only). */
-    fun simulateSms(sender: String, body: String) {
-        container.pipeline.simulateSms(sender, body)
-    }
-
-    /** Phase 19 tool: run a canned SMS through parser classification only (no TTS). */
-    fun classifySmsSample(sender: String, body: String): com.vivekray898.payvoice.core.parser.sms.SmsTransactionClassifier.Result {
-        val bank = com.vivekray898.payvoice.core.parser.sms.SmsSenderHints.resolveBank(sender, body)
-        return com.vivekray898.payvoice.core.parser.sms.SmsTransactionClassifier.classify(sender, body, bank)
     }
 
     fun clearCaptures() {

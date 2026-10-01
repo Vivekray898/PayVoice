@@ -115,42 +115,6 @@ fun DiagnosticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                     }
                 }
             }
-            item(key = "sms-test") {
-                SectionCard(title = "SMS parser test (debug)") {
-                    Text(
-                        "Pushes a sample SMS through the real pipeline " +
-                            "(parse → dedup → announce if received).",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Button(onClick = {
-                            viewModel.simulateSms(
-                                "KKBK6789",
-                                "Your A/c XX1234 is credited with Rs 500 via UPI Ref 432198765432",
-                            )
-                        }) { Text("Kotak credit ₹500 (UTR)") }
-                        OutlinedButton(onClick = {
-                            viewModel.simulateSms(
-                                "KKBK6789",
-                                "Rs 500 debited from your account for UPI transfer",
-                            )
-                        }) { Text("Kotak debit (silent)") }
-                        OutlinedButton(onClick = {
-                            viewModel.simulateSms(
-                                "KKBK6789",
-                                "Your bill of Rs 500 is due tomorrow",
-                            )
-                        }) { Text("Bill reminder (silent)") }
-                        OutlinedButton(onClick = {
-                            viewModel.simulateSms(
-                                "KKBK6789",
-                                "Your OTP for transaction is 123456",
-                            )
-                        }) { Text("OTP (silent)") }
-                    }
-                }
-            }
         }
 
         item(key = "captures") {

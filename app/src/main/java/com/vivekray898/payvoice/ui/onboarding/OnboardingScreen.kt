@@ -71,18 +71,14 @@ fun OnboardingScreen(viewModel: MainViewModel) {
     val notifOk = status?.notificationsEnabled == true
     val batteryOk = status?.batteryExempt == true
     val ttsOk = tts == AnnouncementSpeaker.Status.READY || tts == AnnouncementSpeaker.Status.SPEAKING
-    val smsOk = status?.smsPermissionGranted == true
     val done = listOf(listenerOk, notifOk, batteryOk, ttsOk).count { it }
     val allDone = done == 4
-    // The current step is the first incomplete one (SMS drifts to "current"
-    // only when everything else is done). Drives "Step X of 5" + highlight.
+    // The current step is the first incomplete one. Drives "Step X of 4" + highlight.
     val currentStep = when {
         !listenerOk -> 1
         !notifOk -> 2
         !batteryOk -> 3
-        !ttsOk -> 4
-        !smsOk -> 5
-        else -> 5
+        else -> 4
     }
 
     PvScaffold(
@@ -136,7 +132,7 @@ fun OnboardingScreen(viewModel: MainViewModel) {
                             modifier = Modifier.weight(1f),
                         )
                         Text(
-                            "Step $currentStep of 5",
+                            "Step $currentStep of 4",
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -150,7 +146,7 @@ fun OnboardingScreen(viewModel: MainViewModel) {
                     number = 1,
                     title = "Payment notification access",
                     body = "Lets PayVoice hear payment notifications from Google Pay. " +
-                        "Bank payments arrive by SMS — no extra bank access needed.",
+                        "UPI payments announced the moment Google Pay notifies you.",
                     ok = listenerOk,
                     okLabel = "Enabled",
                     pendingLabel = "Not set up",
@@ -236,41 +232,6 @@ fun OnboardingScreen(viewModel: MainViewModel) {
                 }
             }
 
-            // ---- 5. SMS backup (optional, strongly recommended) ----
-            item(key = "step-sms") {
-                val smsPermissionLauncher = rememberLauncherForActivityResult(
-                    ActivityResultContracts.RequestPermission()
-                ) { granted ->
-                    PayVoiceAnalytics.smsPermission(
-                        if (granted) PayVoiceAnalytics.PermissionResult.GRANTED
-                        else PayVoiceAnalytics.PermissionResult.DENIED,
-                    )
-                    viewModel.refreshStatus()
-                }
-                SetupStep(
-                    number = 5,
-                    title = "Offline payment backup (SMS)",
-                    body = "When Google Pay notifications don't arrive (no internet, " +
-                        "notifications off), the bank's SMS still confirms the payment. " +
-                        "Read locally only — never uploaded.",
-                    ok = smsOk,
-                    okLabel = "Enabled",
-                    pendingLabel = "Recommended",
-                    isCurrent = currentStep == 5,
-                ) {
-                    if (smsOk) {
-                        OutlinedButton(onClick = { viewModel.refreshStatus() }) {
-                            Text("Review")
-                        }
-                    } else {
-                        OutlinedButton(onClick = {
-                            smsPermissionLauncher.launch(Manifest.permission.RECEIVE_SMS)
-                        }) {
-                            Text("Allow SMS")
-                        }
-                    }
-                }
-            }
 
             item(key = "footer") { Spacer(Modifier.height(8.dp)) }
         }

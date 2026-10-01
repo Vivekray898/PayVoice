@@ -19,8 +19,8 @@ import kotlinx.coroutines.withContext
  * jank came from running these synchronously during composition).
  *
  * The three permissions are deliberately separate (spec):
- *  A. Notification Listener access — READ GPay payment notifications (the
- *     only notification source; bank payments arrive via SMS)
+ *  A. Notification Listener access — READ UPI-app payment notifications (GPay;
+ *     the only capture source)
  *  B. POST_NOTIFICATIONS          — PayVoice's own notifications
  *  C. Battery optimization        — background reliability
  */
@@ -32,7 +32,6 @@ class DeviceStatusMonitor(private val context: Context) {
         val listenerEnabled: Boolean,
         val notificationsEnabled: Boolean,
         val batteryExempt: Boolean,
-        val smsPermissionGranted: Boolean,
         val gpay: InstalledApp,
         val manufacturer: String,
         val model: String,
@@ -70,9 +69,6 @@ class DeviceStatusMonitor(private val context: Context) {
             listenerEnabled = isListenerEnabled(),
             notificationsEnabled = SetupNotifications.canPostNotifications(context),
             batteryExempt = isIgnoringBatteryOptimizations(),
-            smsPermissionGranted = ContextCompat.checkSelfPermission(
-                context, android.Manifest.permission.RECEIVE_SMS
-            ) == PackageManager.PERMISSION_GRANTED,
             gpay = gpay,
             manufacturer = info.manufacturer,
             model = info.model,

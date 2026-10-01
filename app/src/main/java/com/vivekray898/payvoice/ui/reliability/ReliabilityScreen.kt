@@ -46,23 +46,6 @@ fun ReliabilityScreen(viewModel: MainViewModel, onBack: () -> Unit) {
     val tts by viewModel.ttsStatus.collectAsStateWithLifecycle()
     val runtime by viewModel.listenerRuntime.collectAsStateWithLifecycle()
 
-    // RECEIVE_SMS is a runtime permission: without the grant the SMS fallback
-    // never fires (offline payments are missed entirely). Request it in-place
-    // with an honest explanation; fall back to App Details when permanently
-    // denied (the OS returns denied with no dialog and the button must still
-    // lead somewhere useful).
-    val smsPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        PayVoiceAnalytics.smsPermission(
-            // This retry flow cannot distinguish a soft denial from a
-            // permanent one (no shouldShowRationale probe) — report honestly.
-            if (granted) PayVoiceAnalytics.PermissionResult.GRANTED
-            else PayVoiceAnalytics.PermissionResult.DENIED,
-        )
-        viewModel.refreshStatus()
-    }
-
     // UI overhaul Phase 3g: real screen chrome (title + back, safeDrawing
     // insets) — this screen previously rendered its first card UNDER the
     // status bar with only a Close text button.
@@ -103,23 +86,12 @@ fun ReliabilityScreen(viewModel: MainViewModel, onBack: () -> Unit) {
 
         item(key = "capture-channels") {
             SectionCard(title = "Capture channels") {
-                // Two-channel architecture: GPay is the only app-notification
-                // source; bank payments (Kotak and others) arrive via bank SMS.
+                // GPay is the only capture source (UPI apps only).
                 StatusLine(status?.gpay?.installed == true, "GPay Notification Access")
                 Text(
                     "Package: ${status?.gpay?.packageName ?: "…"} · " +
                         "Installed: ${if (status?.gpay?.installed == true) "YES" else "NO"}",
                     style = MaterialTheme.typography.bodySmall,
-                )
-                StatusLine(
-                    status?.smsPermissionGranted == true,
-                    if (status?.smsPermissionGranted == true) "SMS Backup — available" else "SMS Backup — permission required",
-                )
-                Text(
-                    "Bank payments (Kotak and others) arrive via bank SMS. " +
-                        "No bank app notification access is used.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 if (status?.isXiaomiFamily == true) {
                     Text(
@@ -149,36 +121,6 @@ fun ReliabilityScreen(viewModel: MainViewModel, onBack: () -> Unit) {
             }
         }
 
-        item(key = "sms") {
-            SectionCard(title = "SMS Backup (offline payments)") {
-                StatusLine(
-                    status?.smsPermissionGranted == true,
-                    if (status?.smsPermissionGranted == true) "Enabled" else "Not granted",
-                )
-                Text(
-                    "When Google Pay notifications don't arrive (offline, or " +
-                        "notifications suppressed), the bank's SMS still confirms the " +
-                        "payment. Grant SMS access to catch those payments. " +
-                        "SMS contents are processed locally to identify payments — " +
-                        "never uploaded, never read from your inbox.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                if (status?.smsPermissionGranted != true) {
-                    // Primary: the runtime dialog. If the user has permanently
-                    // denied, Android returns denied with no dialog — the status
-                    // stays honest and the settings link below still works.
-                    OutlinedButton(onClick = {
-                        smsPermissionLauncher.launch(Manifest.permission.RECEIVE_SMS)
-                    }) {
-                        Text("Allow SMS")
-                    }
-                    TextButton(onClick = { viewModel.openAppDetailsSettings(context) }) {
-                        Text("Or open App settings")
-                    }
-                }
-            }
-        }
 
         item(key = "tts") {
             SectionCard(title = "Text-to-Speech") {

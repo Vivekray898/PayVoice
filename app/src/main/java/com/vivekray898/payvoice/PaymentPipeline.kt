@@ -6,7 +6,6 @@ import com.vivekray898.payvoice.core.database.AnnouncementEntity
 import com.vivekray898.payvoice.core.database.CapturedNotificationEntity
 import com.vivekray898.payvoice.core.database.DiagnosticEntity
 import com.vivekray898.payvoice.core.database.ProcessedEventEntity
-import com.vivekray898.payvoice.core.database.CrossChannelTags
 import com.vivekray898.payvoice.core.database.PayVoiceDatabase
 import com.vivekray898.payvoice.core.model.CaptureEvent
 import com.vivekray898.payvoice.core.model.CaptureSource
@@ -18,8 +17,6 @@ import com.vivekray898.payvoice.core.model.PaymentSource
 import com.vivekray898.payvoice.core.parser.Fingerprinter
 import com.vivekray898.payvoice.core.parser.NotificationTextResolver
 import com.vivekray898.payvoice.core.parser.PaymentParserRegistry
-import com.vivekray898.payvoice.core.parser.sms.SmsNameNormalizer
-import com.vivekray898.payvoice.core.parser.sms.SmsPaymentParserRegistry
 import com.vivekray898.payvoice.core.remote.DeviceRole
 import com.vivekray898.payvoice.core.remote.RemoteEventSender
 import com.vivekray898.payvoice.core.remote.RemoteEventType
@@ -31,10 +28,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 /**
- * The unified capture→announce path (Phase 11). BOTH channels — app
- * notifications and bank SMS — enter through [handleCapture] and share:
- * parse → confidence gate → dedup → TTS → persist. One Room store, one
- * dedup table, one announcer. Nothing is duplicated per channel.
+ * The unified capture→announce path (Phase 11). UPI-app notifications (GPay)
+ * enter through [handleCapture] and flow through:
+ * parse → confidence gate → dedup → TTS → persist. Nothing is duplicated per channel.
  *
  * Everything runs on a background dispatcher; raw content stays on-device.
  */
@@ -54,12 +50,6 @@ class PaymentPipeline(
     /** App context for the wake-up notification; null-safe for unit contexts. */
     private val appContext: android.content.Context? = null,
 ) {
-    init {
-        // Ignored-sender logging follows the build's debuggability (set once;
-        // parser objects are stateless beyond this flag).
-        com.vivekray898.payvoice.core.parser.sms.SmsPaymentParserRegistry.debugLogging = isDebugBuild
-    }
-
     private val _lastAnnouncement = MutableStateFlow<AnnouncementEntity?>(null)
     val lastAnnouncement: StateFlow<AnnouncementEntity?> = _lastAnnouncement
 
@@ -103,13 +93,8 @@ class PaymentPipeline(
         }
     }
 
-    /** SMS receiver entry (new backup path). Suspending: callers wrap in launch. */
+    /** Capture entry (GPay notifications). Suspending: callers wrap in launch. */
     suspend fun handleCapture(event: CaptureEvent, extrasSummary: String? = null) {
-        val s = settings.settings.value
-        if (event.captureSource.name.startsWith("SMS") && !s.smsCaptureEnabled) {
-            diag("sms", "capture disabled by setting")
-            return
-        }
         runCatching { processCapture(event, extrasSummary) }
             .onFailure { diag("pipeline", "error: ${it.javaClass.simpleName}") }
     }
@@ -149,26 +134,16 @@ class PaymentPipeline(
     // ---- Core unified path ----
 
     private suspend fun processCapture(event: CaptureEvent, extrasSummary: String?) {
-        // 1. Parse by channel. GPay sometimes carries the payment line in
+        // 1. Parse. GPay sometimes carries the payment line in
         // EXTRA_BIG_TEXT or EXTRA_SUB_TEXT instead of EXTRA_TEXT (varies by
         // app version) — try each candidate body, best first, so the payment
         // is never silently dropped because of which extra held the text.
-        val parsed: ParsedNotification? = when {
-            event.captureSource.name.startsWith("SMS") -> {
-                val parserResult = SmsPaymentParserRegistry.parse(
-                    sender = event.originId,
-                    body = event.body,
-                    receivedAtMs = event.postedAtMs,
-                )
-                parserResult
-            }
-            else -> {
-                val parser = parsers.parserForPackage(event.originId)
+        val parsed: ParsedNotification? =
+            parsers.parserForPackage(event.originId)?.let { parser ->
                 NotificationTextResolver
                     .candidates(event.title, event.body, event.bigText, event.subText)
-                    .firstNotNullOfOrNull { (t, body) -> parser?.parse(t, body) }
+                    .firstNotNullOfOrNull { (t, body) -> parser.parse(t, body) }
             }
-        }
 
         val parsedAt = System.currentTimeMillis()
 
@@ -235,16 +210,11 @@ class PaymentPipeline(
             referenceId = parsed.referenceId,
             senderName = parsed.senderName,
         )
-        val isSmsCapture = event.captureSource.name.startsWith("SMS")
         val dedupInsert = db.processedEventDao().insert(
             ProcessedEventEntity(
                 fingerprint = fingerprint,
                 eventId = fingerprint,
-                // Channel-tagged (deliverable 2c): the tag makes the
-                // cross-channel suppression queries EXACT instead of
-                // heuristically matching sender IDs vs package names.
-                // Diagnostics still show the raw origin via event.originId.
-                sourcePackage = CrossChannelTags.tag(isSmsCapture, event.originId),
+                sourcePackage = event.originId,
                 amountMinor = amount,
                 announcedAtMs = System.currentTimeMillis(),
             )
@@ -254,35 +224,6 @@ class PaymentPipeline(
             diag("dedup", "duplicate suppressed: ${fingerprint.take(16)}")
             return
         }
-
-        // 4b. Cross-channel dedup window (reliability fix): the SAME payment
-        // can carry DIFFERENT fingerprints per channel (sender name parsed in
-        // one channel only, wording differs, exact-time buckets differ). If
-        // the other channel announced the same amount within the window, this
-        // capture is the second evidence of a payment already announced.
-        val sinceMs = System.currentTimeMillis() - CROSS_CHANNEL_WINDOW_MS
-        val otherChannelSeen = if (isSmsCapture) {
-            db.processedEventDao().recentNotificationExists(amount, sinceMs)
-        } else {
-            db.processedEventDao().recentSmsTaggedExists(amount, sinceMs)
-        }
-        if (otherChannelSeen) {
-            _lastDedupWasDuplicate.value = true
-            // Analytics (docs/ANALYTICS.md): structural only — channel enum,
-            // no amount, no sender, no body. Fired AFTER the state change.
-            com.vivekray898.payvoice.core.analytics.PayVoiceAnalytics.crossChannelSuppressed(
-                event.captureSource.name,
-            )
-            // User-visible audit trail (deliverable 2b): "why wasn't this
-            // announced?" must be answerable from the Diagnostics screen.
-            // Content-free: channel, amount in paise (integer), window in s.
-            diag(
-                "CROSS_CHANNEL_SUPPRESSED",
-                "${event.captureSource} for ${amount / 100} — opposite channel " +
-                    "seen within ${CROSS_CHANNEL_WINDOW_MS / 1000}s",
-            )
-            return
-        }
         _lastDedupWasDuplicate.value = false
         // Analytics (docs/ANALYTICS.md): capture cleared all gates + dedup.
         // Structural only; fired AFTER the state change, off the TTS path.
@@ -290,24 +231,13 @@ class PaymentPipeline(
         val dedupCheckedAt = System.currentTimeMillis()
 
         // 5. Announce. Text composed locally; Phase 3 sends it inside FCM.
-        // SMS events use the deterministic SMS format (spec §11/§13); sender
-        // names are normalized for presentation only — identity is never
-        // inferred, invented, or merged across sources (spec §12).
-        val isSms = isSmsCapture
-        val announcement = if (isSms) {
-            AnnouncementComposer.composeSms(
-                amountMinor = amount,
-                senderName = SmsNameNormalizer.normalize(parsed.senderName),
-            )
-        } else {
-            AnnouncementComposer.compose(
-                amountMinor = amount,
-                senderName = parsed.senderName,
-                source = parsed.source,
-                style = s.style,
-                language = s.language,
-            )
-        }
+        val announcement = AnnouncementComposer.compose(
+            amountMinor = amount,
+            senderName = parsed.senderName,
+            source = parsed.source,
+            style = s.style,
+            language = s.language,
+        )
         val announcedAt = System.currentTimeMillis()
         PaymentTiming.record(
             captureMs = event.postedAtMs,
@@ -361,9 +291,7 @@ class PaymentPipeline(
             sourceName = parsed.sourceLabel ?: parsed.source.displayName,
             amountMinor = amount,
             currency = parsed.currency,
-            // Normalized presentation for SMS senders (spec §12); identical to
-            // what was spoken. Never identity-inferred or cross-merged.
-            senderName = if (isSms) SmsNameNormalizer.normalize(parsed.senderName) else parsed.senderName,
+            senderName = parsed.senderName,
             announcementText = announcement,
             detectedAtMs = event.postedAtMs,
             announcedAtMs = announcedAt,
@@ -397,13 +325,7 @@ class PaymentPipeline(
         }
     }
 
-    private fun parserNameFor(event: CaptureEvent): String = when {
-        event.captureSource.name.startsWith("SMS") -> when (event.captureSource) {
-            CaptureSource.SMS_KOTAK -> "KotakSmsParser"
-            else -> "BankSmsParser"
-        }
-        else -> "GooglePayParser"
-    }
+    private fun parserNameFor(event: CaptureEvent): String = "GooglePayParser"
 
     /**
      * Owner-triggered test announcement (spec §27). Never touches dedup,
@@ -438,23 +360,6 @@ class PaymentPipeline(
         }
     }
 
-    /** Debug simulator for SMS (Phase 19 tool path; UI exposes in debug builds). */
-    fun simulateSms(sender: String, body: String) {
-        scope.launch {
-            runCatching {
-                handleCapture(
-                    CaptureEvent(
-                        captureSource = CaptureSource.SMS_BANK,
-                        originId = sender,
-                        title = null,
-                        body = body,
-                        postedAtMs = System.currentTimeMillis(),
-                    )
-                )
-            }
-        }
-    }
-
     private fun rank(c: Confidence): Int = when (c) {
         Confidence.HIGH -> 3
         Confidence.MEDIUM -> 2
@@ -473,22 +378,5 @@ class PaymentPipeline(
     companion object {
         /** Cheap "money was mentioned" marker for missed-payment diagnostics. */
         val MONEY_MARKER = Regex("[\\u20B9\\u20A8]|(?i)\\b(?:rs|inr)\\b")
-
-        /**
-         * Cross-channel dedup window (deliverable 2a: was 30s). A GPay
-         * notification and the matching bank SMS for the SAME payment
-         * typically arrive within a few seconds; 10s covers that with
-         * margin while keeping genuinely separate same-amount payments
-         * (20s apart) from being conflated.
-         */
-        const val CROSS_CHANNEL_WINDOW_MS = 10_000L
     }
-}
-
-/**
- * Public window constant so the contract test can pin the value without
- * reaching into the pipeline's private companion.
- */
-object CrossChannelWindow {
-    const val WINDOW_MS = PaymentPipeline.CROSS_CHANNEL_WINDOW_MS
 }

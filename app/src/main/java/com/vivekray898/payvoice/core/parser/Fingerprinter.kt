@@ -46,17 +46,16 @@ object Fingerprinter {
         return "evt_" + sha256Hex(payload)
     }
 
-    /** Wider bucket for cross-channel matching (SMS delivery lags push). */
+    /** Time-bucket width for reference-less fingerprints (same amount + sender). */
     const val CROSS_CHANNEL_BUCKET_MS = 5 * 60_000L
 
     /**
-     * Cross-channel payment fingerprint (Phase 12). A transaction reference
-     * (UTR/UPI Ref/RRN) is the primary key: the same reference arriving via a
-     * bank notification AND a bank SMS produces ONE fingerprint → announced
-     * once. Channel, exact wording and precise time are deliberately excluded
-     * so both channels collide. Without a reference: amount + sender + a
-     * 5-minute bucket (wide enough for SMS delivery delay, narrow enough to
-     * never merge two separate payments from different senders).
+     * Payment fingerprint. A transaction reference (UTR/UPI Ref/RRN) is the
+     * primary key: the same reference → ONE fingerprint → announced once.
+     * Channel, exact wording and precise time are deliberately excluded.
+     * Without a reference: amount + sender + a 5-minute bucket (wide enough
+     * for delivery delay, narrow enough to never merge two separate payments
+     * from different senders).
      */
     fun captureFingerprint(
         packageId: String,
