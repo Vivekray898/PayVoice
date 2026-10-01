@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -30,7 +31,6 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -44,12 +44,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.vivekray898.payvoice.ui.theme.Spacing
 
 
 // ---------------------------------------------------------------------------
@@ -76,6 +78,7 @@ fun PvScaffold(
     snackbarHostState: SnackbarHostState? = null,
     bottomBar: (@Composable () -> Unit)? = null,
     floatingActionButton: (@Composable () -> Unit)? = null,
+    largeTitle: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Scaffold(
@@ -89,7 +92,7 @@ fun PvScaffold(
                 Modifier
                     .fillMaxWidth()
                     .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
-                    .padding(start = 4.dp, end = 16.dp)
+                    .padding(start = Spacing.xs, end = Spacing.lg)
                     .heightIn(min = 56.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -105,14 +108,18 @@ fun PvScaffold(
                 Column(
                     Modifier
                         .weight(1f)
-                        .padding(start = if (onBack != null) 4.dp else 16.dp),
+                        .padding(
+                            start = if (onBack != null) Spacing.xs else Spacing.lg,
+                            top = if (largeTitle) Spacing.sm else 0.dp,
+                            bottom = if (largeTitle) Spacing.xs else 0.dp,
+                        ),
                 ) {
                     Text(
                         title,
-                        style = if (subtitle == null) {
-                            MaterialTheme.typography.headlineSmall
-                        } else {
-                            MaterialTheme.typography.headlineMedium
+                        style = when {
+                            largeTitle -> MaterialTheme.typography.headlineLarge
+                            subtitle == null -> MaterialTheme.typography.headlineSmall
+                            else -> MaterialTheme.typography.headlineMedium
                         },
                     )
                     if (subtitle != null) {
@@ -157,7 +164,7 @@ fun StatusPill(text: String, ok: Boolean?, modifier: Modifier = Modifier) {
         false -> statusNegative()
         null -> MaterialTheme.colorScheme.onSurfaceVariant
     }
-    Surface(color = bg, contentColor = fg, shape = MaterialTheme.shapes.small) {
+    Surface(color = bg, contentColor = fg, shape = RoundedCornerShape(percent = 50)) {
         Text(
             text,
             style = MaterialTheme.typography.labelMedium,
@@ -280,8 +287,10 @@ fun PvLoadingRow(label: String) {
 // ---------------------------------------------------------------------------
 
 /**
- * The big, calm status block at the top of Home: icon, title, ONE human
- * line, and an optional single primary action. No technical terms ever.
+ * The big, calm status block at the top of Home: tinted icon circle, title,
+ * status chip, one headline, one human line, and an optional single primary
+ * action. Background is a subtle primary→surface gradient wash (the premium
+ * hero treatment). No technical terms ever.
  */
 @Composable
 fun PvStatusHero(
@@ -291,34 +300,63 @@ fun PvStatusHero(
     headline: String,
     body: String,
     modifier: Modifier = Modifier,
+    chip: String? = null,
+    chipOk: Boolean? = null,
     actionLabel: String? = null,
     onAction: (() -> Unit)? = null,
 ) {
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp),
-        color = tint.copy(alpha = 0.10f),
+            .padding(horizontal = Spacing.lg),
+        color = MaterialTheme.colorScheme.surface,
         contentColor = MaterialTheme.colorScheme.onSurface,
-        shape = MaterialTheme.shapes.large,
+        shape = MaterialTheme.shapes.extraLarge,
     ) {
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Icon(icon, contentDescription = null, tint = tint)
-                Text(title, style = MaterialTheme.typography.titleMedium)
+        Column(
+            Modifier
+                .background(
+                    Brush.linearGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+                            MaterialTheme.colorScheme.surface,
+                        ),
+                    ),
+                )
+                .padding(Spacing.xl),
+            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+            ) {
+                Box(
+                    Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(tint.copy(alpha = 0.14f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(24.dp))
+                }
+                Text(
+                    title,
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f),
+                )
+                if (chip != null) {
+                    StatusPill(text = chip, ok = chipOk)
+                }
             }
-            Text(headline, style = MaterialTheme.typography.headlineMedium)
+            Text(headline, style = MaterialTheme.typography.headlineLarge)
             Text(
                 body,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             if (actionLabel != null && onAction != null) {
-                Spacer(Modifier.height(8.dp))
-                Button(
-                    onClick = onAction,
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                ) { Text(actionLabel) }
+                Spacer(Modifier.height(Spacing.xs))
+                Button(onClick = onAction) { Text(actionLabel) }
             }
         }
     }
@@ -389,9 +427,9 @@ fun PvDivider(modifier: Modifier = Modifier) {
 // ---------------------------------------------------------------------------
 
 /**
- * Tappable action card (GPay-style): leading icon, title, one-line subtitle,
- * trailing chevron. 48dp+ target via the full-card click surface. The whole
- * card is the tap target — no inner buttons.
+ * Tappable action card (GPay-style): leading icon in a tinted circle, title,
+ * one-line subtitle, trailing chevron. The whole card is the tap target —
+ * no inner buttons.
  */
 @Composable
 fun PvActionCard(
@@ -413,11 +451,19 @@ fun PvActionCard(
         tonalElevation = 1.dp,
     ) {
         Row(
-            Modifier.padding(16.dp),
+            Modifier.padding(Spacing.lg),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
-            Icon(icon, contentDescription = null, tint = iconTint)
+            Box(
+                Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(iconTint.copy(alpha = 0.10f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(22.dp))
+            }
             Column(Modifier.weight(1f)) {
                 Text(title, style = MaterialTheme.typography.titleMedium)
                 Text(

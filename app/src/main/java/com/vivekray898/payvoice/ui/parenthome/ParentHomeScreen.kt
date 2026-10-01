@@ -1,11 +1,11 @@
 package com.vivekray898.payvoice.ui.parenthome
 
+import android.os.Build
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
@@ -24,9 +24,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import android.os.Build
+import com.vivekray898.payvoice.core.parser.AmountExtractor
 import com.vivekray898.payvoice.core.remote.DeviceRole
 import com.vivekray898.payvoice.ui.MainViewModel
 import com.vivekray898.payvoice.ui.components.PvActionCard
@@ -36,17 +35,19 @@ import com.vivekray898.payvoice.ui.components.PvPaymentRow
 import com.vivekray898.payvoice.ui.components.PvScaffold
 import com.vivekray898.payvoice.ui.components.PvSection
 import com.vivekray898.payvoice.ui.components.PvStatusHero
+import com.vivekray898.payvoice.ui.components.statusCaution
 import com.vivekray898.payvoice.ui.components.statusNegative
 import com.vivekray898.payvoice.ui.components.statusPositive
 import com.vivekray898.payvoice.ui.components.timeAgo
+import com.vivekray898.payvoice.ui.theme.Spacing
 import java.util.Calendar
 
 /**
- * Home (insets-hardening pass): now on the SHARED [PvScaffold] chrome —
- * title/subtitle/actions in the topBar slot (status bar handled once,
- * centrally), body already inset by the scaffold (nav bar included), so
- * the list needs only aesthetic padding. No screen-local Scaffold or
- * inset math remains anywhere in the app. ViewModel wiring untouched.
+ * Home (premium pass, UI overhaul Phase 3): large title + greeting in the
+ * shared [PvScaffold] chrome, gradient status hero with icon circle and
+ * status chip, and icon-circle action cards. List is inset by the scaffold
+ * (status/nav bars handled centrally); only aesthetic padding here.
+ * ViewModel wiring untouched.
  */
 @Composable
 fun ParentHomeScreen(
@@ -70,6 +71,7 @@ fun ParentHomeScreen(
     PvScaffold(
         title = "PayVoice",
         subtitle = greeting(),
+        largeTitle = true,
         actions = {
             IconButton(onClick = onOpenSettings) {
                 Icon(Icons.Filled.Settings, contentDescription = "Settings")
@@ -78,8 +80,8 @@ fun ParentHomeScreen(
     ) {
         LazyColumn(
             Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(top = 4.dp, bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            contentPadding = PaddingValues(top = Spacing.xs, bottom = Spacing.xxxl),
+            verticalArrangement = Arrangement.spacedBy(Spacing.xs),
         ) {
             item(key = "hero") {
                 if (isEmployee) {
@@ -90,16 +92,20 @@ fun ParentHomeScreen(
                             icon = Icons.Filled.CheckCircle,
                             tint = statusPositive(),
                             title = "Payment announcements",
-                            headline = "ON",
-                            body = "You're ready to announce payments.",
+                            headline = "Announcements on",
+                            body = "PayVoice speaks every payment as it arrives.",
+                            chip = "Ready",
+                            chipOk = true,
                         )
                     } else {
                         PvStatusHero(
                             icon = Icons.Filled.Warning,
                             tint = statusNegative(),
                             title = "Payment announcements",
-                            headline = "Action needed",
+                            headline = "Setup incomplete",
                             body = "Allow notification access so PayVoice can hear your payments.",
+                            chip = "Action needed",
+                            chipOk = false,
                             actionLabel = "Fix this",
                             onAction = onOpenReliability,
                         )
@@ -120,8 +126,10 @@ fun ParentHomeScreen(
                             history.take(6).forEachIndexed { index, entry ->
                                 if (index > 0) PvDivider()
                                 PvPaymentRow(
-                                    amountText = com.vivekray898.payvoice.core.parser.AmountExtractor
-                                        .formatMinor(entry.amountMinor, entry.currency),
+                                    amountText = AmountExtractor.formatMinor(
+                                        entry.amountMinor,
+                                        entry.currency,
+                                    ),
                                     source = entry.sourceName,
                                     sender = entry.senderName,
                                     timeText = timeAgo(entry.announcedAtMs),
@@ -141,9 +149,7 @@ fun ParentHomeScreen(
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        androidx.compose.foundation.layout.Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                             Button(onClick = { viewModel.setRole(DeviceRole.OWNER, Build.MODEL ?: "Owner") }) {
                                 Text("I'm the owner")
                             }
@@ -158,7 +164,7 @@ fun ParentHomeScreen(
 
             item(key = "cards") {
                 PvSection(title = "Manage") {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
                         when (settings.role) {
                             DeviceRole.OWNER -> PvActionCard(
                                 icon = Icons.Filled.Group,
@@ -195,8 +201,6 @@ fun ParentHomeScreen(
                     }
                 }
             }
-
-            item(key = "footer") { Spacer(Modifier.height(8.dp)) }
         }
     }
 }
@@ -210,18 +214,22 @@ private fun EmployeeHero(viewModel: MainViewModel, onOpen: () -> Unit) {
             icon = Icons.Filled.CheckCircle,
             tint = statusPositive(),
             title = "Remote announcements",
-            headline = "Connected",
+            headline = "Connected to your owner",
             body = "This phone announces your owner's payments.",
+            chip = "Live",
+            chipOk = true,
             actionLabel = "View connection",
             onAction = onOpen,
         )
     } else {
         PvStatusHero(
-            icon = Icons.Filled.Warning,
-            tint = com.vivekray898.payvoice.ui.components.statusCaution(),
+            icon = Icons.Filled.Link,
+            tint = statusCaution(),
             title = "Remote announcements",
-            headline = "Not connected",
+            headline = "Waiting for a pairing code",
             body = "Join with a code from your owner to start announcing.",
+            chip = "Not connected",
+            chipOk = null,
             actionLabel = "Join",
             onAction = onOpen,
         )
