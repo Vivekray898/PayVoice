@@ -17,5 +17,6 @@ object Spacing {
     val lg: Dp = 16.dp
     val xl: Dp = 24.dp
     val xxl: Dp = 32.dp
+    val xxxl: Dp = 48.dp
     val huge: Dp = 64.dp
 }

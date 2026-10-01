@@ -15,12 +15,21 @@ import androidx.compose.ui.unit.sp
  * within Normal/SemiBold — nothing shouts.
  */
 val Typography = Typography(
+    // Hero headers (wizard welcome, big status).
+    headlineLarge = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Bold,
+        fontSize = 32.sp,
+        lineHeight = 38.sp,
+        letterSpacing = (-0.5).sp,
+    ),
     // App title / hero status heading.
     headlineMedium = TextStyle(
         fontFamily = FontFamily.Default,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 28.sp,
-        lineHeight = 34.sp,
+        fontSize = 24.sp,
+        lineHeight = 30.sp,
+        letterSpacing = (-0.25).sp,
     ),
     // Screen titles.
     headlineSmall = TextStyle(
@@ -97,11 +106,11 @@ val Typography = Typography(
     ),
 )
 
-/** One consistent corner-radius story across the app (GPay-style: 8/12/16/28). */
+/** One consistent corner-radius story across the app (4/8/12/16/24). */
 val PayVoiceShapes = Shapes(
-    extraSmall = RoundedCornerShape(8.dp),
+    extraSmall = RoundedCornerShape(4.dp),
     small = RoundedCornerShape(8.dp),
     medium = RoundedCornerShape(12.dp),
     large = RoundedCornerShape(16.dp),
-    extraLarge = RoundedCornerShape(28.dp),
+    extraLarge = RoundedCornerShape(24.dp),
 )
