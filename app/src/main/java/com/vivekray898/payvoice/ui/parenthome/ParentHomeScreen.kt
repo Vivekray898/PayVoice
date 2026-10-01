@@ -22,10 +22,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.MonitorHeart
 import androidx.compose.material.icons.filled.People
-import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.SupportAgent
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -268,14 +267,14 @@ fun ParentHomeScreen(
                         Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceEvenly,
                     ) {
-                        QuickLink(icon = Icons.Filled.QrCode2, label = "QR code", onClick = {})
+                        QuickLink(icon = Icons.Filled.MonitorHeart, label = "Diagnostics", onClick = onOpenDiagnostics)
                         QuickLink(
-                            icon = if (role == DeviceRole.EMPLOYEE) Icons.Filled.People else Icons.Filled.People,
+                            icon = Icons.Filled.People,
                             label = "Employees",
                             onClick = if (role == DeviceRole.EMPLOYEE) onOpenEmployeeRemote else onOpenOwnerRemote,
                         )
                         QuickLink(icon = Icons.Filled.Settings, label = "Settings", onClick = onOpenSettings)
-                        QuickLink(icon = Icons.Filled.SupportAgent, label = "Support", onClick = onOpenReliability)
+                        QuickLink(icon = Icons.Filled.Build, label = "Reliability", onClick = onOpenReliability)
                     }
                 }
             }
