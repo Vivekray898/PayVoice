@@ -1,0 +1,51 @@
+package com.vivekray898.payvoice.ui.components
+
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
+import com.vivekray898.payvoice.ui.theme.Spacing
+
+/**
+ * The filled pill (DESIGN.md `button-primary-pill`, Phase 2 rebuild). The
+ * one filled button on a surface; minimum touch height built from tokens
+ * (32+16+8 = 56dp, structural).
+ */
+@Composable
+fun PvPrimaryButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = Spacing.xxl + Spacing.lg + Spacing.sm),
+        shape = RoundedCornerShape(percent = 50),
+        contentPadding = PaddingValues(
+            horizontal = Spacing.lg,
+            vertical = Spacing.md,
+        ),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
+            disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f),
+        ),
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelLarge,
+            textAlign = TextAlign.Center,
+        )
+    }
+}

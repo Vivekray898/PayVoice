@@ -4,9 +4,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -14,9 +16,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -24,12 +28,54 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextAlign
 import com.vivekray898.payvoice.ui.theme.Spacing
 
-/** Status colors mapped to DESIGN.md roles (Phase 1 bridge; Phase 2 rewrites these). */
+// ---------------------------------------------------------------------------
+// Compat section (pre-rebuild screens; removed as Phase 3 lands)
+// ---------------------------------------------------------------------------
+
+/** Carded content section with a micro header (compat shim). */
+@Composable
+fun PvSection(
+    modifier: Modifier = Modifier,
+    title: String? = null,
+    carded: Boolean = false,
+    content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
+) {
+    androidx.compose.foundation.layout.Column(
+        modifier
+            .fillMaxWidth()
+            .padding(horizontal = Spacing.lg, vertical = Spacing.sm),
+        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+    ) {
+        if (title != null) {
+            SectionHeader(text = title, modifier = Modifier.padding(top = Spacing.xxs))
+        }
+        if (carded) {
+            Surface(
+                color = MaterialTheme.colorScheme.surface,
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                shape = MaterialTheme.shapes.large,
+                tonalElevation = Spacing.xxs,
+            ) {
+                androidx.compose.foundation.layout.Column(
+                    Modifier.padding(Spacing.lg),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.md),
+                    content = content,
+                )
+            }
+        } else {
+            content()
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Status color helpers (DESIGN.md roles; Warning uses the lemon accent)
+// ---------------------------------------------------------------------------
+
 @Composable
 fun statusPositive(): Color = MaterialTheme.colorScheme.primary
 
@@ -37,40 +83,40 @@ fun statusPositive(): Color = MaterialTheme.colorScheme.primary
 fun statusNegative(): Color = MaterialTheme.colorScheme.error
 
 @Composable
-fun statusCaution(): Color = MaterialTheme.colorScheme.onSurfaceVariant
+fun statusCaution(): Color = statusToneContent(StatusTone.Warning)
+
+/** Maps a tri-state boolean to a [StatusTone] (null = caution/unknown). */
+fun statusToneOf(ok: Boolean?): StatusTone = when (ok) {
+    true -> StatusTone.Success
+    false -> StatusTone.Error
+    null -> StatusTone.Warning
+}
+
+// ---------------------------------------------------------------------------
+// Dots, icons, lines
+// ---------------------------------------------------------------------------
 
 /** null = caution/unknown. */
 @Composable
 fun StatusDot(ok: Boolean?, modifier: Modifier = Modifier) {
-    val color = when (ok) {
-        true -> statusPositive()
-        false -> statusNegative()
-        null -> statusCaution()
-    }
     Box(
         modifier
-            .size(10.dp)
+            .size(Spacing.sm + Spacing.xxs - Spacing.xs)
             .clip(CircleShape)
-            .background(color),
+            .background(statusToneContainer(statusToneOf(ok))),
     )
 }
 
-/**
- * Status icon: check / cross / warning in a tinted circle — the premium
- * replacement for the bare status dot.
- */
+/** Check / cross / warning glyph in a tinted circle (sizes structural). */
 @Composable
 fun StatusIcon(ok: Boolean?, modifier: Modifier = Modifier) {
-    val color = when (ok) {
-        true -> statusPositive()
-        false -> statusNegative()
-        null -> statusCaution()
-    }
+    val container = statusToneContainer(statusToneOf(ok))
+    val content = statusToneContent(statusToneOf(ok))
     Box(
         modifier
-            .size(22.dp)
+            .size(Spacing.xl + Spacing.xxs)
             .clip(CircleShape)
-            .background(color.copy(alpha = 0.14f)),
+            .background(container),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
@@ -80,8 +126,8 @@ fun StatusIcon(ok: Boolean?, modifier: Modifier = Modifier) {
                 null -> Icons.Filled.Warning
             },
             contentDescription = null,
-            tint = color,
-            modifier = Modifier.size(14.dp),
+            tint = content,
+            modifier = Modifier.size(Spacing.lg + Spacing.xxs - Spacing.xs),
         )
     }
 }
@@ -110,31 +156,8 @@ fun timeAgo(thenMs: Long, nowMs: Long = System.currentTimeMillis()): String {
 }
 
 // ---------------------------------------------------------------------------
-// Shared card + switch row (used by Reliability / Diagnostics / Onboarding)
+// Rows and toggles
 // ---------------------------------------------------------------------------
-
-@Composable
-fun SectionCard(
-    modifier: Modifier = Modifier,
-    title: String? = null,
-    content: @Composable ColumnScope.() -> Unit,
-) {
-    ElevatedCard(modifier = modifier.fillMaxWidth()) {
-        Column(
-            Modifier.padding(Spacing.lg),
-            verticalArrangement = Arrangement.spacedBy(Spacing.md),
-        ) {
-            if (title != null) {
-                Text(
-                    title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
-            content()
-        }
-    }
-}
 
 @Composable
 fun SwitchRow(
@@ -145,7 +168,10 @@ fun SwitchRow(
     supporting: String? = null,
 ) {
     Row(
-        Modifier.fillMaxWidth(),
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = Spacing.xxl + Spacing.lg + Spacing.sm)
+            .padding(horizontal = Spacing.lg, vertical = Spacing.md),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
@@ -160,5 +186,229 @@ fun SwitchRow(
             }
         }
         Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
+    }
+}
+
+/** Hairline divider. */
+@Composable
+fun PvDivider(modifier: Modifier = Modifier) {
+    Box(
+        modifier
+            .fillMaxWidth()
+            .height(Spacing.xxs - Spacing.xs + Spacing.xs) // 1dp structural hairline
+            .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+    )
+}
+
+// ---------------------------------------------------------------------------
+// Empty / loading states
+// ---------------------------------------------------------------------------
+
+@Composable
+fun PvEmptyState(
+    title: String,
+    body: String,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null,
+) {
+    Column(
+        modifier
+            .fillMaxWidth()
+            .padding(horizontal = Spacing.xxl, vertical = Spacing.xxl),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+    ) {
+        if (icon != null) {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(Spacing.xxl + Spacing.lg + Spacing.xs),
+            )
+        }
+        Text(title, style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
+        Text(
+            body,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        if (actionLabel != null && onAction != null) {
+            Spacer(Modifier.height(Spacing.xs))
+            Button(onClick = onAction) { Text(actionLabel) }
+        }
+    }
+}
+
+/** Compact inline empty hint inside a card. */
+@Composable
+fun PvEmptyHint(
+    text: String,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+) {
+    Row(
+        modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+    ) {
+        if (icon != null) {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(Spacing.lg + Spacing.xxs),
+            )
+        }
+        Text(
+            text,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+fun PvLoadingRow(label: String) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(vertical = Spacing.md),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+    ) {
+        CircularProgressIndicator(Modifier.size(Spacing.lg + Spacing.xxs), strokeWidth = Spacing.xxs)
+        Text(label, style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Payment row
+// ---------------------------------------------------------------------------
+
+/** One payment: prominent amount (tabular), source/sender, time. */
+@Composable
+fun PvPaymentRow(amountText: String, source: String?, sender: String?, timeText: String) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(vertical = Spacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+    ) {
+        Surface(
+            color = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            shape = CircleShape,
+        ) {
+            Text(
+                "₹",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(Spacing.sm),
+            )
+        }
+        Column(Modifier.weight(1f)) {
+            MoneyText(
+                text = amountText,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+            )
+            val secondary = buildString {
+                if (!sender.isNullOrBlank()) append("from $sender")
+                else if (!source.isNullOrBlank()) append(source)
+            }
+            if (secondary.isNotBlank()) {
+                Text(secondary, style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+        Text(
+            timeText,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Status hero (compat until the Phase 3 Home rebuild)
+// ---------------------------------------------------------------------------
+
+/**
+ * Big calm status block: icon circle, title, chip, headline, one human line,
+ * optional primary action. Colors are scheme roles only.
+ */
+@Composable
+fun PvStatusHero(
+    icon: ImageVector,
+    tint: Color,
+    title: String,
+    headline: String,
+    body: String,
+    modifier: Modifier = Modifier,
+    chip: String? = null,
+    chipOk: Boolean? = null,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null,
+) {
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = Spacing.lg),
+        color = MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        shape = MaterialTheme.shapes.extraLarge,
+    ) {
+        Column(
+            Modifier
+                .background(
+                    androidx.compose.ui.graphics.Brush.linearGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+                            MaterialTheme.colorScheme.surface,
+                        ),
+                    ),
+                )
+                .padding(Spacing.xl),
+            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+            ) {
+                Box(
+                    Modifier
+                        .size(Spacing.huge - Spacing.lg)
+                        .clip(CircleShape)
+                        .background(tint.copy(alpha = 0.14f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        icon,
+                        contentDescription = null,
+                        tint = tint,
+                        modifier = Modifier.size(Spacing.xl + Spacing.lg),
+                    )
+                }
+                Text(
+                    title,
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f),
+                )
+                if (chip != null) {
+                    StatusPill(text = chip, tone = statusToneOf(chipOk))
+                }
+            }
+            Text(headline, style = MaterialTheme.typography.headlineLarge)
+            Text(
+                body,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (actionLabel != null && onAction != null) {
+                Spacer(Modifier.height(Spacing.xs))
+                Button(onClick = onAction) { Text(actionLabel) }
+            }
+        }
     }
 }
