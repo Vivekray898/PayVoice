@@ -58,7 +58,9 @@ fun NotificationAccessStep(
             body = "PayVoice listens for payment notifications from Google Pay " +
                 "and announces them out loud.",
             primaryLabel = if (granted) "Continue" else "Allow access",
-            onPrimary = { viewModel.openListenerSettings(context) },
+            onPrimary = {
+                if (granted) onNext() else viewModel.openListenerSettings(context)
+            },
             linkLabel = "Why do I need this?",
             onLink = { showWhy = !showWhy },
         ) {

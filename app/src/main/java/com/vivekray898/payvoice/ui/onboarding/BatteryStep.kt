@@ -32,7 +32,9 @@ fun BatteryStep(viewModel: MainViewModel, onBack: () -> Unit, onNext: () -> Unit
         body = "Android may put PayVoice to sleep and delay announcements. " +
             "Exempting PayVoice keeps it running.",
         primaryLabel = if (exempt) "Continue" else "Allow background access",
-        onPrimary = { viewModel.fixBattery(context) },
+        onPrimary = {
+            if (exempt) onNext() else viewModel.fixBattery(context)
+        },
         linkLabel = "Skip for now",
         onLink = onNext,
     )

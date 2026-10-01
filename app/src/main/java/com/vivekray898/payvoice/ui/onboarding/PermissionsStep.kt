@@ -57,7 +57,8 @@ fun PermissionsStep(viewModel: MainViewModel, onBack: () -> Unit, onNext: () -> 
             ) {
                 launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
             } else {
-                viewModel.openAppNotificationSettings(context)
+                // Already granted (or API < 33): "Continue" continues.
+                onNext()
             }
         },
         linkLabel = "Skip for now",
