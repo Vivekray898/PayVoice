@@ -17,12 +17,11 @@ fun MoneyText(
     amountMinor: Long,
     currency: String = "INR",
     modifier: Modifier = Modifier,
+    style: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.titleMedium,
 ) {
     Text(
         text = AmountExtractor.formatMinor(amountMinor, currency),
-        style = MaterialTheme.typography.titleMedium.copy(
-            fontFeatureSettings = "tnum",
-        ),
+        style = style.copy(fontFeatureSettings = "tnum"),
         color = MaterialTheme.colorScheme.onSurface,
         modifier = modifier,
     )

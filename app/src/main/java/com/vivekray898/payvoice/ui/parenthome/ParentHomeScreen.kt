@@ -1,58 +1,69 @@
 package com.vivekray898.payvoice.ui.parenthome
 
-import android.os.Build
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material.icons.filled.SupportAgent
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vivekray898.payvoice.core.parser.AmountExtractor
 import com.vivekray898.payvoice.core.remote.DeviceRole
 import com.vivekray898.payvoice.service.status.DeviceStatusMonitor
 import com.vivekray898.payvoice.ui.MainViewModel
+import com.vivekray898.payvoice.ui.components.BellIllustration
+import com.vivekray898.payvoice.ui.components.IconTile
 import com.vivekray898.payvoice.ui.components.MoneyText
-import com.vivekray898.payvoice.ui.components.PvActionCard
+import com.vivekray898.payvoice.ui.components.PaymentsEmptyIllustration
 import com.vivekray898.payvoice.ui.components.PvDivider
-import com.vivekray898.payvoice.ui.components.PvEmptyHint
 import com.vivekray898.payvoice.ui.components.PvPaymentRow
+import com.vivekray898.payvoice.ui.components.PvSecondaryButton
 import com.vivekray898.payvoice.ui.components.PvScaffold
-import com.vivekray898.payvoice.ui.components.StatusPill
-import com.vivekray898.payvoice.ui.components.StatusTone
-import com.vivekray898.payvoice.ui.components.SectionHeader
+import com.vivekray898.payvoice.ui.components.StorefrontHero
 import com.vivekray898.payvoice.ui.components.timeAgo
 import com.vivekray898.payvoice.ui.theme.Spacing
 
 /**
- * Home (DESIGN.md rebuild, Phase 3b): LargeTopAppBar "PayVoice", the hero
- * card (role + status pill + one human line), then the Manage action cards.
- * No role selector — role is set during onboarding and read-only here.
+ * Home (GPay-Business structure rebuild): custom header (business name +
+ * chevron + avatar) over a full-bleed Canvas storefront hero, then the
+ * greeting, the action card with an inline text-link CTA (only when
+ * something needs attention), the today-amount numeric block with the
+ * payments empty state / recent list, and the quick-links row. The
+ * scaffold's topBar slot stays empty so the hero bleeds under the status
+ * bar; bottom clearance = nav-bar inset + 24dp.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ParentHomeScreen(
     viewModel: MainViewModel,
@@ -67,183 +78,301 @@ fun ParentHomeScreen(
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val ownDevice by viewModel.ownDevice.collectAsStateWithLifecycle()
 
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val role = settings.role
-    val tone = homeTone(status, role, ownDevice?.isActive == true)
-    val statusText = homeStatusText(role, status, ownDevice?.isActive == true)
+    val listenerOk = status?.listenerEnabled == true
+    val notifOk = status?.notificationsEnabled == true
+    val paired = ownDevice?.isActive == true
+    val needsAction = when (role) {
+        DeviceRole.EMPLOYEE -> !paired
+        else -> !(listenerOk && notifOk)
+    }
+    val todayMinor = history.filter { it.announcedAtMs >= startOfToday() }.sumOf { it.amountMinor }
+    val displayName = settings.deviceName.ifBlank {
+        when (role) {
+            DeviceRole.EMPLOYEE -> "This phone"
+            else -> "Your business"
+        }
+    }
+    val statusBarPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
-    PvScaffold(
-        topBar = {
-            LargeTopAppBar(
-                title = { Text("PayVoice", style = MaterialTheme.typography.headlineMedium) },
-                actions = {
-                    IconButton(onClick = onOpenSettings) {
-                        Icon(Icons.Filled.Settings, contentDescription = "Settings")
-                    }
-                },
-                colors = TopAppBarDefaults.largeTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
-                ),
-                scrollBehavior = scrollBehavior,
-            )
-        },
-    ) { inner ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .nestedScroll(scrollBehavior.nestedScrollConnection),
-            contentPadding = PaddingValues(bottom = Spacing.xxl + inner.calculateBottomPadding()),
-        ) {
+    PvScaffold(topBar = {}) { _ ->
+        LazyColumn(Modifier.fillMaxSize()) {
+            // 1. Custom app bar (transparent, over nothing) + 2. bleeding hero
             item(key = "hero") {
-                HeroCard(
-                    modifier = Modifier.padding(horizontal = Spacing.lg),
-                    role = role,
-                    statusText = statusText,
-                    tone = tone,
-                )
-            }
-            item(key = "history") {
-                Column(Modifier.padding(horizontal = Spacing.lg)) {
-                    SectionHeader(text = "Recent payments")
-                    if (history.isEmpty()) {
-                        PvEmptyHint(
-                            text = "Payments will appear here when they are detected.",
+                Box(Modifier.fillMaxWidth()) {
+                    StorefrontHero(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(Spacing.huge * 3 + Spacing.sm), // ~200dp structural
+                    )
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(
+                                top = statusBarPadding + Spacing.sm,
+                                start = Spacing.xl - Spacing.xs, // 20dp structural side padding
+                                end = Spacing.xl - Spacing.xs,
+                            )
+                            .height(Spacing.xxl + Spacing.lg), // 48dp structural bar
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = displayName,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f),
                         )
+                        Icon(
+                            Icons.Filled.ExpandMore,
+                            contentDescription = "Switch account",
+                            tint = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Spacer(Modifier.width(Spacing.md))
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            modifier = Modifier.size(Spacing.xxl + Spacing.lg), // 40dp avatar
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = displayName.take(1).uppercase(),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 3. Greeting block
+            item(key = "greeting") {
+                Column(
+                    Modifier.padding(
+                        start = Spacing.xl - Spacing.xs,
+                        end = Spacing.xl - Spacing.xs,
+                        top = Spacing.xl,
+                    ),
+                ) {
+                    Text(
+                        text = "Hello, $displayName",
+                        style = MaterialTheme.typography.displaySmall,
+                        color = MaterialTheme.colorScheme.onBackground,
+                    )
+                    Spacer(Modifier.height(Spacing.xs))
+                    Text(
+                        text = if (needsAction) {
+                            "Complete pending actions now"
+                        } else {
+                            "You're all set. Payments will appear here."
+                        },
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            // 4. Primary action card (only when action required)
+            if (needsAction) {
+                item(key = "action") {
+                    ActionCard(
+                        modifier = Modifier.padding(
+                            start = Spacing.lg,
+                            end = Spacing.lg,
+                            top = Spacing.xl,
+                        ),
+                        title = when (role) {
+                            DeviceRole.EMPLOYEE -> "Connect to your owner"
+                            else -> "Turn on all notifications"
+                        },
+                        description = when (role) {
+                            DeviceRole.EMPLOYEE ->
+                                "Pair this phone with your owner's code to hear payments live"
+                            else ->
+                                "Get audio alerts & timely notifications when customers pay you"
+                        },
+                        cta = when (role) {
+                            DeviceRole.EMPLOYEE -> "Enter code now"
+                            else -> "Turn on now"
+                        },
+                        onAction = when (role) {
+                            DeviceRole.EMPLOYEE -> onOpenEmployeeRemote
+                            else -> onOpenReliability
+                        },
+                    )
+                }
+            }
+
+            // 5. Numeric data block
+            item(key = "today") {
+                Column(
+                    Modifier.padding(
+                        start = Spacing.xl - Spacing.xs,
+                        end = Spacing.xl - Spacing.xs,
+                        top = Spacing.xxl,
+                    ),
+                ) {
+                    MoneyText(
+                        amountMinor = todayMinor,
+                        modifier = Modifier,
+                        style = MaterialTheme.typography.displaySmall,
+                    )
+                    Text(
+                        "Received today",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            // Payments: empty state or recent list
+            item(key = "payments") {
+                Column(
+                    Modifier.padding(horizontal = Spacing.xl - Spacing.xs),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    if (history.isEmpty()) {
+                        Spacer(Modifier.height(Spacing.xl))
+                        PaymentsEmptyIllustration()
+                        Spacer(Modifier.height(Spacing.md))
+                        Text(
+                            "Recent payments from customers will be shown here",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = Spacing.xxl),
+                        )
+                        Spacer(Modifier.height(Spacing.xl))
                     } else {
-                        history.take(6).forEachIndexed { index, entry ->
+                        history.take(5).forEachIndexed { index, entry ->
+                            if (index == 0) Spacer(Modifier.height(Spacing.lg))
                             if (index > 0) PvDivider()
                             PvPaymentRow(
-                                amountText = AmountExtractor.formatMinor(
-                                    entry.amountMinor,
-                                    entry.currency,
-                                ),
+                                amountText = AmountExtractor.formatMinor(entry.amountMinor, entry.currency),
                                 source = entry.sourceName,
                                 sender = entry.senderName,
                                 timeText = timeAgo(entry.announcedAtMs),
                             )
                         }
+                        Spacer(Modifier.height(Spacing.md))
+                    }
+                    PvSecondaryButton(
+                        text = "Show all payments",
+                        onClick = onOpenDiagnostics,
+                        enabled = history.isNotEmpty(),
+                    )
+                }
+            }
+
+            // 6. Quick links
+            item(key = "quick-links") {
+                Column(
+                    Modifier.padding(
+                        start = Spacing.xl - Spacing.xs,
+                        end = Spacing.xl - Spacing.xs,
+                        top = Spacing.xxl,
+                    ),
+                ) {
+                    Text(
+                        "Quick links",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onBackground,
+                    )
+                    Spacer(Modifier.height(Spacing.lg))
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                    ) {
+                        QuickLink(icon = Icons.Filled.QrCode2, label = "QR code", onClick = {})
+                        QuickLink(
+                            icon = if (role == DeviceRole.EMPLOYEE) Icons.Filled.People else Icons.Filled.People,
+                            label = "Employees",
+                            onClick = if (role == DeviceRole.EMPLOYEE) onOpenEmployeeRemote else onOpenOwnerRemote,
+                        )
+                        QuickLink(icon = Icons.Filled.Settings, label = "Settings", onClick = onOpenSettings)
+                        QuickLink(icon = Icons.Filled.SupportAgent, label = "Support", onClick = onOpenReliability)
                     }
                 }
             }
-            item(key = "manage") {
-                Column(Modifier.padding(horizontal = Spacing.lg)) {
-                    SectionHeader(text = if (role == DeviceRole.EMPLOYEE) "This device" else "Manage")
-                    Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
-                        when (role) {
-                            DeviceRole.EMPLOYEE -> PvActionCard(
-                                icon = Icons.Filled.Link,
-                                title = "Pair status",
-                                subtitle = statusText,
-                                onClick = onOpenEmployeeRemote,
-                            )
-                            DeviceRole.OWNER -> PvActionCard(
-                                icon = Icons.Filled.Group,
-                                title = "Employees",
-                                subtitle = "Devices that hear your payment announcements",
-                                onClick = onOpenOwnerRemote,
-                            )
-                            DeviceRole.UNSET -> Unit
-                        }
-                        PvActionCard(
-                            icon = Icons.Filled.Info,
-                            title = "Diagnostics",
-                            subtitle = "Technical logs and captured notifications",
-                            onClick = onOpenDiagnostics,
-                        )
-                        PvActionCard(
-                            icon = Icons.Filled.Build,
-                            title = "Reliability",
-                            subtitle = "Permissions, battery and connection repair",
-                            onClick = onOpenReliability,
-                        )
-                        PvActionCard(
-                            icon = Icons.Filled.Settings,
-                            title = "Settings",
-                            subtitle = "Voice, announcements & more",
-                            onClick = onOpenSettings,
-                        )
-                    }
-                    Spacer(Modifier.height(Spacing.xl))
-                }
+
+            // 7. Bottom padding = nav-bar inset + 24dp
+            item(key = "footer") {
+                val navPad = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+                Spacer(Modifier.height(navPad + Spacing.xxl))
             }
         }
     }
 }
 
+/** The GPay-Business action card: bell art, bold headline, muted two-line
+ *  description, and an inline text-link CTA below the row. */
 @Composable
-private fun HeroCard(
-    role: DeviceRole,
-    statusText: String,
-    tone: StatusTone,
+private fun ActionCard(
+    title: String,
+    description: String,
+    cta: String,
+    onAction: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.extraLarge, // rounded.xl
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = Spacing.xxs,
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(onClick = onAction),
+        shape = RoundedCornerShape(Spacing.xl), // rounded.xl = 16dp
+        color = MaterialTheme.colorScheme.surfaceVariant,
     ) {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .padding(Spacing.xl),
-        ) {
-            androidx.compose.foundation.layout.Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = when (role) {
-                        DeviceRole.OWNER -> "Owner"
-                        DeviceRole.EMPLOYEE -> "Employee"
-                        DeviceRole.UNSET -> "Welcome"
-                    },
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.weight(1f),
-                )
-                StatusPill(
-                    text = when (tone) {
-                        StatusTone.Success -> "Ready"
-                        StatusTone.Error -> "Action needed"
-                        StatusTone.Warning -> "Waiting"
-                        StatusTone.Neutral -> "Idle"
-                    },
-                    tone = tone,
-                )
+        Column(Modifier.padding(Spacing.xl - Spacing.xs)) { // 20dp structural padding
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                BellIllustration()
+                Spacer(Modifier.width(Spacing.lg))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        title,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Spacer(Modifier.height(Spacing.xxs))
+                    Text(
+                        description,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
-            Spacer(Modifier.height(Spacing.sm))
-            Text(
-                text = statusText,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            TextButton(onClick = onAction) {
+                Text(cta, style = MaterialTheme.typography.labelLarge)
+            }
         }
     }
 }
 
-private fun homeTone(
-    status: DeviceStatusMonitor.Snapshot?,
-    role: DeviceRole,
-    paired: Boolean,
-): StatusTone = when (role) {
-    DeviceRole.EMPLOYEE -> if (paired) StatusTone.Success else StatusTone.Warning
-    else -> when {
-        status == null -> StatusTone.Neutral
-        status.listenerEnabled && status.notificationsEnabled -> StatusTone.Success
-        else -> StatusTone.Error
+/** Quick link: 56dp icon tile + label, >= 72dp total tap height. */
+@Composable
+private fun QuickLink(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    onClick: () -> Unit,
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .clickable(onClick = onClick)
+            .padding(Spacing.xs),
+    ) {
+        IconTile(icon = icon)
+        Spacer(Modifier.height(Spacing.sm))
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
-private fun homeStatusText(
-    role: DeviceRole,
-    status: DeviceStatusMonitor.Snapshot?,
-    paired: Boolean,
-): String = when (role) {
-    DeviceRole.EMPLOYEE ->
-        if (paired) "This phone announces your owner's payments."
-        else "Join with a code from your owner to start announcing."
-    else -> when {
-        status == null -> "Checking this device…"
-        status.listenerEnabled && status.notificationsEnabled ->
-            "PayVoice speaks every payment as it arrives."
-        else -> "Allow notification access so PayVoice can hear your payments."
-    }
+private fun startOfToday(): Long {
+    val cal = java.util.Calendar.getInstance()
+    cal.set(java.util.Calendar.HOUR_OF_DAY, 0)
+    cal.set(java.util.Calendar.MINUTE, 0)
+    cal.set(java.util.Calendar.SECOND, 0)
+    cal.set(java.util.Calendar.MILLISECOND, 0)
+    return cal.timeInMillis
 }
