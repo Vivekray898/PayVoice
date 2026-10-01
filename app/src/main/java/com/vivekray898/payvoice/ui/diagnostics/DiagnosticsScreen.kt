@@ -1,5 +1,6 @@
 package com.vivekray898.payvoice.ui.diagnostics
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -9,11 +10,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -28,24 +31,23 @@ import com.vivekray898.payvoice.core.model.PaymentSource
 import com.vivekray898.payvoice.core.remote.PayVoiceAuth
 import com.vivekray898.payvoice.core.remote.RemoteEventSender
 import com.vivekray898.payvoice.ui.MainViewModel
-import com.vivekray898.payvoice.ui.components.PvDivider
 import com.vivekray898.payvoice.ui.components.PvEmptyHint
 import com.vivekray898.payvoice.ui.components.PvScaffold
-import com.vivekray898.payvoice.ui.components.PvSection
+import com.vivekray898.payvoice.ui.components.PvTopBar
+import com.vivekray898.payvoice.ui.components.SectionHeader
 import com.vivekray898.payvoice.ui.components.StatusLine
+import com.vivekray898.payvoice.ui.components.StatusTone
 import com.vivekray898.payvoice.ui.components.SwitchRow
+import com.vivekray898.payvoice.ui.components.statusToneContainer
+import com.vivekray898.payvoice.ui.components.statusToneOf
 import com.vivekray898.payvoice.ui.components.timeAgo
 import com.vivekray898.payvoice.ui.theme.Spacing
 
 /**
- * Local diagnostics (spec: PAYMENT NOTIFICATION DIAGNOSTICS). Shows the exact
- * notification fields (title/text/bigText/subText/id/posted time) for captured
- * payment-app notifications so parsers can be refined per app version/language.
- * This data is LOCAL ONLY — never uploaded.
- *
- * Premium pass (Phase 4b): carded sections, monospace data in quiet code
- * blocks, divider-separated capture rows. Technical by design — this is the
- * one screen where monospace is the point.
+ * Local diagnostics (DESIGN.md rebuild, Phase 3f): System / Listener / FCM /
+ * Remote / Recent events cards over the existing flows. Captured-notification
+ * fields stay (local-only parser tooling); GPay simulation remains
+ * debug-only. This data is LOCAL ONLY — never uploaded.
  */
 @Composable
 fun DiagnosticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
@@ -53,82 +55,139 @@ fun DiagnosticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val captured by viewModel.captured.collectAsStateWithLifecycle()
     val logs by viewModel.diagnostics.collectAsStateWithLifecycle()
+    val runtime by viewModel.listenerRuntime.collectAsStateWithLifecycle()
+    val fcm by viewModel.fcm.collectAsStateWithLifecycle()
 
-    PvScaffold(title = "Diagnostics", onBack = onBack) {
+    PvScaffold(
+        topBar = { PvTopBar(title = "Diagnostics", onBack = onBack) },
+    ) { inner ->
         LazyColumn(
-            Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(top = Spacing.xs, bottom = Spacing.xxl),
-            verticalArrangement = Arrangement.spacedBy(Spacing.sm),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = Spacing.lg,
+                end = Spacing.lg,
+                bottom = Spacing.xxl + inner.calculateBottomPadding(),
+            ),
         ) {
-            item(key = "status") {
-                PvSection(title = "Live status", carded = true) {
-                    StatusLine(status?.listenerEnabled == true, "Notification listener")
-                    StatusLine(status?.notificationsEnabled == true, "App notifications")
-                    StatusLine(status?.batteryExempt == true, "Battery optimization exempt")
-                    Text(
-                        "${status?.manufacturer ?: "?"} ${status?.model ?: "?"} · " +
-                            "Android ${status?.androidVersion ?: "?"}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+            item(key = "system") {
+                SectionHeader(text = "System")
+                DiagCard {
+                    InfoRow("Device", "${status?.manufacturer ?: "?"} ${status?.model ?: "?"}")
+                    InfoRow("Android", "${status?.androidVersion ?: "?"} (SDK ${android.os.Build.VERSION.SDK_INT})")
+                    InfoRow("App", "1.0 · ${if (viewModel.isDebugBuild) "debug" else "release"}")
+                    InfoRow("Package", "com.vivekray898.payvoice")
+                    OutlinedButton(
+                        onClick = { viewModel.refreshStatus() },
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(percent = 50),
+                    ) { Text("Refresh") }
+                }
+            }
 
-                    // Remote layer (spec §32) — identifiers masked, never tokens.
-                    val role by viewModel.settings.collectAsStateWithLifecycle()
+            item(key = "listener") {
+                SectionHeader(text = "Listener")
+                DiagCard {
+                    StatusLine(runtime.systemGrant, "Access granted in Android settings")
+                    StatusLine(runtime.connected, if (runtime.connected) "Listener connected" else "Listener not connected")
+                    if (runtime.mismatch) {
+                        Text(
+                            "Android granted access but the service is not bound. " +
+                                "Use Reliability → Repair to rebind.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
+            }
+
+            item(key = "fcm") {
+                SectionHeader(text = "FCM")
+                DiagCard {
+                    StatusLine(
+                        fcm.tokenAvailable,
+                        if (fcm.tokenAvailable) "Push transport ready" else "Token unavailable",
+                    )
+                    if (fcm.tokenAvailable) {
+                        Text(
+                            "Token: ${fcm.tokenPreview ?: "registered (hidden)"}",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    fcm.error?.let {
+                        Text(
+                            "Error: $it",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
+            }
+
+            item(key = "remote") {
+                SectionHeader(text = "Remote")
+                DiagCard {
+                    val settingsState by viewModel.settings.collectAsStateWithLifecycle()
                     val authState by viewModel.authState.collectAsStateWithLifecycle()
                     val employees by viewModel.employees.collectAsStateWithLifecycle()
                     val sendState by viewModel.remoteSendState.collectAsStateWithLifecycle()
-                    val dup by viewModel.lastRemoteDuplicate.collectAsStateWithLifecycle()
-                    CodeBlock(
-                        listOf(
-                            "role    : ${role.role.label.lowercase()}",
-                            "auth    : ${when (authState) {
-                                is PayVoiceAuth.State.READY -> "signed-in"
-                                is PayVoiceAuth.State.SIGNING_IN -> "signing-in"
-                                is PayVoiceAuth.State.FAILED -> "failed"
-                            }}",
-                            "devices : ${employees.count { it.isActive }} active / ${employees.size} total",
-                            "send    : ${when (sendState) {
-                                is RemoteEventSender.SendState.SENT -> "accepted"
-                                is RemoteEventSender.SendState.FAILED -> "failed"
-                                else -> "idle"
-                            }} · dup-ignored: ${dup == true}",
-                        ),
+                    InfoRow("Role", settingsState.role.label.lowercase())
+                    InfoRow(
+                        "Auth",
+                        when (authState) {
+                            is PayVoiceAuth.State.READY -> "signed-in"
+                            is PayVoiceAuth.State.SIGNING_IN -> "signing-in"
+                            is PayVoiceAuth.State.FAILED -> "failed"
+                        },
                     )
-                    OutlinedButton(onClick = { viewModel.refreshStatus() }) { Text("Refresh") }
+                    InfoRow("Devices", "${employees.count { it.isActive }} active / ${employees.size} total")
+                    InfoRow(
+                        "Send",
+                        when (sendState) {
+                            is RemoteEventSender.SendState.SENT -> "accepted"
+                            is RemoteEventSender.SendState.FAILED -> "failed"
+                            else -> "idle"
+                        } + " · dup-ignored: ${viewModel.lastRemoteDuplicate.value == true}",
+                    )
                 }
             }
 
             item(key = "capture-toggle") {
-                PvSection(title = "Unknown-package capture", carded = true) {
+                SectionHeader(text = "Unknown-package capture")
+                DiagCard {
                     Text(
                         "Capture non-GPay notifications locally to identify unexpected " +
-                            "packages. Captured packages are never treated as payment " +
-                            "sources — GPay is the only notification source.",
-                        style = MaterialTheme.typography.bodyMedium,
+                            "packages. Never treated as payment sources.",
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     SwitchRow(
                         label = "Capture unknown packages (local only)",
                         checked = settings.captureUnknownPackages,
                         onCheckedChange = viewModel::setCaptureUnknownPackages,
-                        supporting = "Stores raw text of non-payment app notifications in the local database",
                     )
-                    OutlinedButton(onClick = { viewModel.clearCaptures() }) { Text("Clear captures") }
+                    OutlinedButton(
+                        onClick = { viewModel.clearCaptures() },
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(percent = 50),
+                    ) { Text("Clear captures") }
                 }
             }
 
             if (viewModel.isDebugBuild) {
                 item(key = "gpay-test") {
-                    PvSection(title = "GPay parser test (debug)", carded = true) {
-                        Button(onClick = { viewModel.simulate(PaymentSource.GOOGLE_PAY) }) {
-                            Text("Simulate GPay ₹500")
-                        }
+                    SectionHeader(text = "GPay parser test (debug)")
+                    DiagCard {
+                        Button(
+                            onClick = { viewModel.simulate(PaymentSource.GOOGLE_PAY) },
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(percent = 50),
+                        ) { Text("Simulate GPay ₹500") }
                     }
                 }
             }
 
             item(key = "captures") {
-                PvSection(title = "Captured notifications (newest first)", carded = true) {
+                SectionHeader(text = "Captured notifications")
+                DiagCard {
                     if (captured.isEmpty()) {
                         PvEmptyHint(
                             text = "None yet — captured notifications will appear here.",
@@ -136,22 +195,19 @@ fun DiagnosticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                         )
                     } else {
                         captured.take(15).forEachIndexed { index, c ->
-                            if (index > 0) PvDivider()
-                            Column(Modifier.padding(vertical = Spacing.sm)) {
+                            if (index > 0) {
+                                Spacer(Modifier.height(Spacing.md))
+                            }
+                            Column {
                                 Text(
                                     "${c.packageName} · ${timeAgo(c.capturedAtMs)}",
                                     style = MaterialTheme.typography.labelMedium,
                                 )
-                                Spacer(Modifier.height(Spacing.xs))
-                                CodeBlock(
-                                    listOf(
-                                        "notif id : ${c.notificationId} · posted: ${c.postedTimeMs}",
-                                        "title    : ${c.title.orEmpty()}",
-                                        "text     : ${c.text.orEmpty()}",
-                                    ) + listOfNotNull(
-                                        c.bigText?.takeIf { it.isNotBlank() }?.let { "bigText  : $it" },
-                                        c.subText?.takeIf { it.isNotBlank() }?.let { "subText  : $it" },
-                                    ),
+                                Text(
+                                    "title: ${c.title.orEmpty()} · text: ${c.text.orEmpty()}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontFamily = FontFamily.Monospace,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                         }
@@ -159,15 +215,26 @@ fun DiagnosticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                 }
             }
 
-            item(key = "logs") {
-                PvSection(title = "System log (last 200)", carded = true) {
+            item(key = "events") {
+                SectionHeader(text = "Recent events")
+                DiagCard {
                     if (logs.isEmpty()) {
-                        PvEmptyHint(
-                            text = "No events yet — system log entries will appear here.",
-                            icon = Icons.Filled.List,
-                        )
+                        PvEmptyHint(text = "No events yet — system log entries will appear here.")
                     } else {
-                        CodeBlock(logs.map { "%tT [%s] %s".format(it.atMs, it.tag, it.message) })
+                        logs.take(50).forEach { d ->
+                            EventRow(
+                                tone = when {
+                                    d.tag.contains("ERR", ignoreCase = true) ||
+                                        d.tag.contains("FAIL", ignoreCase = true) -> StatusTone.Error
+                                    d.tag.contains("WARN", ignoreCase = true) -> StatusTone.Warning
+                                    else -> StatusTone.Neutral
+                                },
+                                time = "%tT".format(d.atMs),
+                                kind = d.tag,
+                                message = d.message,
+                            )
+                            Spacer(Modifier.height(Spacing.sm))
+                        }
                     }
                 }
             }
@@ -175,26 +242,64 @@ fun DiagnosticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
     }
 }
 
-/** Quiet terminal-style block for technical values inside a card. */
 @Composable
-private fun CodeBlock(lines: List<String>) {
+private fun DiagCard(
+    content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
+) {
     Surface(
-        color = MaterialTheme.colorScheme.surfaceContainerHighest,
-        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-        shape = MaterialTheme.shapes.small,
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = Spacing.xxs,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(
-            Modifier.padding(Spacing.md),
-            verticalArrangement = Arrangement.spacedBy(Spacing.xxs),
-        ) {
-            lines.forEach { line ->
-                Text(
-                    line,
-                    style = MaterialTheme.typography.bodySmall,
-                    fontFamily = FontFamily.Monospace,
-                )
-            }
+            Modifier.padding(Spacing.lg),
+            verticalArrangement = Arrangement.spacedBy(Spacing.md),
+            content = content,
+        )
+    }
+}
+
+@Composable
+private fun InfoRow(label: String, value: String) {
+    Row(
+        Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyLarge)
+        Text(
+            value,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun EventRow(tone: StatusTone, time: String, kind: String, message: String) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+    ) {
+        androidx.compose.foundation.layout.Box(
+            Modifier
+                .size(Spacing.sm + Spacing.xxs - Spacing.xs) // 6dp dot, structural
+                .background(
+                    statusToneContainer(tone),
+                    CircleShape,
+                ),
+        )
+        Column {
+            Text(
+                "$time · $kind",
+                style = MaterialTheme.typography.labelMedium,
+            )
+            Text(
+                message,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
