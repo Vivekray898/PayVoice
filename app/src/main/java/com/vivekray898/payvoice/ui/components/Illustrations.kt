@@ -143,7 +143,8 @@ fun StorefrontHero(modifier: Modifier = Modifier) {
 
 /**
  * Rounded-square illustration tile behind an icon (quick links, list rows):
- * 56dp tile at rounded.lg, icon at 28dp — both structural.
+ * 56dp tile at rounded.lg (40dp variant for dense rows), icon 28/20dp —
+ * structural.
  */
 @Composable
 fun IconTile(
@@ -151,10 +152,11 @@ fun IconTile(
     modifier: Modifier = Modifier,
     container: Color = MaterialTheme.colorScheme.surfaceVariant,
     content: Color = MaterialTheme.colorScheme.primary,
+    tile: Dp = Spacing.xxl + Spacing.lg + Spacing.sm, // 56dp structural
     iconSize: Dp = Spacing.xl + Spacing.xs, // 28dp structural
 ) {
     Surface(
-        modifier = modifier.size(Spacing.xxl + Spacing.lg + Spacing.sm), // 56dp structural tile
+        modifier = modifier.size(tile),
         shape = MaterialTheme.shapes.large, // rounded.lg = 12dp
         color = container,
     ) {
