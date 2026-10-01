@@ -5,13 +5,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -35,15 +31,17 @@ import com.vivekray898.payvoice.ui.MainViewModel
 import com.vivekray898.payvoice.ui.components.PvActionCard
 import com.vivekray898.payvoice.ui.components.PvPrimaryButton
 import com.vivekray898.payvoice.ui.components.PvScaffold
-import com.vivekray898.payvoice.ui.components.PvSection
+import com.vivekray898.payvoice.ui.components.PvSecondaryButton
+import com.vivekray898.payvoice.ui.components.PvTopBar
+import com.vivekray898.payvoice.ui.components.SectionHeader
 import com.vivekray898.payvoice.ui.components.SwitchRow
 import com.vivekray898.payvoice.ui.theme.Spacing
 
 /**
- * Settings (premium pass, UI overhaul Phase 4): carded sections, slider
- * values in pill chips, and the screen's one primary action ("Preview
- * voice") bottom-anchored and always visible. No raw package names or role
- * jargon; debug/diagnostic entries live under Advanced.
+ * Settings (DESIGN.md rebuild, Phase 3e): sectioned Surface groups with
+ * 56dp rows, inline slider values, chip selectors, a bottom-anchored
+ * "Preview voice" pill, and an About group. Role changes live here (Home
+ * is read-only), per the rebuild spec.
  */
 @Composable
 fun SettingsScreen(
@@ -55,29 +53,32 @@ fun SettingsScreen(
     val settings by viewModel.settings.collectAsStateWithLifecycle()
 
     PvScaffold(
-        title = "Settings",
-        onBack = onBack,
+        topBar = { PvTopBar(title = "Settings", onBack = onBack) },
         bottomBar = {
             PvPrimaryButton(
                 text = "Preview voice",
-                onClick = viewModel::speakTest,
+                onClick = { viewModel.speakTest() },
                 modifier = Modifier
                     .padding(horizontal = Spacing.lg)
-                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))
-                    .padding(bottom = Spacing.md),
+                    .padding(bottom = Spacing.lg),
             )
         },
-    ) {
+    ) { inner ->
         LazyColumn(
-            Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(top = Spacing.xs, bottom = Spacing.xxl),
-            verticalArrangement = Arrangement.spacedBy(Spacing.xs),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = Spacing.lg,
+                end = Spacing.lg,
+                top = Spacing.sm,
+                bottom = Spacing.xl + inner.calculateBottomPadding(),
+            ),
         ) {
             item(key = "announcements") {
-                PvSection(title = "Announcements", carded = true) {
+                SectionHeader(text = "Announcements")
+                SettingsGroup {
                     Text(
                         "Payments are spoken automatically as they arrive.",
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Text("Voice style", style = MaterialTheme.typography.titleSmall)
@@ -100,7 +101,7 @@ fun SettingsScreen(
                             )
                         }
                     }
-                    SliderRow(
+                    SliderSetting(
                         label = "Speech speed",
                         value = "%.1fx".format(settings.speechRate),
                     ) {
@@ -113,7 +114,7 @@ fun SettingsScreen(
                             ),
                         )
                     }
-                    SliderRow(
+                    SliderSetting(
                         label = "Speech volume",
                         value = "%d%%".format((settings.speechVolume * 100).toInt()),
                     ) {
@@ -130,7 +131,8 @@ fun SettingsScreen(
             }
 
             item(key = "detection") {
-                PvSection(title = "Payment detection", carded = true) {
+                SectionHeader(text = "Notifications")
+                SettingsGroup {
                     SwitchRow(
                         label = "Google Pay notifications",
                         checked = settings.gpayEnabled,
@@ -147,7 +149,8 @@ fun SettingsScreen(
             }
 
             item(key = "employees") {
-                PvSection(title = "Employees", carded = true) {
+                SectionHeader(text = "Device & team")
+                SettingsGroup {
                     SwitchRow(
                         label = "Send payments to employee phones",
                         checked = settings.remoteAnnouncementsEnabled,
@@ -158,7 +161,7 @@ fun SettingsScreen(
                             "Available when this phone is set as the owner"
                         },
                     )
-                    Text("This device is", style = MaterialTheme.typography.titleSmall)
+                    Text("Change role", style = MaterialTheme.typography.titleSmall)
                     Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                         FilterChip(
                             selected = settings.role == DeviceRole.OWNER,
@@ -185,8 +188,9 @@ fun SettingsScreen(
             }
 
             item(key = "storage") {
-                PvSection(title = "Storage", carded = true) {
-                    SliderRow(
+                SectionHeader(text = "Storage")
+                SettingsGroup {
+                    SliderSetting(
                         label = "Payment memory",
                         value = "%d h".format(settings.dedupRetentionHours),
                     ) {
@@ -200,7 +204,7 @@ fun SettingsScreen(
                             ),
                         )
                     }
-                    SliderRow(
+                    SliderSetting(
                         label = "Keep history",
                         value = "%d days".format(settings.historyRetentionDays),
                     ) {
@@ -217,8 +221,9 @@ fun SettingsScreen(
                 }
             }
 
-            item(key = "advanced") {
-                PvSection(title = "Advanced") {
+            item(key = "support") {
+                SectionHeader(text = "Support")
+                Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
                     PvActionCard(
                         icon = Icons.Filled.Build,
                         title = "Fix a problem",
@@ -233,13 +238,41 @@ fun SettingsScreen(
                     )
                 }
             }
+
+            item(key = "about") {
+                SectionHeader(text = "About")
+                SettingsGroup {
+                    AboutRow("Version", "1.0")
+                    AboutRow("Android", android.os.Build.VERSION.RELEASE ?: "?")
+                    AboutRow("Device", Build.MODEL ?: "?")
+                }
+            }
         }
     }
 }
 
-/** Slider with the current value shown in a pill chip beside the label. */
+/** A carded settings group (rounded.lg surface). */
 @Composable
-private fun SliderRow(
+private fun SettingsGroup(
+    content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
+) {
+    Surface(
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = Spacing.xxs,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            Modifier.padding(Spacing.lg),
+            verticalArrangement = Arrangement.spacedBy(Spacing.md),
+            content = content,
+        )
+    }
+}
+
+/** Slider row with the current value inline. */
+@Composable
+private fun SliderSetting(
     label: String,
     value: String,
     slider: @Composable () -> Unit,
@@ -251,23 +284,34 @@ private fun SliderRow(
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.weight(1f),
             )
-            ValuePill(text = value)
+            Surface(
+                color = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                shape = RoundedCornerShape(percent = 50),
+            ) {
+                Text(
+                    value,
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.xxs),
+                )
+            }
         }
         slider()
     }
 }
 
 @Composable
-private fun ValuePill(text: String) {
-    Surface(
-        color = MaterialTheme.colorScheme.primaryContainer,
-        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-        shape = RoundedCornerShape(percent = 50),
+private fun AboutRow(label: String, value: String) {
+    Row(
+        Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
+        Text(label, style = MaterialTheme.typography.bodyLarge)
         Text(
-            text,
-            style = MaterialTheme.typography.labelMedium,
-            modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.xxs),
+            value,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
