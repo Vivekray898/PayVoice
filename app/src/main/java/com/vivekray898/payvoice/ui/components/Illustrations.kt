@@ -30,6 +30,8 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -43,113 +45,85 @@ import com.vivekray898.payvoice.ui.theme.Spacing
  * sizes are marked `// structural` per docs/DESIGN_SYSTEM.md.
  */
 
-/** Full-bleed storefront scene: sky, ground, shop with striped awning. */
+/**
+ * Full-bleed hero: a rounded-square phone silhouette with the rupee mark
+ * inside and concentric sound-wave arcs to its right — the product story
+ * (PayVoice announces payments out loud) in one consistent scene on a soft
+ * primaryContainer wash.
+ */
 @Composable
 fun StorefrontHero(modifier: Modifier = Modifier) {
     // Colors are captured in composition (DrawScope is not composable).
-    val sky = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
-    val skyTop = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
-    val ground = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
-    val shop = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f)
-    val shopLight = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
-    val awningB = MaterialTheme.colorScheme.primaryContainer
-    val accent = MaterialTheme.colorScheme.tertiaryContainer
+    val wash = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+    val washDeep = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+    val phoneBody = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f)
+    val phoneScreen = MaterialTheme.colorScheme.surface
+    val waves = MaterialTheme.colorScheme.primary
+    val rupee = MaterialTheme.colorScheme.onPrimaryContainer
     Canvas(modifier = modifier.fillMaxSize()) {
         val w = size.width
         val h = size.height
 
-        // Sky (two-band wash, lighter at the top)
-        drawRect(color = skyTop, size = Size(w, h * 0.55f))
-        drawRect(color = sky, topLeft = Offset(0f, h * 0.55f), size = Size(w, h * 0.45f))
+        // Background wash (soft vertical two-step)
+        drawRect(color = wash, size = Size(w, h * 0.6f))
+        drawRect(color = washDeep, topLeft = Offset(0f, h * 0.6f), size = Size(w, h * 0.4f))
 
-        // Ground band
-        drawRect(color = ground, topLeft = Offset(0f, h * 0.78f), size = Size(w, h * 0.22f))
+        // Phone silhouette (centered, slightly left to leave room for waves)
+        val phoneW = w * 0.2f
+        val phoneH = h * 0.52f
+        val phoneLeft = w * 0.34f
+        val phoneTop = h * 0.22f
+        drawRoundRect(
+            color = phoneBody,
+            topLeft = Offset(phoneLeft, phoneTop),
+            size = Size(phoneW, phoneH),
+            cornerRadius = CornerRadius(phoneW * 0.22f),
+        )
+        // Screen inset
+        val screenPad = phoneW * 0.09f
+        drawRoundRect(
+            color = phoneScreen,
+            topLeft = Offset(phoneLeft + screenPad, phoneTop + screenPad),
+            size = Size(phoneW - screenPad * 2, phoneH - screenPad * 2),
+            cornerRadius = CornerRadius(phoneW * 0.16f),
+        )
 
-        // Clouds
-        listOf(0.16f, 0.62f).forEachIndexed { i, cx ->
-            val cy = h * (0.16f + i * 0.06f)
-            val r = w * (0.035f + i * 0.012f)
-            drawCircle(color = Color.White.copy(alpha = 0.75f), radius = r, center = Offset(w * cx, cy))
-            drawCircle(
-                color = Color.White.copy(alpha = 0.75f),
-                radius = r * 0.8f,
-                center = Offset(w * cx + r, cy + r * 0.25f),
+        // Rupee symbol inside the screen (two strokes + the crossbar)
+        val cx = phoneLeft + phoneW / 2
+        val cy = phoneTop + phoneH * 0.42f
+        val s = phoneW * 0.16f
+        drawLine(
+            color = rupee,
+            start = Offset(cx - s, cy - s),
+            end = Offset(cx + s, cy - s),
+            strokeWidth = s * 0.28f,
+        )
+        drawLine(
+            color = rupee,
+            start = Offset(cx - s, cy),
+            end = Offset(cx + s * 0.2f, cy),
+            strokeWidth = s * 0.28f,
+        )
+        drawLine(
+            color = rupee,
+            start = Offset(cx - s, cy + s * 0.15f),
+            end = Offset(cx + s, cy + s * 1.4f),
+            strokeWidth = s * 0.28f,
+        )
+
+        // Sound-wave arcs (three concentric, right of the phone)
+        val arcCenter = Offset(phoneLeft + phoneW + w * 0.015f, phoneTop + phoneH * 0.5f)
+        for (i in 1..3) {
+            drawArc(
+                color = waves.copy(alpha = 0.85f - (i - 1) * 0.22f),
+                startAngle = -55f,
+                sweepAngle = 110f,
+                useCenter = false,
+                topLeft = Offset(arcCenter.x - i * w * 0.05f, arcCenter.y - i * h * 0.11f),
+                size = Size(i * w * 0.1f, i * h * 0.22f),
+                style = Stroke(width = w * 0.012f, cap = StrokeCap.Round),
             )
         }
-
-        // Sun
-        drawCircle(color = accent, radius = w * 0.045f, center = Offset(w * 0.86f, h * 0.14f))
-
-        // Distant blocks (left skyline)
-        drawRect(
-            color = shopLight.copy(alpha = 0.4f),
-            topLeft = Offset(w * 0.06f, h * 0.52f),
-            size = Size(w * 0.07f, h * 0.26f),
-        )
-        drawRect(
-            color = shopLight.copy(alpha = 0.3f),
-            topLeft = Offset(w * 0.16f, h * 0.6f),
-            size = Size(w * 0.05f, h * 0.18f),
-        )
-
-        // Shop body
-        val shopLeft = w * 0.38f
-        val shopRight = w * 0.78f
-        val shopTop = h * 0.34f
-        val shopBottom = h * 0.9f
-        drawRoundRect(
-            color = shop,
-            topLeft = Offset(shopLeft, shopTop),
-            size = Size(shopRight - shopLeft, shopBottom - shopTop),
-            cornerRadius = CornerRadius(w * 0.015f),
-        )
-
-        // Roof slab
-        drawRoundRect(
-            color = shopLight,
-            topLeft = Offset(shopLeft - w * 0.02f, shopTop - h * 0.035f),
-            size = Size(shopRight - shopLeft + w * 0.04f, h * 0.05f),
-            cornerRadius = CornerRadius(w * 0.012f),
-        )
-
-        // Striped awning
-        val awningTop = shopTop + h * 0.08f
-        val awningH = h * 0.09f
-        val stripeCount = 6
-        val stripeW = (shopRight - shopLeft) / stripeCount
-        for (i in 0 until stripeCount) {
-            drawRoundRect(
-                color = if (i % 2 == 0) shop else awningB,
-                topLeft = Offset(shopLeft + i * stripeW, awningTop),
-                size = Size(stripeW, awningH),
-                cornerRadius = CornerRadius(w * 0.008f),
-            )
-        }
-
-        // Window + door
-        drawRoundRect(
-            color = Color.White.copy(alpha = 0.85f),
-            topLeft = Offset(shopLeft + (shopRight - shopLeft) * 0.12f, awningTop + awningH + h * 0.04f),
-            size = Size((shopRight - shopLeft) * 0.35f, h * 0.16f),
-            cornerRadius = CornerRadius(w * 0.01f),
-        )
-        drawRoundRect(
-            color = shopLight,
-            topLeft = Offset(shopLeft + (shopRight - shopLeft) * 0.6f, awningTop + awningH + h * 0.04f),
-            size = Size((shopRight - shopLeft) * 0.22f, h * 0.22f),
-            cornerRadius = CornerRadius(w * 0.01f),
-        )
-
-        // Counter figure (simple person: head + body)
-        val px = w * 0.58f
-        val py = awningTop + awningH + h * 0.02f
-        drawCircle(color = Color.White, radius = w * 0.018f, center = Offset(px, py))
-        drawRoundRect(
-            color = Color.White,
-            topLeft = Offset(px - w * 0.018f, py + w * 0.026f),
-            size = Size(w * 0.036f, h * 0.1f),
-            cornerRadius = CornerRadius(w * 0.012f),
-        )
     }
 }
 
