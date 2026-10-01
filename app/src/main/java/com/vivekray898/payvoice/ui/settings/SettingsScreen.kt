@@ -70,7 +70,7 @@ fun SettingsScreen(
     ) {
         LazyColumn(
             Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(top = Spacing.xs, bottom = Spacing.xxxl),
+            contentPadding = PaddingValues(top = Spacing.xs, bottom = Spacing.xxl),
             verticalArrangement = Arrangement.spacedBy(Spacing.xs),
         ) {
             item(key = "announcements") {

@@ -57,7 +57,7 @@ fun DiagnosticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
     PvScaffold(title = "Diagnostics", onBack = onBack) {
         LazyColumn(
             Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(top = Spacing.xs, bottom = Spacing.xxxl),
+            contentPadding = PaddingValues(top = Spacing.xs, bottom = Spacing.xxl),
             verticalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             item(key = "status") {

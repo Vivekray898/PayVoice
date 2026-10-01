@@ -61,7 +61,7 @@ fun ReliabilityScreen(viewModel: MainViewModel, onBack: () -> Unit) {
     PvScaffold(title = "Reliability", onBack = onBack) {
         LazyColumn(
             Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(top = Spacing.xs, bottom = Spacing.xxxl),
+            contentPadding = PaddingValues(top = Spacing.xs, bottom = Spacing.xxl),
             verticalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             item(key = "summary") {

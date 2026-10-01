@@ -27,26 +27,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.vivekray898.payvoice.ui.theme.Caution
-import com.vivekray898.payvoice.ui.theme.CautionDark
-import com.vivekray898.payvoice.ui.theme.Negative
-import com.vivekray898.payvoice.ui.theme.NegativeDark
-import com.vivekray898.payvoice.ui.theme.Positive
-import com.vivekray898.payvoice.ui.theme.PositiveDark
 import com.vivekray898.payvoice.ui.theme.Spacing
 
-/** Status colors that keep contrast correct in light AND dark. */
+/** Status colors mapped to DESIGN.md roles (Phase 1 bridge; Phase 2 rewrites these). */
 @Composable
-fun statusPositive(): Color =
-    if (MaterialTheme.colorScheme.surface.luminance() > 0.5f) Positive else PositiveDark
+fun statusPositive(): Color = MaterialTheme.colorScheme.primary
 
 @Composable
-fun statusNegative(): Color =
-    if (MaterialTheme.colorScheme.surface.luminance() > 0.5f) Negative else NegativeDark
+fun statusNegative(): Color = MaterialTheme.colorScheme.error
 
 @Composable
-fun statusCaution(): Color =
-    if (MaterialTheme.colorScheme.surface.luminance() > 0.5f) Caution else CautionDark
+fun statusCaution(): Color = MaterialTheme.colorScheme.onSurfaceVariant
 
 /** null = caution/unknown. */
 @Composable

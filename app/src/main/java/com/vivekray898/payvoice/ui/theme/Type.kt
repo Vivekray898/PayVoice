@@ -1,116 +1,114 @@
 package com.vivekray898.payvoice.ui.theme
 
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * Restrained hierarchy (spec §15): big-but-not-decorative titles, prominent
- * amounts via display/headline styles, comfortable body sizes. Weights stay
- * within Normal/SemiBold — nothing shouts.
+ * Type scale from DESIGN.md. Sohne is proprietary — SansSerif stands in at
+ * the reference's weights; the Light display tiers and negative tracking are
+ * the typographic signature and are preserved exactly.
  */
-val Typography = Typography(
-    // Hero headers (wizard welcome, big status).
-    headlineLarge = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Bold,
+private val PvFamily = FontFamily.SansSerif
+
+val PvTypography = Typography(
+    displayLarge = TextStyle(
+        fontFamily = PvFamily,
+        fontWeight = FontWeight.Light,
+        fontSize = 56.sp,
+        lineHeight = 58.sp,
+        letterSpacing = (-1.4).sp,
+    ),
+    displayMedium = TextStyle(
+        fontFamily = PvFamily,
+        fontWeight = FontWeight.Light,
+        fontSize = 48.sp,
+        lineHeight = 55.sp,
+        letterSpacing = (-0.96).sp,
+    ),
+    displaySmall = TextStyle(
+        fontFamily = PvFamily,
+        fontWeight = FontWeight.Light,
         fontSize = 32.sp,
-        lineHeight = 38.sp,
-        letterSpacing = (-0.5).sp,
+        lineHeight = 35.sp,
+        letterSpacing = (-0.64).sp,
     ),
-    // App title / hero status heading.
+    headlineLarge = TextStyle(
+        fontFamily = PvFamily,
+        fontWeight = FontWeight.Light,
+        fontSize = 26.sp,
+        lineHeight = 29.sp,
+        letterSpacing = (-0.26).sp,
+    ),
     headlineMedium = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 24.sp,
-        lineHeight = 30.sp,
-        letterSpacing = (-0.25).sp,
+        fontFamily = PvFamily,
+        fontWeight = FontWeight.Light,
+        fontSize = 22.sp,
+        lineHeight = 24.sp,
+        letterSpacing = (-0.22).sp,
     ),
-    // Screen titles.
     headlineSmall = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 24.sp,
-        lineHeight = 30.sp,
-    ),
-    // Section titles.
-    titleLarge = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.SemiBold,
+        fontFamily = PvFamily,
+        fontWeight = FontWeight.Light,
         fontSize = 20.sp,
-        lineHeight = 26.sp,
+        lineHeight = 28.sp,
+        letterSpacing = (-0.2).sp,
     ),
-    // Card / row titles.
+    titleLarge = TextStyle(
+        fontFamily = PvFamily,
+        fontWeight = FontWeight.Light,
+        fontSize = 18.sp,
+        lineHeight = 25.sp,
+    ),
     titleMedium = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.SemiBold,
+        fontFamily = PvFamily,
+        fontWeight = FontWeight.Normal,
         fontSize = 16.sp,
         lineHeight = 22.sp,
-        letterSpacing = 0.1.sp,
     ),
     titleSmall = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Medium,
-        fontSize = 14.sp,
-        lineHeight = 20.sp,
+        fontFamily = PvFamily,
+        fontWeight = FontWeight.Normal,
+        fontSize = 15.sp,
+        lineHeight = 21.sp,
     ),
-    // Primary content.
     bodyLarge = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = PvFamily,
         fontWeight = FontWeight.Normal,
         fontSize = 16.sp,
-        lineHeight = 24.sp,
-        letterSpacing = 0.3.sp,
+        lineHeight = 22.sp,
     ),
-    // Secondary content.
     bodyMedium = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = PvFamily,
         fontWeight = FontWeight.Normal,
-        fontSize = 14.sp,
-        lineHeight = 20.sp,
-        letterSpacing = 0.2.sp,
+        fontSize = 15.sp,
+        lineHeight = 21.sp,
     ),
-    // Supporting info.
     bodySmall = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Normal,
-        fontSize = 12.sp,
-        lineHeight = 16.sp,
-        letterSpacing = 0.3.sp,
+        fontFamily = PvFamily,
+        fontWeight = FontWeight.Light,
+        fontSize = 13.sp,
+        lineHeight = 18.sp,
+        letterSpacing = (-0.39).sp,
     ),
-    // Buttons / chips / status labels.
     labelLarge = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = PvFamily,
         fontWeight = FontWeight.Medium,
-        fontSize = 14.sp,
-        lineHeight = 20.sp,
+        fontSize = 16.sp,
+        lineHeight = 16.sp,
     ),
     labelMedium = TextStyle(
-        fontFamily = FontFamily.Default,
+        fontFamily = PvFamily,
         fontWeight = FontWeight.Medium,
-        fontSize = 12.sp,
-        lineHeight = 16.sp,
-        letterSpacing = 0.4.sp,
+        fontSize = 14.sp,
+        lineHeight = 14.sp,
     ),
     labelSmall = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Medium,
+        fontFamily = PvFamily,
+        fontWeight = FontWeight.Normal,
         fontSize = 11.sp,
-        lineHeight = 16.sp,
-        letterSpacing = 0.5.sp,
+        lineHeight = 15.sp,
     ),
-)
-
-/** One consistent corner-radius story across the app (4/8/12/16/24). */
-val PayVoiceShapes = Shapes(
-    extraSmall = RoundedCornerShape(4.dp),
-    small = RoundedCornerShape(8.dp),
-    medium = RoundedCornerShape(12.dp),
-    large = RoundedCornerShape(16.dp),
-    extraLarge = RoundedCornerShape(24.dp),
 )
