@@ -40,8 +40,9 @@ import com.vivekray898.payvoice.ui.components.PvEmptyHint
 import com.vivekray898.payvoice.ui.components.PvLoadingRow
 import com.vivekray898.payvoice.ui.components.PvPrimaryButton
 import com.vivekray898.payvoice.ui.components.PvScaffold
+import com.vivekray898.payvoice.ui.components.HeroBanner
 import com.vivekray898.payvoice.ui.components.PvSecondaryButton
-import com.vivekray898.payvoice.ui.components.PvTopBar
+import com.vivekray898.payvoice.ui.components.ScreenHeader
 import com.vivekray898.payvoice.ui.components.SectionHeader
 import com.vivekray898.payvoice.ui.components.StatusPill
 import com.vivekray898.payvoice.ui.components.StatusTone
@@ -66,7 +67,7 @@ fun OwnerRemoteScreen(viewModel: MainViewModel, onBack: () -> Unit) {
     var sheetEmployee by remember { mutableStateOf<EmployeeDevice?>(null) }
 
     PvScaffold(
-        topBar = { PvTopBar(title = "Employees", onBack = onBack) },
+        topBar = {},
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = {
@@ -82,11 +83,13 @@ fun OwnerRemoteScreen(viewModel: MainViewModel, onBack: () -> Unit) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
-                start = Spacing.lg,
-                end = Spacing.lg,
                 bottom = Spacing.huge + inner.calculateBottomPadding(),
             ),
         ) {
+            item(key = "header") {
+                ScreenHeader(title = "Employees", onBack = onBack)
+                HeroBanner(modifier = Modifier.padding(top = Spacing.md))
+            }
             if (employees.isEmpty()) {
                 item(key = "empty") {
                     Column(

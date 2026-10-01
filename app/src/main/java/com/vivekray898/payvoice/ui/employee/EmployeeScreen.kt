@@ -36,9 +36,10 @@ import com.vivekray898.payvoice.ui.components.PvDivider
 import com.vivekray898.payvoice.ui.components.PvEmptyHint
 import com.vivekray898.payvoice.ui.components.PvLoadingRow
 import com.vivekray898.payvoice.ui.components.PvPaymentRow
+import com.vivekray898.payvoice.ui.components.HeroBanner
 import com.vivekray898.payvoice.ui.components.PvScaffold
 import com.vivekray898.payvoice.ui.components.PvSecondaryButton
-import com.vivekray898.payvoice.ui.components.PvTopBar
+import com.vivekray898.payvoice.ui.components.ScreenHeader
 import com.vivekray898.payvoice.ui.components.SectionHeader
 import com.vivekray898.payvoice.ui.components.StatusLine
 import com.vivekray898.payvoice.ui.components.StatusPill
@@ -68,17 +69,20 @@ fun EmployeeScreen(viewModel: MainViewModel, onBack: () -> Unit) {
     val paired = ownDevice?.isActive == true
 
     PvScaffold(
-        topBar = { PvTopBar(title = "This device", onBack = onBack) },
+        topBar = {},
     ) { inner ->
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
-                start = Spacing.lg,
-                end = Spacing.lg,
                 bottom = Spacing.xxl + inner.calculateBottomPadding(),
             ),
             verticalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
+            item(key = "header") {
+                ScreenHeader(title = "This device", onBack = onBack)
+                HeroBanner(modifier = Modifier.padding(top = Spacing.md))
+            }
+
             item(key = "hero") {
                 Surface(
                     shape = MaterialTheme.shapes.extraLarge,

@@ -11,15 +11,23 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.vivekray898.payvoice.ui.theme.Spacing
 
-/** Section label: micro ink-mute with generous top space (Phase 2 rebuild). */
+/**
+ * Section label. Uppercase muted style for the GPay-Business treatment;
+ * pass [dense] = false for the v3-card sections (labelMedium, no caps).
+ */
 @Composable
 fun SectionHeader(
     text: String,
     modifier: Modifier = Modifier,
+    uppercase: Boolean = true,
 ) {
     Text(
-        text = text,
-        style = MaterialTheme.typography.labelMedium,
+        text = if (uppercase) text.uppercase() else text,
+        style = if (uppercase) {
+            MaterialTheme.typography.labelLarge
+        } else {
+            MaterialTheme.typography.labelMedium
+        },
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = modifier
             .fillMaxWidth()

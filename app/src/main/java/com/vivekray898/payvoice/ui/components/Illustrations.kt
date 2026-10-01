@@ -2,8 +2,20 @@ package com.vivekray898.payvoice.ui.components
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material3.Text
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -138,6 +150,70 @@ fun StorefrontHero(modifier: Modifier = Modifier) {
             size = Size(w * 0.036f, h * 0.1f),
             cornerRadius = CornerRadius(w * 0.012f),
         )
+    }
+}
+
+/**
+ * Sub-screen header: floating back chevron + headlineSmall title (no
+ * TopAppBar chrome — the GPay-Business sub-page treatment).
+ */
+@Composable
+fun ScreenHeader(
+    title: String,
+    onBack: (() -> Unit)? = null,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier
+            .fillMaxWidth()
+            .padding(
+                top = androidx.compose.foundation.layout.WindowInsets.statusBars
+                    .asPaddingValues()
+                    .calculateTopPadding() + Spacing.xs,
+                start = Spacing.xs,
+                end = Spacing.xl - Spacing.xs,
+            ),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (onBack != null) {
+            androidx.compose.material3.IconButton(onClick = onBack) {
+                Icon(
+                    Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                    contentDescription = "Back",
+                    tint = MaterialTheme.colorScheme.onBackground,
+                )
+            }
+        }
+        Text(
+            title,
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.padding(start = Spacing.sm),
+        )
+    }
+}
+
+/**
+ * Compact storefront banner for sub-screens: the hero art clipped into a
+ * rounded.xl block (~120dp) with the role/status content below it.
+ */
+@Composable
+fun HeroBanner(modifier: Modifier = Modifier) {
+    androidx.compose.material3.Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = Spacing.lg),
+        shape = MaterialTheme.shapes.extraLarge,
+        color = MaterialTheme.colorScheme.surfaceVariant,
+    ) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(Spacing.xxl * 4 + Spacing.lg) // ~136dp structural
+                .clip(MaterialTheme.shapes.extraLarge),
+        ) {
+            StorefrontHero()
+        }
     }
 }
 

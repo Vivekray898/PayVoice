@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -22,6 +24,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vivekray898.payvoice.service.setup.SetupNotifications
 import com.vivekray898.payvoice.service.tts.AnnouncementSpeaker
 import com.vivekray898.payvoice.ui.MainViewModel
+import com.vivekray898.payvoice.ui.components.IconTile
 import com.vivekray898.payvoice.ui.components.PvScaffold
 import com.vivekray898.payvoice.ui.components.PvSecondaryButton
 import com.vivekray898.payvoice.ui.components.PvTopBar
@@ -104,8 +107,6 @@ fun ReliabilityScreen(viewModel: MainViewModel, onBack: () -> Unit) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
-                start = Spacing.lg,
-                end = Spacing.lg,
                 bottom = Spacing.xxl + inner.calculateBottomPadding(),
             ),
         ) {
@@ -135,7 +136,14 @@ fun ReliabilityScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(Spacing.lg),
                     ) {
-                        StatusIcon(ok = check.ok)
+                        IconTile(
+                            icon = Icons.Filled.Check,
+                            container = MaterialTheme.colorScheme.primaryContainer.copy(
+                                alpha = if (check.ok) 0.5f else 0.25f,
+                            ),
+                            tile = Spacing.xxl, // 40dp structural
+                            iconSize = Spacing.xl - Spacing.xs,
+                        )
                         Column(Modifier.weight(1f)) {
                             Text(check.title, style = MaterialTheme.typography.titleMedium)
                             Text(
