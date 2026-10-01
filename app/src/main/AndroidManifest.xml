@@ -12,11 +12,6 @@
          to reading GPay payment notifications — that is Notification Listener
          access, and GPay is the only notification source. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <!-- Restore the daily retention job after reboot (smallest supported
-         mechanism). NotificationListenerService re-binds via the OS; the boot
-         receiver only re-primes pipeline state. -->
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-
     <!-- Package visibility (API 30+): detect the installed payment app for the
          diagnostics/reliability screens without broad QUERY_ALL_PACKAGES.
          UPI apps only — GPay is the only capture source. -->
@@ -70,16 +65,6 @@
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
         </service>
-
-        <!-- Boot: re-prime pipeline state + re-schedule retention. The
-             notification listener re-binds via the OS without this. -->
-        <receiver
-            android:name=".service.sms.PayVoiceBootReceiver"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-            </intent-filter>
-        </receiver>
 
         <!-- Startup perf: WorkManager is initialized on demand via
              Configuration.Provider; drop the eager main-thread initializer. -->
