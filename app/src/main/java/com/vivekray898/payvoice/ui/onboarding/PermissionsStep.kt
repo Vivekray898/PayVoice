@@ -5,7 +5,10 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
@@ -13,15 +16,11 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vivekray898.payvoice.service.setup.SetupNotifications
 import com.vivekray898.payvoice.ui.MainViewModel
+import com.vivekray898.payvoice.ui.components.PvPrimaryButton
 
 /**
- * Wizard step 4 — POST_NOTIFICATIONS (PayVoice's own notifications, needed so
- * the wake/announcement notifications are legal on API 33+).
- *
- * Bug 1 fix: auto-advances when the grant lands. The activity result
- * callback AND the shared [PermissionAutoAdvance] (fed by the ON_RESUME
- * status refresh) both cover the return-from-dialog path, so the user never
- * has to tap "Skip for now" after granting.
+ * Wizard step: POST_NOTIFICATIONS. Auto-advances on grant (the activity
+ * result callback refreshes status; PermissionStep fires the transition).
  */
 @Composable
 fun PermissionsStep(viewModel: MainViewModel, onBack: () -> Unit, onNext: () -> Unit) {
@@ -29,10 +28,10 @@ fun PermissionsStep(viewModel: MainViewModel, onBack: () -> Unit, onNext: () -> 
     val status by viewModel.status.collectAsStateWithLifecycle()
     val granted = status?.notificationsEnabled == true
 
-    PermissionAutoAdvance(
+    PermissionStep(
         status = status,
         isGranted = { it?.notificationsEnabled == true },
-        onNext = onNext,
+        onContinue = onNext,
     )
 
     val launcher = rememberLauncherForActivityResult(
@@ -42,26 +41,34 @@ fun PermissionsStep(viewModel: MainViewModel, onBack: () -> Unit, onNext: () -> 
         viewModel.refreshStatus()
     }
 
-    WizardPage(
-        icon = Icons.Filled.NotificationsActive,
-        heading = "Allow announcements",
+    StepScaffold(
+        step = WizardStep.NOTIF_PERMISSION,
+        onBack = onBack,
+        icon = Icons.Filled.Notifications,
+        title = "Allow announcements",
         body = "Android needs your permission to show the notification that " +
             "keeps announcements working in the background.",
-        primaryLabel = if (granted) "Continue" else "Allow notifications",
-        onPrimary = {
-            SetupNotifications.ensureChannels(context)
-            if (Build.VERSION.SDK_INT >= 33 &&
-                ContextCompat.checkSelfPermission(
-                    context, Manifest.permission.POST_NOTIFICATIONS,
-                ) != android.content.pm.PackageManager.PERMISSION_GRANTED
-            ) {
-                launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
-            } else {
-                // Already granted (or API < 33): "Continue" continues.
-                onNext()
+        primaryButton = {
+            PvPrimaryButton(
+                text = if (granted) "Continue" else "Allow notifications",
+                onClick = {
+                    SetupNotifications.ensureChannels(context)
+                    if (Build.VERSION.SDK_INT >= 33 &&
+                        ContextCompat.checkSelfPermission(
+                            context, Manifest.permission.POST_NOTIFICATIONS,
+                        ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+                    ) {
+                        launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    } else {
+                        onNext()
+                    }
+                },
+            )
+        },
+        secondaryAction = {
+            TextButton(onClick = onNext) {
+                Text("Skip for now", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         },
-        linkLabel = "Skip for now",
-        onLink = onNext,
     )
 }

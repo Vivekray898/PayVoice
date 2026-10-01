@@ -1,14 +1,24 @@
 package com.vivekray898.payvoice.ui.onboarding
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -16,85 +26,73 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vivekray898.payvoice.core.remote.DeviceRole
 import com.vivekray898.payvoice.ui.MainViewModel
+import com.vivekray898.payvoice.ui.components.PvScaffold
 import com.vivekray898.payvoice.ui.theme.Spacing
 
 /**
- * Setup wizard (premium UI v2, Phase 2): ONE decision per screen, a progress
- * bar + back arrow, and a final ready screen. Replaces the flat checklist.
+ * Setup wizard (DESIGN.md rebuild, Phase 3a): one decision per screen, a
+ * 4dp progress bar, bottom-anchored pill actions, and grant auto-advance.
  *
  * State: step + local role copy are screen-local [rememberSaveable]; the
- * ROLE SELECTION ITSELF is persisted through the EXISTING ViewModel methods
- * (setRole at the Role step, completeOnboarding at Done) — the same settings
- * store Home reads, so the wizard's choice sticks. Grant detection:
- * MainActivity.refreshStatus() on every ON_RESUME feeds the status flows this
- * screen observes, and the shared PermissionAutoAdvance fires each step's
- * false→true grant transition exactly once.
+ * ROLE SELECTION is persisted through the existing setRole at the Role
+ * step, completion through completeOnboarding at Done. Permission steps
+ * auto-advance via [PermissionStep] (the false-to-true grant transition,
+ * fed by MainActivity.onResume refreshStatus) — never by Skip.
  */
 @Composable
 fun OnboardingScreen(viewModel: MainViewModel) {
     var step by rememberSaveable { mutableIntStateOf(WizardStep.WELCOME) }
     var role by rememberSaveable { mutableStateOf<DeviceRole?>(null) }
-
-    // Read-only view of the persisted settings: used for defaults (device
-    // name) and to steer the wizard when a role already exists.
     val settings by viewModel.settings.collectAsStateWithLifecycle()
 
-    val onBack: () -> Unit = {
-        step = (step - 1).coerceAtLeast(WizardStep.WELCOME)
-    }
+    val onBack: () -> Unit = { step = (step - 1).coerceAtLeast(WizardStep.WELCOME) }
     val onNext: () -> Unit = { step += 1 }
 
-    Column(Modifier.padding(vertical = Spacing.md)) {
-        if (step != WizardStep.WELCOME && step != WizardStep.READY) {
-            WizardHeader(step = step, onBack = onBack)
-        }
-        when (step) {
-            WizardStep.WELCOME -> WelcomeStep(onNext = onNext)
-            WizardStep.ROLE -> RoleStep(
-                onRole = { chosen ->
-                    // Bug 2 fix: persist through the ViewModel (same settings
-                    // store Home reads) so the role survives onboarding; the
-                    // driver-local copy only steers wizard branching.
-                    role = chosen
-                    viewModel.setRole(
-                        chosen,
-                        settings.deviceName.ifBlank {
-                            android.os.Build.MODEL ?: if (chosen == DeviceRole.OWNER) "Owner" else "Employee"
-                        },
-                    )
-                    onNext()
-                },
-            )
-            WizardStep.ACCESS -> NotificationAccessStep(
-                viewModel = viewModel,
-                isEmployee = role == DeviceRole.EMPLOYEE,
-                onBack = onBack,
-                onNext = onNext,
-            )
-            WizardStep.NOTIF_PERMISSION -> PermissionsStep(
-                viewModel = viewModel,
-                onBack = onBack,
-                onNext = onNext,
-            )
-            WizardStep.BATTERY -> BatteryStep(
-                viewModel = viewModel,
-                onBack = onBack,
-                onNext = onNext,
-            )
-            WizardStep.READY -> ReadyStep(
-                viewModel = viewModel,
-                onDone = { viewModel.completeOnboarding() },
-            )
-        }
+    when (step) {
+        WizardStep.WELCOME -> WelcomeStep(onNext = onNext)
+        WizardStep.ROLE -> RoleStep(
+            onRole = { chosen ->
+                role = chosen
+                viewModel.setRole(
+                    chosen,
+                    settings.deviceName.ifBlank {
+                        android.os.Build.MODEL ?: if (chosen == DeviceRole.OWNER) "Owner" else "Employee"
+                    },
+                )
+                onNext()
+            },
+        )
+        WizardStep.ACCESS -> NotificationAccessStep(
+            viewModel = viewModel,
+            isEmployee = role == DeviceRole.EMPLOYEE,
+            onBack = onBack,
+            onNext = onNext,
+        )
+        WizardStep.NOTIF_PERMISSION -> PermissionsStep(
+            viewModel = viewModel,
+            onBack = onBack,
+            onNext = onNext,
+        )
+        WizardStep.BATTERY -> BatteryStep(
+            viewModel = viewModel,
+            onBack = onBack,
+            onNext = onNext,
+        )
+        WizardStep.READY -> ReadyStep(
+            viewModel = viewModel,
+            onDone = { viewModel.completeOnboarding() },
+        )
     }
 }
 
 /** Numbered steps for the progress indicator (welcome/ready excluded). */
-private object WizardStep {
+internal object WizardStep {
     const val WELCOME = 0
     const val ROLE = 1
     const val ACCESS = 2
@@ -104,46 +102,107 @@ private object WizardStep {
 
     /** The highest step number shown as "Step N of 4" (role..battery = 1..4). */
     const val LAST_NUMBERED = 4
-
-    fun label(step: Int): String = when (step) {
-        ROLE -> "Step 1 of 4"
-        ACCESS -> "Step 2 of 4"
-        NOTIF_PERMISSION -> "Step 3 of 4"
-        BATTERY -> "Step 4 of 4"
-        else -> ""
-    }
-
-    fun progress(step: Int): Float = when (step) {
-        ROLE -> 0.25f
-        ACCESS -> 0.5f
-        NOTIF_PERMISSION -> 0.75f
-        BATTERY -> 1f
-        else -> 0f
-    }
 }
 
+/**
+ * The wizard page shell: back arrow, 4dp progress bar + "Step N of M"
+ * label, icon circle, title, body, and the step's actions bottom-anchored
+ * (primary pill + optional secondary), always visible without scrolling.
+ */
 @Composable
-private fun WizardHeader(step: Int, onBack: () -> Unit) {
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .padding(horizontal = Spacing.lg),
-    ) {
-        IconButton(onClick = onBack) {
-            Icon(
-                Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = "Back",
-                tint = MaterialTheme.colorScheme.onSurface,
+internal fun StepScaffold(
+    step: Int,
+    onBack: (() -> Unit)?,
+    icon: ImageVector,
+    title: String,
+    body: String,
+    primaryButton: @Composable () -> Unit,
+    secondaryAction: (@Composable () -> Unit)? = null,
+    content: (@Composable () -> Unit)? = null,
+) {
+    PvScaffold(
+        topBar = {
+            if (onBack != null) {
+                androidx.compose.foundation.layout.Row(
+                    Modifier.fillMaxWidth(),
+                ) {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = MaterialTheme.colorScheme.onBackground,
+                        )
+                    }
+                }
+            }
+        },
+        bottomBar = {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = Spacing.lg)
+                    .padding(bottom = Spacing.lg),
+            ) {
+                primaryButton()
+                if (secondaryAction != null) {
+                    Spacer(Modifier.height(Spacing.sm))
+                    secondaryAction()
+                }
+            }
+        },
+    ) { inner ->
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(inner)
+                .padding(horizontal = Spacing.xl),
+        ) {
+            if (step in WizardStep.ROLE..WizardStep.BATTERY) {
+                LinearProgressIndicator(
+                    progress = { step.toFloat() / WizardStep.LAST_NUMBERED },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(Spacing.xs), // structural: 4dp track
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                )
+                Spacer(Modifier.height(Spacing.sm))
+                Text(
+                    text = "Step $step of ${WizardStep.LAST_NUMBERED}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Spacer(Modifier.height(Spacing.xxl))
+
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primaryContainer,
+                modifier = Modifier.size(Spacing.huge + Spacing.sm), // 72dp structural
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        icon,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(Spacing.xxl), // 32dp structural
+                    )
+                }
+            }
+            Spacer(Modifier.height(Spacing.xl))
+
+            Text(
+                text = title,
+                style = MaterialTheme.typography.headlineMedium,
+                color = MaterialTheme.colorScheme.onBackground,
             )
+            Spacer(Modifier.height(Spacing.md))
+            Text(
+                text = body,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            content?.invoke()
         }
-        LinearProgressIndicator(
-            progress = { WizardStep.progress(step) },
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Text(
-            WizardStep.label(step),
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }
