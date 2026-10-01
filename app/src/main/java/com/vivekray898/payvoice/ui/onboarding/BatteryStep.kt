@@ -17,7 +17,13 @@ import com.vivekray898.payvoice.ui.MainViewModel
 fun BatteryStep(viewModel: MainViewModel, onBack: () -> Unit, onNext: () -> Unit) {
     val status by viewModel.status.collectAsStateWithLifecycle()
     val exempt = status?.batteryExempt == true
-    LaunchedEffect(exempt) { if (exempt) onNext() }
+    // Bug 1 fix: shared auto-advance (false→true only) — composed-exempt no
+    // longer auto-advances (it skipped the step on back-navigation).
+    PermissionAutoAdvance(
+        status = status,
+        isGranted = { it?.batteryExempt == true },
+        onNext = onNext,
+    )
     val context = LocalContext.current
 
     WizardPage(

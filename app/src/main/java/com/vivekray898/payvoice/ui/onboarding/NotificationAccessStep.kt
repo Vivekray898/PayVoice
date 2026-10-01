@@ -42,7 +42,14 @@ fun NotificationAccessStep(
     if (!isEmployee) {
         val status by viewModel.status.collectAsStateWithLifecycle()
         val granted = status?.listenerEnabled == true
-        LaunchedEffect(granted) { if (granted) onNext() }
+        // Bug 1 fix: shared auto-advance (false→true only) instead of a raw
+        // LaunchedEffect that also fires when the step is composed already-granted
+        // (which skipped steps on back-navigation).
+        PermissionAutoAdvance(
+            status = status,
+            isGranted = { it?.listenerEnabled == true },
+            onNext = onNext,
+        )
         var showWhy by rememberSaveable { mutableStateOf(false) }
         val context = LocalContext.current
         WizardPage(
@@ -70,6 +77,8 @@ fun NotificationAccessStep(
     } else {
         val joinState by viewModel.joinState.collectAsStateWithLifecycle()
         var code by rememberSaveable { mutableStateOf("") }
+        // Join is an async one-shot (not a resumed system setting): keep the
+        // LaunchedEffect on the JoinState itself.
         LaunchedEffect(joinState) {
             if (joinState is MainViewModel.JoinState.Success) onNext()
         }
