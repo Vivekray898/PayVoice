@@ -10,7 +10,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -28,6 +33,7 @@ import com.vivekray898.payvoice.ui.theme.Negative
 import com.vivekray898.payvoice.ui.theme.NegativeDark
 import com.vivekray898.payvoice.ui.theme.Positive
 import com.vivekray898.payvoice.ui.theme.PositiveDark
+import com.vivekray898.payvoice.ui.theme.Spacing
 
 /** Status colors that keep contrast correct in light AND dark. */
 @Composable
@@ -58,13 +64,44 @@ fun StatusDot(ok: Boolean?, modifier: Modifier = Modifier) {
     )
 }
 
+/**
+ * Status icon: check / cross / warning in a tinted circle — the premium
+ * replacement for the bare status dot.
+ */
+@Composable
+fun StatusIcon(ok: Boolean?, modifier: Modifier = Modifier) {
+    val color = when (ok) {
+        true -> statusPositive()
+        false -> statusNegative()
+        null -> statusCaution()
+    }
+    Box(
+        modifier
+            .size(22.dp)
+            .clip(CircleShape)
+            .background(color.copy(alpha = 0.14f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = when (ok) {
+                true -> Icons.Filled.Check
+                false -> Icons.Filled.Close
+                null -> Icons.Filled.Warning
+            },
+            contentDescription = null,
+            tint = color,
+            modifier = Modifier.size(14.dp),
+        )
+    }
+}
+
 @Composable
 fun StatusLine(ok: Boolean?, label: String) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
-        StatusDot(ok)
+        StatusIcon(ok)
         Text(label, style = MaterialTheme.typography.bodyMedium)
     }
 }
