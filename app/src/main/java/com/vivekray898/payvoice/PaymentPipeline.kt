@@ -51,6 +51,8 @@ class PaymentPipeline(
         com.vivekray898.payvoice.core.remote.DeviceRole.UNSET
     },
     private val remoteEnabledProvider: () -> Boolean = { true },
+    /** App context for the wake-up notification; null-safe for unit contexts. */
+    private val appContext: android.content.Context? = null,
 ) {
     init {
         // Ignored-sender logging follows the build's debuggability (set once;
@@ -318,6 +320,24 @@ class PaymentPipeline(
         // on utterance completion (spec §15). If the engine is still starting,
         // the text is parked and spoken on readiness — the payment is never
         // dropped after dedup has consumed the fingerprint.
+        // Post a HIGH-priority notification with sound. This is what forces Android
+        // to wake from Doze / screen-lock so the TTS engine can run. Without it, the
+        // announcement is deferred until the user manually unlocks.
+        val posted = appContext?.let {
+            com.vivekray898.payvoice.service.tts.PaymentAnnouncementNotifier.post(
+                it,
+                announcement,
+            )
+        } ?: false
+        if (isDebugBuild) {
+            android.util.Log.d("PaymentPipeline", "wake-up notification posted=$posted")
+        }
+        appContext?.let {
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(
+                { com.vivekray898.payvoice.service.tts.PaymentAnnouncementNotifier.cancel(it) },
+                5_000L,
+            )
+        }
         speaker.speakWhenReady(announcement)
 
         // 5b. Remote fan-out (spec §8): strictly AFTER the local TTS request,

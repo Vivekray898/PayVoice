@@ -59,6 +59,7 @@ class PayVoiceApp : Application(), Configuration.Provider {
         // and idempotent; safe to call on every cold start.
         PaymentNotification.ensureChannel(this)
         com.vivekray898.payvoice.service.tts.TtsFallbackNotifier.ensureChannel(this)
+        com.vivekray898.payvoice.service.tts.PaymentAnnouncementNotifier.ensureChannel(this)
 
         // Off-main: schedule the daily retention pass (WorkManager is on-demand
         // initialized, so this must run after onCreate starts). No other startup

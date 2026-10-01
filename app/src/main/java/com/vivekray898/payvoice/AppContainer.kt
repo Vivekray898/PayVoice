@@ -88,6 +88,7 @@ class AppContainer(private val appContext: Context) {
             remoteSender = remoteSender,
             roleProvider = { settings.settings.value.role },
             remoteEnabledProvider = { settings.settings.value.remoteAnnouncementsEnabled },
+            appContext = appContext,
         )
     }
 }

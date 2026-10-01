@@ -104,6 +104,12 @@ class PayVoiceMessagingService : FirebaseMessagingService() {
                 )
                 val ttsRequestedAt = System.currentTimeMillis()
                 stageLog(eid, stage = "tts_requested", extra = "validate→ttsRequest=${ttsRequestedAt - receivedAt}ms")
+                // Wake-up notification (HIGH + sound): forces Android out of Doze /
+                // screen-lock so the TTS engine can run. Cancelled shortly after.
+                com.vivekray898.payvoice.service.tts.PaymentAnnouncementNotifier.post(
+                    applicationContext,
+                    "Payment announcement incoming",
+                )
                 container.speaker.speakWhenReady(text)
 
                 // 5. History AFTER the TTS request (persistence off the
@@ -136,6 +142,10 @@ class PayVoiceMessagingService : FirebaseMessagingService() {
                 android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(
                     { PaymentNotification.cancel(applicationContext) },
                     4_000L,
+                )
+                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(
+                    { com.vivekray898.payvoice.service.tts.PaymentAnnouncementNotifier.cancel(applicationContext) },
+                    5_000L,
                 )
             }.onFailure {
                 stageLog(eid, stage = "failed", reason = it.javaClass.simpleName)
