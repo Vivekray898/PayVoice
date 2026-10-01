@@ -27,20 +27,4 @@ fun SectionHeader(
     )
 }
 
-/**
- * Minimal settings-style row body: token-built minimum touch height
- * (32+16+8 = 56dp, structural — the 48dp target plus breathing room).
- */
-@Composable
-fun PvRowBody(
-    modifier: Modifier = Modifier,
-    content: @Composable ColumnScope.() -> Unit,
-) {
-    Column(
-        modifier
-            .fillMaxWidth()
-            .heightIn(min = Spacing.xxl + Spacing.lg + Spacing.sm)
-            .padding(horizontal = Spacing.lg, vertical = Spacing.md),
-        content = content,
-    )
-}
+

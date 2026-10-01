@@ -103,5 +103,6 @@ Run after every UI change — output must be empty:
 grep -rnE "\.dp\b|Color\(0x|\.sp\b" app/src/main/java/com/vivekray898/payvoice/ui/ \
   --include="*.kt" \
   | grep -vE "ui/theme/(Color|Spacing|Shape|Type|Theme)\.kt" \
+  | grep -v "import androidx.compose.ui.unit.dp" \
   | grep -v "// structural"
 ```
