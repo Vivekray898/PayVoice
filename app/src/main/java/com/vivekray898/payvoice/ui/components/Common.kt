@@ -130,8 +130,8 @@ fun SectionCard(
 ) {
     ElevatedCard(modifier = modifier.fillMaxWidth()) {
         Column(
-            Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            Modifier.padding(Spacing.lg),
+            verticalArrangement = Arrangement.spacedBy(Spacing.md),
         ) {
             if (title != null) {
                 Text(

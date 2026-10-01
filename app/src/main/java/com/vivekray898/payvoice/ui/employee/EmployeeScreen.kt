@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -30,6 +31,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vivekray898.payvoice.core.parser.AmountExtractor
 import com.vivekray898.payvoice.service.setup.SetupNotifications
 import com.vivekray898.payvoice.ui.MainViewModel
+import com.vivekray898.payvoice.ui.components.PvEmptyHint
+import com.vivekray898.payvoice.ui.components.PvLoadingRow
 import com.vivekray898.payvoice.ui.components.PvPaymentRow
 import com.vivekray898.payvoice.ui.components.PvScaffold
 import com.vivekray898.payvoice.ui.components.PvSection
@@ -161,10 +164,9 @@ fun EmployeeScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                         val history by viewModel.history.collectAsStateWithLifecycle()
                         val last = history.firstOrNull()
                         if (last == null) {
-                            Text(
-                                "Nothing yet — payments announced here appear below.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            PvEmptyHint(
+                                text = "Nothing yet — payments announced here appear below.",
+                                icon = Icons.Filled.Notifications,
                             )
                         } else {
                             PvPaymentRow(
@@ -232,11 +234,7 @@ fun EmployeeScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                     modifier = Modifier.fillMaxWidth(),
                 )
                 when (val s = joinState) {
-                    is MainViewModel.JoinState.Joining -> Text(
-                        "Connecting…",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    is MainViewModel.JoinState.Joining -> PvLoadingRow("Connecting…")
                     is MainViewModel.JoinState.Success -> Text(
                         "Connected!",
                         style = MaterialTheme.typography.bodyMedium,

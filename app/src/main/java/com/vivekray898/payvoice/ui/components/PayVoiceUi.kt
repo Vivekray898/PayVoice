@@ -169,7 +169,7 @@ fun StatusPill(text: String, ok: Boolean?, modifier: Modifier = Modifier) {
         Text(
             text,
             style = MaterialTheme.typography.labelMedium,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.xs),
         )
     }
 }
@@ -269,9 +269,9 @@ fun PvEmptyState(
     Column(
         modifier
             .fillMaxWidth()
-            .padding(horizontal = 32.dp, vertical = 32.dp),
+            .padding(horizontal = Spacing.xxl, vertical = Spacing.xxl),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
         if (icon != null) {
             Icon(
@@ -289,7 +289,7 @@ fun PvEmptyState(
             textAlign = TextAlign.Center,
         )
         if (actionLabel != null && onAction != null) {
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(Spacing.xs))
             Button(onClick = onAction) { Text(actionLabel) }
         }
     }
@@ -300,12 +300,43 @@ fun PvLoadingRow(label: String) {
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(vertical = 14.dp),
+            .padding(vertical = Spacing.md),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
         CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
         Text(label, style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+/**
+ * Compact inline empty hint inside a card: muted icon + one line. For the
+ * full-height empty state use [PvEmptyState] instead.
+ */
+@Composable
+fun PvEmptyHint(
+    text: String,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+) {
+    Row(
+        modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+    ) {
+        if (icon != null) {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+        Text(
+            text,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -402,9 +433,9 @@ fun PvPaymentRow(amountText: String, source: String?, sender: String?, timeText:
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(vertical = 10.dp),
+            .padding(vertical = Spacing.sm),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
         Surface(
             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
@@ -414,7 +445,7 @@ fun PvPaymentRow(amountText: String, source: String?, sender: String?, timeText:
             Text(
                 "₹",
                 style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(10.dp),
+                modifier = Modifier.padding(Spacing.sm),
             )
         }
         Column(Modifier.weight(1f)) {

@@ -10,7 +10,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -27,6 +29,7 @@ import com.vivekray898.payvoice.core.remote.PayVoiceAuth
 import com.vivekray898.payvoice.core.remote.RemoteEventSender
 import com.vivekray898.payvoice.ui.MainViewModel
 import com.vivekray898.payvoice.ui.components.PvDivider
+import com.vivekray898.payvoice.ui.components.PvEmptyHint
 import com.vivekray898.payvoice.ui.components.PvScaffold
 import com.vivekray898.payvoice.ui.components.PvSection
 import com.vivekray898.payvoice.ui.components.StatusLine
@@ -127,10 +130,9 @@ fun DiagnosticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
             item(key = "captures") {
                 PvSection(title = "Captured notifications (newest first)", carded = true) {
                     if (captured.isEmpty()) {
-                        Text(
-                            "None yet.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        PvEmptyHint(
+                            text = "None yet — captured notifications will appear here.",
+                            icon = Icons.Filled.Notifications,
                         )
                     } else {
                         captured.take(15).forEachIndexed { index, c ->
@@ -160,10 +162,9 @@ fun DiagnosticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
             item(key = "logs") {
                 PvSection(title = "System log (last 200)", carded = true) {
                     if (logs.isEmpty()) {
-                        Text(
-                            "No events yet.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        PvEmptyHint(
+                            text = "No events yet — system log entries will appear here.",
+                            icon = Icons.Filled.List,
                         )
                     } else {
                         CodeBlock(logs.map { "%tT [%s] %s".format(it.atMs, it.tag, it.message) })
