@@ -1,4 +1,4 @@
-# PayVoice — UI Review (DESIGN.md rebuild v3, 2026-10-01)
+# PayVoice — UI Review (DESIGN.md rebuild v3 + GPay-Business Home, 2026-10-02)
 
 Scope: full UI rebuild from `DESIGN.md` — not a re-style. Theme tokens,
 primitives, and every screen are direct translations of the reference
@@ -6,6 +6,36 @@ system; the v2-era component layer was replaced. One commit per phase:
 `ccef6a9` (theme) → `6e5d55b` (primitives) → `efeea2b`/`c358132`/
 `328295d`/`cd51696`/`29a6dfe`/`d4918a4`/`c25a153` (screens) →
 `4505923` (compat removal) → docs + screenshots (`e019bc2`).
+
+## GPay-Business pass (2026-10-02, commits `311d3d6` → `4584f9e`)
+
+Home was rebuilt from scratch to the reference structure (no admin-panel
+action rows):
+
+1. Custom inline app bar — business/device name + chevron affordance +
+   avatar initial, over an EMPTY scaffold topBar so the hero bleeds
+   under the status bar.
+2. Full-bleed ~200dp Canvas storefront illustration (flat vector shapes:
+   sky wash, clouds, sun, distant blocks, shop with striped awning,
+   window/door, counter figure — all scheme-role colors).
+3. "Hello, {name}" at displaySmall + pending/all-set subline.
+4. Action card (only when needed): rounded.xl surfaceVariant card,
+   bell illustration with lemon badge, inline TextButton CTA — verified
+   in both states (granted → no card; revoked → "Turn on now").
+5. Numeric block: today's total via MoneyText at displaySmall (tabular)
+   + "Received today" + payments empty-state illustration or recent list
+   + pill "Show all payments" (disabled when empty).
+6. Quick links: four 56dp rounded-square IconTiles (QR / Employees /
+   Settings / Support) with ≥72dp tap height.
+7. Footer = nav-bar inset + 24dp.
+
+Settings adopts the reference treatment: displaySmall headline with a
+floating back chevron (no TopAppBar, no 3-dot menu), uppercase muted
+section headers, 72dp rows with 40dp icon tiles. Owner/Employee gain
+ScreenHeader + a clipped HeroBanner. Diagnostics/Reliability get the
+light treatment (20dp sides, uppercase headers, icon tiles) and stay
+dense. Diagnostics/Reliability moved under Settings → Support (Home's
+quick links replace the Manage stack, matching the reference).
 
 ## Design language
 
