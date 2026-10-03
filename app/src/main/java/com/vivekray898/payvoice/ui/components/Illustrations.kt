@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material3.Text
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -33,6 +32,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.vivekray898.payvoice.ui.theme.Lemon
@@ -60,6 +63,7 @@ fun StorefrontHero(modifier: Modifier = Modifier) {
     val phoneScreen = MaterialTheme.colorScheme.surface
     val waves = MaterialTheme.colorScheme.primary
     val rupee = MaterialTheme.colorScheme.onPrimaryContainer
+    val rupeeMeasurer = rememberTextMeasurer()
     Canvas(modifier = modifier.fillMaxSize()) {
         val w = size.width
         val h = size.height
@@ -88,27 +92,21 @@ fun StorefrontHero(modifier: Modifier = Modifier) {
             cornerRadius = CornerRadius(phoneW * 0.16f),
         )
 
-        // Rupee symbol inside the screen (two strokes + the crossbar)
+        // Rupee symbol inside the screen — the real glyph, so it reads as ₹
+        // instead of an approximation drawn from three strokes.
         val cx = phoneLeft + phoneW / 2
         val cy = phoneTop + phoneH * 0.42f
-        val s = phoneW * 0.16f
-        drawLine(
-            color = rupee,
-            start = Offset(cx - s, cy - s),
-            end = Offset(cx + s, cy - s),
-            strokeWidth = s * 0.28f,
+        val rupeeLayout = rupeeMeasurer.measure(
+            text = "₹",
+            style = TextStyle(
+                color = rupee,
+                fontSize = (phoneW * 0.52f).toSp(),
+                fontWeight = FontWeight.Bold,
+            ),
         )
-        drawLine(
-            color = rupee,
-            start = Offset(cx - s, cy),
-            end = Offset(cx + s * 0.2f, cy),
-            strokeWidth = s * 0.28f,
-        )
-        drawLine(
-            color = rupee,
-            start = Offset(cx - s, cy + s * 0.15f),
-            end = Offset(cx + s, cy + s * 1.4f),
-            strokeWidth = s * 0.28f,
+        drawText(
+            textLayoutResult = rupeeLayout,
+            topLeft = Offset(cx - rupeeLayout.size.width / 2f, cy - rupeeLayout.size.height / 2f),
         )
 
         // Sound-wave arcs (three concentric, right of the phone)
@@ -256,37 +254,4 @@ fun BellIllustration(
     }
 }
 
-/** Centered empty-state art for "no payments yet": coin + awning mark. */
-@Composable
-fun PaymentsEmptyIllustration(modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier.size(Spacing.huge + Spacing.lg), // 80dp structural
-        contentAlignment = Alignment.Center,
-    ) {
-        Surface(
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
-            modifier = Modifier.fillMaxSize(),
-        ) {}
-        val coin = MaterialTheme.colorScheme.primary
-        val coinInner = MaterialTheme.colorScheme.primaryContainer
-        val awning = MaterialTheme.colorScheme.primary.copy(alpha = 0.75f)
-        Canvas(Modifier.fillMaxSize()) {
-            val c = center
-            val r = size.minDimension * 0.16f
-            drawCircle(color = coin, radius = r, center = Offset(c.x, c.y - size.height * 0.12f))
-            drawCircle(
-                color = coinInner,
-                radius = r * 0.6f,
-                center = Offset(c.x, c.y - size.height * 0.12f),
-            )
-            val awningW = size.width * 0.34f
-            drawRoundRect(
-                color = awning,
-                topLeft = Offset(c.x - awningW / 2, c.y + size.height * 0.02f),
-                size = Size(awningW, size.height * 0.1f),
-                cornerRadius = CornerRadius(awningW * 0.2f),
-            )
-        }
-    }
-}
+
