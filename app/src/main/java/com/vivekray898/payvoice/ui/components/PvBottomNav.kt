@@ -7,7 +7,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.People
-import androidx.compose.material.icons.filled.ReceiptLong
+import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -18,8 +18,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import com.vivekray898.payvoice.R
 import com.vivekray898.payvoice.core.remote.DeviceRole
 import com.vivekray898.payvoice.ui.theme.PvElevation
@@ -54,7 +56,7 @@ fun PvBottomNav(
             PvTab.LIST,
             // PlaylistPlay read as "play media", not "payments". A receipt is
             // the same idea as the history screen behind it.
-            Icons.Filled.ReceiptLong,
+            Icons.AutoMirrored.Filled.ReceiptLong,
             stringResource(if (isOwner) R.string.nav_payments else R.string.nav_recent),
         ),
         TabSpec(
@@ -92,12 +94,28 @@ fun PvBottomNav(
                         )
                     }
                 },
-                label = { Text(spec.label, style = MaterialTheme.typography.labelSmall) },
+                label = {
+                    Text(
+                        spec.label,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = if (selected == spec.tab) {
+                            FontWeight.SemiBold
+                        } else {
+                            FontWeight.Normal
+                        },
+                    )
+                },
                 alwaysShowLabel = true,
                 colors = NavigationBarItemDefaults.colors(
                     selectedIconColor = MaterialTheme.colorScheme.primary,
                     selectedTextColor = MaterialTheme.colorScheme.primary,
-                    indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                    // No pill behind the active tab. A filled lavender bubble
+                    // under every selected destination is Material's default,
+                    // not this brand's: DESIGN.md gives `{rounded.pill}` to
+                    // buttons and tag pills, and indigo is reserved for one
+                    // filled element per band. Tint plus a semibold label
+                    // carries the state without a third shape on screen.
+                    indicatorColor = Color.Transparent,
                     unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
                     unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 ),

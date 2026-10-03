@@ -2,18 +2,20 @@ package com.vivekray898.payvoice.ui.components
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -27,12 +29,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import com.vivekray898.payvoice.ui.theme.Spacing
 
 /**
  * The controls the tab screens needed but had been calling Material's
- * widgets for directly: the header icon button, the pill FAB, the choice
- * chip, the labelled slider and the step progress bar.
+ * widgets for directly: the header icon button, the segmented choice group,
+ * the labelled slider and the step progress bar.
  *
  * Each one previously existed as a raw `IconButton(` / `ExtendedFloating…Button(` /
  * `FilterChip(` / `Slider(` / `LinearProgressIndicator(` call site inside a
@@ -65,80 +69,86 @@ fun PvIconButton(
     }
 }
 
-/**
- * The pill FAB for a tab screen's single primary action ("Add employee").
- * `skipPartiallyExpanded` is not a FAB option, but the label collapses via
- * [PvIconButton]-style width only when the caller wants an icon-only variant.
- */
-@Composable
-fun PvFab(
-    text: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    icon: ImageVector? = null,
-) {
-    ExtendedFloatingActionButton(
-        onClick = onClick,
-        modifier = modifier.heightIn(min = Spacing.touch),
-        shape = RoundedCornerShape(percent = 50),
-        containerColor = MaterialTheme.colorScheme.primary,
-        contentColor = MaterialTheme.colorScheme.onPrimary,
-        icon = {
-            if (icon != null) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    modifier = Modifier.size(Spacing.icon),
-                )
-            }
-        },
-        text = { Text(text = text, style = MaterialTheme.typography.labelLarge) },
-    )
-}
+
 
 /**
- * One selectable option in a small set (voice style, language, role, range).
+ * One control for choosing one of N options (voice style, language, role,
+ * payment range).
  *
- * `FilterChip` was the raw widget here; the border follows the same hairline
- * treatment as [PvCard] so a selected chip is filled and an unselected one is
- * a quiet outline instead of a filled grey chip.
+ * This was N separate `PvChoiceChip` pills drawn as `RoundedCornerShape(
+ * percent = 50)`. Six fully-rounded bubbles per screen is not the brand:
+ * DESIGN.md reserves `{rounded.pill}` 9999px for **buttons and tag pills**, and
+ * its indigo rule is "used sparingly — one filled pill per band". A selection
+ * group is neither a button nor a tag, so it takes `{rounded.sm}` 6dp
+ * (`shapes.small`) and the options live *inside one* hairline container,
+ * divided by hairlines, with the chosen one filled in solid `{colors.primary}`.
+ *
+ * The row scrolls horizontally when the labels do not fit rather than clipping
+ * them, which is what Material's own segmented button row does — and it is
+ * reachable by keyboard, so large font scales stay legible.
  */
 @Composable
-fun PvChoiceChip(
-    text: String,
-    selected: Boolean,
-    onClick: () -> Unit,
+fun <T> PvSegmentedGroup(
+    options: List<T>,
+    selected: T,
+    onSelect: (T) -> Unit,
+    label: @Composable (T) -> String,
     modifier: Modifier = Modifier,
 ) {
+    val outline = MaterialTheme.colorScheme.outlineVariant
     Surface(
-        modifier = modifier
-            .heightIn(min = Spacing.rowBar)
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(percent = 50),
-        color = if (selected) {
-            MaterialTheme.colorScheme.primaryContainer
-        } else {
-            MaterialTheme.colorScheme.surface
-        },
-        contentColor = if (selected) {
-            MaterialTheme.colorScheme.onPrimaryContainer
-        } else {
-            MaterialTheme.colorScheme.onSurfaceVariant
-        },
-        border = BorderStroke(
-            Spacing.hairline,
-            if (selected) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.outlineVariant
-            },
-        ),
+        modifier = modifier,
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(Spacing.hairline, outline),
     ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelMedium,
-            modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
-        )
+        Row(
+            modifier = Modifier
+                .height(Spacing.rowBar)
+                .horizontalScroll(rememberScrollState()),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            options.forEachIndexed { index, option ->
+                if (index > 0) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .width(Spacing.hairline)
+                            .background(outline),
+                    )
+                }
+                val isSelected = option == selected
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .background(
+                            if (isSelected) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                Color.Transparent
+                            },
+                        )
+                        .selectable(
+                            selected = isSelected,
+                            role = Role.RadioButton,
+                            onClick = { onSelect(option) },
+                        )
+                        .padding(horizontal = Spacing.lg),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = label(option),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                        color = if (isSelected) {
+                            MaterialTheme.colorScheme.onPrimary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -171,17 +181,13 @@ fun PvSliderRow(
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.weight(1f),
             )
-            Surface(
-                color = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                shape = RoundedCornerShape(percent = 50),
-            ) {
-                Text(
-                    text = valueText,
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.xxs),
-                )
-            }
+            // A reading is not a tag: DESIGN.md's pill radius is for buttons
+            // and tag pills, so the value is plain primary-coloured text.
+            Text(
+                text = valueText,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+            )
         }
         Slider(
             value = value,
@@ -247,17 +253,5 @@ fun PvIconPlate(
     }
 }
 
-/** Convenience: a [PvChoiceChip] row that wraps on narrow screens. */
-@Composable
-fun PvChoiceChipRow(
-    modifier: Modifier = Modifier,
-    content: @Composable () -> Unit,
-) {
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
-    ) {
-        content()
-    }
-}
+
 

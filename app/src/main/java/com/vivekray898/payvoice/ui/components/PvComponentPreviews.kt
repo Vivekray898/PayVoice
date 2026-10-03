@@ -469,13 +469,14 @@ private fun PvFabPreview() = PvPreviewPvFab()
 
 /** Gallery body shared with the screenshot test source set. */
 @Composable
-fun PvPreviewChoiceChip() {
+fun PvPreviewSegmentedGroup() {
     PvPreviewTheme {
-        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-            PvChoiceChip(text = "Today", selected = true, onClick = {})
-            PvChoiceChip(text = "Week", selected = false, onClick = {})
-            PvChoiceChip(text = "Month", selected = false, onClick = {})
-        }
+        PvSegmentedGroup(
+            options = listOf("Today", "Week", "Month", "All"),
+            selected = "Today",
+            onSelect = {},
+            label = { range -> range },
+        )
     }
 }
 
@@ -485,7 +486,7 @@ fun PvPreviewChoiceChip() {
 @Preview(name = "large-font", showBackground = true, fontScale = 1.3f)
 @Preview(name = "320dp", showBackground = true, widthDp = 320)
 @Composable
-private fun PvChoiceChipPreview() = PvPreviewChoiceChip()
+private fun PvSegmentedGroupPreview() = PvPreviewSegmentedGroup()
 
 
 /** Gallery body shared with the screenshot test source set. */

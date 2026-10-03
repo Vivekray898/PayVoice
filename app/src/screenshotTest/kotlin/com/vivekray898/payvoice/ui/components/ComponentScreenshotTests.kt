@@ -223,7 +223,7 @@ fun PvFabScreenshot() = PvPreviewPvFab()
 @Preview(name = "large-font", showBackground = true, fontScale = 1.3f)
 @Preview(name = "320dp", showBackground = true, widthDp = 320)
 @Composable
-fun PvChoiceChipScreenshot() = PvPreviewChoiceChip()
+fun PvSegmentedGroupScreenshot() = PvPreviewSegmentedGroup()
 
 
 @PreviewTest

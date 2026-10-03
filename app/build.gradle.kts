@@ -365,6 +365,8 @@ dependencies {
 // ---------------------------------------------------------------------------
 val uiRootPath = file("src/main/java/com/vivekray898/payvoice/ui").absolutePath
 val uiSkipDirs = listOf("theme", "components")
+val componentsRootPath = file("src/main/java/com/vivekray898/payvoice/ui/components").absolutePath
+val PILL_SHAPE = Regex("""RoundedCornerShape\s*\(\s*percent\s*=\s*50""")
 
 // (ruleName, regex, appliesToScreenFilesOnly)
 val pvHardRules = listOf(
@@ -450,6 +452,67 @@ pvRegisterDesignCheck(
     pvComponentRules,
 )
 
+/**
+ * DESIGN.md gives `{rounded.pill}` (9999px) to **buttons and tag pills** and
+ * nothing else, and reserves solid indigo for one filled element per band.
+ * Nothing stops a selection group, a value readout or a nav indicator from
+ * being drawn as a fully-rounded bubble again — six of them sat on the
+ * payments screen before this gate existed.
+ *
+ * So the radius itself is gated: a `RoundedCornerShape(percent = 50)` is only
+ * legal in the five component files below, each of which is a button or a tag
+ * pill. One file per sanctioned use, so allowlisting the file cannot quietly
+ * license a new pill next to a legal one.
+ */
+val pvPillSanctionedFiles = setOf(
+    "PvPrimaryButton.kt",
+    "PvSecondaryButton.kt",
+    "PvTextButton.kt",
+    "PvFab.kt",
+    "StatusPill.kt",
+)
+
+tasks.register("verifyDesignShapes") {
+    group = "verification"
+    description =
+        "Fails on rounded.pill outside the buttons and tag pills DESIGN.md sanctions."
+    val rootPath = componentsRootPath
+    val sanctioned = pvPillSanctionedFiles
+    // Captured as a String, not the Regex object: a doLast cannot close over
+    // a Gradle script reference when the configuration cache is on.
+    val pillPattern = PILL_SHAPE.pattern
+    doLast {
+        val pill = Regex(pillPattern)
+        val root = File(rootPath)
+        val found = mutableListOf<String>()
+        if (root.isDirectory) {
+            root.walkTopDown()
+                .filter { it.isFile && it.extension == "kt" }
+                .sortedBy { it.path }
+                .forEach { f ->
+                    val name = f.name
+                    val rel = f.relativeTo(root).path.replace('\\', '/')
+                    f.readLines().forEachIndexed { i, raw ->
+                        val code = raw.substringBefore("//")
+                        if (pill.containsMatchIn(code) && name !in sanctioned) {
+                            found += "  $rel:${i + 1}  [rounded.pill]  ${raw.trim()}"
+                        }
+                    }
+                }
+        }
+        if (found.isNotEmpty()) {
+            throw GradleException(
+                "verifyDesignShapes failed with ${found.size} violation(s):\n" +
+                    found.joinToString("\n") +
+                    "\n\nDESIGN.md reserves {rounded.pill} for buttons and tag " +
+                    "pills. Use MaterialTheme.shapes.small/medium for a control, " +
+                    "or put the pill in one of: ${sanctioned.sorted().joinToString()}.",
+            )
+        }
+        logger.lifecycle("verifyDesignShapes: OK")
+    }
+}
+
 tasks.matching { it.name == "check" }.configureEach {
-    dependsOn("verifyDesignTokens", "verifyDesignComponents")
+    dependsOn("verifyDesignTokens", "verifyDesignComponents", "verifyDesignShapes")
 }

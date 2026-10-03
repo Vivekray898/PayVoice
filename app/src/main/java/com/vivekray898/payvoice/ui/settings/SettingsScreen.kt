@@ -33,7 +33,7 @@ import com.vivekray898.payvoice.core.announce.AnnouncementStyle
 import com.vivekray898.payvoice.core.remote.DeviceRole
 import com.vivekray898.payvoice.ui.MainViewModel
 import com.vivekray898.payvoice.ui.components.PvCard
-import com.vivekray898.payvoice.ui.components.PvChoiceChip
+import com.vivekray898.payvoice.ui.components.PvSegmentedGroup
 import com.vivekray898.payvoice.ui.components.PvListItem
 import com.vivekray898.payvoice.ui.components.PvSecondaryButton
 import com.vivekray898.payvoice.ui.components.PvSectionHeader
@@ -107,28 +107,22 @@ fun SettingsScreen(
                             text = "Voice style",
                             style = MaterialTheme.typography.bodyMedium,
                         )
-                        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                            AnnouncementStyle.entries.forEach { style ->
-                                PvChoiceChip(
-                                    text = style.label,
-                                    selected = settings.style == style,
-                                    onClick = { viewModel.setStyle(style) },
-                                )
-                            }
-                        }
+                        PvSegmentedGroup(
+                            options = AnnouncementStyle.entries,
+                            selected = settings.style,
+                            onSelect = viewModel::setStyle,
+                            label = { style -> style.label },
+                        )
                         Text(
                             text = "Language",
                             style = MaterialTheme.typography.bodyMedium,
                         )
-                        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                            AnnouncementLanguage.entries.forEach { lang ->
-                                PvChoiceChip(
-                                    text = lang.label,
-                                    selected = settings.language == lang,
-                                    onClick = { viewModel.setLanguage(lang) },
-                                )
-                            }
-                        }
+                        PvSegmentedGroup(
+                            options = AnnouncementLanguage.entries,
+                            selected = settings.language,
+                            onSelect = viewModel::setLanguage,
+                            label = { lang -> lang.label },
+                        )
                         PvSliderRow(
                             label = "Speech speed",
                             valueText = "%.1fx".format(settings.speechRate),
@@ -186,28 +180,19 @@ fun SettingsScreen(
                         leadingIcon = Icons.Filled.Storefront,
                         minHeight = Spacing.listRow,
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                        PvChoiceChip(
-                            text = "Owner",
-                            selected = settings.role == DeviceRole.OWNER,
-                            onClick = {
-                                viewModel.setRole(
-                                    DeviceRole.OWNER,
-                                    settings.deviceName.ifBlank { Build.MODEL ?: "Owner" },
-                                )
-                            },
-                        )
-                        PvChoiceChip(
-                            text = "Employee",
-                            selected = settings.role == DeviceRole.EMPLOYEE,
-                            onClick = {
-                                viewModel.setRole(
-                                    DeviceRole.EMPLOYEE,
-                                    settings.deviceName.ifBlank { Build.MODEL ?: "Employee" },
-                                )
-                            },
-                        )
-                    }
+                    PvSegmentedGroup(
+                        options = listOf(DeviceRole.OWNER, DeviceRole.EMPLOYEE),
+                        selected = settings.role,
+                        onSelect = { role ->
+                            viewModel.setRole(
+                                role,
+                                settings.deviceName.ifBlank {
+                                    Build.MODEL ?: role.label
+                                },
+                            )
+                        },
+                        label = { role -> role.label },
+                    )
                     PvSwitchRow(
                         label = "Send payments to employee phones",
                         supporting = "Announce on connected employee devices",

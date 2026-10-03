@@ -3,10 +3,8 @@ package com.vivekray898.payvoice.ui.payments
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -34,7 +32,7 @@ import com.vivekray898.payvoice.ui.MainViewModel
 import com.vivekray898.payvoice.ui.components.PvDivider
 import com.vivekray898.payvoice.ui.components.PvTab
 import com.vivekray898.payvoice.ui.components.PvTabScaffold
-import com.vivekray898.payvoice.ui.components.PvChoiceChip
+import com.vivekray898.payvoice.ui.components.PvSegmentedGroup
 import com.vivekray898.payvoice.ui.components.PvEmptyState
 import com.vivekray898.payvoice.ui.components.PvErrorState
 import com.vivekray898.payvoice.ui.components.PvLoadingList
@@ -151,18 +149,15 @@ fun PaymentsScreen(
 
             item(key = "ranges") {
                 if (!readOnly) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                        PaymentsRange.entries.forEach { candidate ->
-                            RangeChip(
-                                label = rangeLabel(candidate),
-                                selected = range == candidate,
-                                onClick = {
-                                    range = candidate
-                                    limit = PAGE_SIZE
-                                },
-                            )
-                        }
-                    }
+                    PvSegmentedGroup(
+                        options = PaymentsRange.entries,
+                        selected = range,
+                        onSelect = { candidate ->
+                            range = candidate
+                            limit = PAGE_SIZE
+                        },
+                        label = { candidate -> rangeLabel(candidate) },
+                    )
                 }
             }
 
@@ -239,10 +234,7 @@ private fun rangeLabel(range: PaymentsRange): String = stringResource(
     },
 )
 
-@Composable
-private fun RangeChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    PvChoiceChip(text = label, selected = selected, onClick = onClick)
-}
+
 
 /**
  * Pure function over the history list so the state is testable and previewable
