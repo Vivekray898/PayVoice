@@ -1,7 +1,10 @@
 package com.vivekray898.payvoice.core.remote
 
 import android.content.Context
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -20,7 +23,8 @@ import kotlin.coroutines.resume
  * exactly four request shapes, so a full SDK would only add startup cost and
  * dependency weight. Every call:
  *  - is suspend + cancellable, with a bounded timeout;
- *  - runs OFF the main thread (callers are already on Dispatchers.Default);
+ *  - runs its blocking work on Dispatchers.IO under an overall deadline, so a
+ *    slow network never occupies a CPU worker (see [onIo]);
  *  - carries the CURRENT publishable key on `apikey` (sb_publishable_... —
  *    never the deprecated `anon`/`service_role` JWT keys), plus the user's
  *    access token when signed in (Authorization: Bearer) — PostgREST RLS
@@ -385,34 +389,70 @@ class SupabaseClient(private val context: Context) {
 
     data class HttpResponse(val code: Int, val body: String)
 
-    private fun execute(url: String, headers: Map<String, String>, body: String?): HttpResponse {
+    private suspend fun execute(
+        url: String,
+        headers: Map<String, String>,
+        body: String?,
+    ): HttpResponse = onIo {
         val conn = open(url)
         conn.requestMethod = if (body == null) "GET" else "POST"
         headers.forEach { (k, v) -> conn.setRequestProperty(k, v) }
-        if (body != null) {
-            conn.doOutput = true
-            conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
-        }
-        return readResponse(conn)
+        if (body != null) writeBody(conn, body)
+        readResponse(conn)
     }
 
-    private fun get(url: String, headers: Map<String, String>): HttpResponse {
+    private suspend fun get(url: String, headers: Map<String, String>): HttpResponse = onIo {
         val conn = open(url)
         conn.requestMethod = "GET"
         headers.forEach { (k, v) -> conn.setRequestProperty(k, v) }
-        return readResponse(conn)
+        readResponse(conn)
     }
 
-    private fun patch(url: String, headers: Map<String, String>, body: String): HttpResponse {
+    private suspend fun patch(
+        url: String,
+        headers: Map<String, String>,
+        body: String,
+    ): HttpResponse = onIo {
         val conn = open(url)
         // HttpURLConnection has no PATCH; tunnel it the PostgREST way.
         conn.requestMethod = "POST"
         conn.setRequestProperty("X-HTTP-Method-Override", "PATCH")
         headers.forEach { (k, v) -> conn.setRequestProperty(k, v) }
-        conn.doOutput = true
-        conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
-        return readResponse(conn)
+        writeBody(conn, body)
+        readResponse(conn)
     }
+
+    /**
+     * Sends [body] with an explicit Content-Length.
+     *
+     * Without a fixed length HttpURLConnection buffers the whole payload and
+     * switches to chunked encoding, and a stalled write then has no timeout of
+     * its own — only the read timeout applies, which does not start until the
+     * request has been sent. Declaring the length lets the platform bound the
+     * write with the read timeout, so a half-open connection on slow 2G/3G
+     * cannot hang a request indefinitely.
+     */
+    private fun writeBody(conn: HttpURLConnection, body: String) {
+        val bytes = body.toByteArray(Charsets.UTF_8)
+        conn.doOutput = true
+        conn.setFixedLengthStreamingMode(bytes.size)
+        conn.outputStream.use { it.write(bytes) }
+    }
+
+    /**
+     * Runs the blocking request on the IO dispatcher under an overall bound.
+     *
+     * The calls were already `suspend` but performed their blocking work on
+     * whatever dispatcher the caller happened to use. Several callers are on
+     * Dispatchers.Default, so a request waiting on a slow network occupied a
+     * CPU worker that other work needed, and on a 2-core device that is a real
+     * stall. [REQUEST_TIMEOUT_MS] is the ceiling for connect + write + read
+     * combined, so no request can outlive it regardless of which phase hangs.
+     */
+    private suspend fun <T> onIo(block: () -> T): T =
+        withContext(Dispatchers.IO) {
+            withTimeout(REQUEST_TIMEOUT_MS) { block() }
+        }
 
     private fun open(url: String): HttpURLConnection {
         val conn = URL(url).openConnection() as HttpURLConnection
@@ -439,6 +479,13 @@ class SupabaseClient(private val context: Context) {
         const val TAG = "SupabaseClient"
         const val CONNECT_TIMEOUT_MS = 10_000
         const val READ_TIMEOUT_MS = 15_000
+
+        /**
+         * Ceiling for a whole request. Generous enough for the slowest link we
+         * support (a payment event on 2G) but finite, so a request can never
+         * leave the announcement path waiting indefinitely.
+         */
+        const val REQUEST_TIMEOUT_MS = 45_000L
         const val DEFAULT_EXPIRES_IN_S = 3600L
         const val EXPIRY_MARGIN_MS = 60_000L
 
