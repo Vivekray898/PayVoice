@@ -59,7 +59,13 @@ Verified against `supabase/functions/fcm-gateway/index.ts` and
 `supabase/migrations/*.sql`:
 
 1. **Owner phone** captures a Google Pay payment notification locally and
-   parses it. Local capture and announcement do not depend on the network.
+   parses it. Everything after the notification exists is local — but the
+   notification itself requires network, because Google Pay only posts it
+   after syncing with the UPI network. Offline, no new payment is detected and
+   nothing is replayed: `onNotificationPosted` is the sole detection trigger
+   (`service/notification/PayVoiceNotificationListener.kt:86`), and the one-shot
+   `activeNotifications` snapshot at `onListenerConnected` (line 72) does not
+   re-scan later. This is a source limitation, not an app limitation.
 2. **Owner app** inserts a row into Supabase `payment_events` with an
    idempotent `evt_…` identifier (`core/parser/Fingerprinter.kt:46`).
 3. A **Supabase Database Webhook** on `payment_events` INSERT calls the

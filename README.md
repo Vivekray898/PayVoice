@@ -118,8 +118,10 @@ In plain text, for crawlers that do not render Mermaid:
 
 1. Google Pay posts a payment notification to the owner's phone.
 2. PayVoice's notification listener reads it and parses the amount and sender.
-3. The owner's phone announces the payment aloud immediately, with no network
-   involved.
+3. The owner's phone announces the payment aloud immediately. This step adds no
+   network dependency of its own — but note that step 1 already required one,
+   because Google Pay only posts that notification after syncing with the UPI
+   network.
 4. In parallel, the app inserts a row into the Supabase `payment_events` table
    with an idempotent `evt_...` identifier.
 5. A Supabase Database Webhook calls the `fcm-gateway` Edge Function, which
@@ -313,9 +315,20 @@ Yes. Apache-2.0 licensed, no paid tier, no in-app purchase, and the backend runs
 on Supabase's free tier.
 
 **Does it work without internet?**
-On the owner's phone, yes. Capturing a notification and speaking it are both
-local, so announcements keep working offline. Only forwarding an event to a
-paired employee's phone needs a network connection.
+Not for detecting new payments — and this is a limitation of the source, not of
+PayVoice. PayVoice has no payment feed of its own; it announces the notification
+Google Pay posts, and Google Pay only posts it once it has reached the payment
+network to learn that a payment happened. In airplane mode a payment is not
+detected, not queued, and not announced when connectivity returns. Nothing is
+replayed: the listener only processes notifications as they are posted.
+
+What *is* genuinely offline is everything PayVoice does after that notification
+exists. Parsing the amount and sender, writing to the local history, deduping,
+and speaking through the phone's own TTS engine are all local — no server call
+sits on the announcement path. That matters in the ordinary case of a flaky
+connection: once a notification has landed, the shopkeeper still hears the
+payment. Forwarding an event to a paired employee's phone needs the network
+too, on top of the requirement above.
 
 **Which Android versions are supported?**
 Android 8.0 (API 26) and newer, built against API 37.
