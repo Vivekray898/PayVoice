@@ -53,11 +53,22 @@ android {
 
     buildTypes {
         release {
-            // R8 + resource shrinking land in Phase 6 (hardening), after the full
-            // feature set exists. Release stays unminified for now.
+            // R8 full mode. `optimization.enable` is the AGP 9 replacement for
+            // the old `isMinifyEnabled`; R8 has defaulted to full mode since
+            // AGP 8.0, so no separate fullMode flag is needed.
+            //
+            // Before this, the release APK shipped fully unminified at 17.0 MiB
+            // — over the < 15 MB budget (audit C1). Shrinking resources as well
+            // strips the unused Material icon set (icons-extended contributes
+            // tens of MB unshrunk; see the dependency note below).
             optimization {
-                enable = false
+                enable = true
             }
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
             // Sign with the real release keystore when keystore.properties exists;
             // otherwise fall back to the debug key so a fresh clone / CI without
             // secrets can still `assembleRelease` for perf verification.
