@@ -206,3 +206,57 @@ fun PvErrorStateScreenshot() = PvPreviewErrorState()
 @Preview(name = "320dp", showBackground = true, widthDp = 320)
 @Composable
 fun PvSnackbarScreenshot() = PvPreviewSnackbar()
+
+
+@PreviewTest
+@Preview(name = "light", showBackground = true)
+@Preview(name = "dark", showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Preview(name = "large-font", showBackground = true, fontScale = 1.3f)
+@Preview(name = "320dp", showBackground = true, widthDp = 320)
+@Composable
+fun PvFabScreenshot() = PvPreviewPvFab()
+
+
+@PreviewTest
+@Preview(name = "light", showBackground = true)
+@Preview(name = "dark", showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Preview(name = "large-font", showBackground = true, fontScale = 1.3f)
+@Preview(name = "320dp", showBackground = true, widthDp = 320)
+@Composable
+fun PvChoiceChipScreenshot() = PvPreviewChoiceChip()
+
+
+@PreviewTest
+@Preview(name = "light", showBackground = true)
+@Preview(name = "dark", showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Preview(name = "large-font", showBackground = true, fontScale = 1.3f)
+@Preview(name = "320dp", showBackground = true, widthDp = 320)
+@Composable
+fun PvIconButtonScreenshot() = PvPreviewIconButton()
+
+
+@PreviewTest
+@Preview(name = "light", showBackground = true)
+@Preview(name = "dark", showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Preview(name = "large-font", showBackground = true, fontScale = 1.3f)
+@Preview(name = "320dp", showBackground = true, widthDp = 320)
+@Composable
+fun PvSliderRowScreenshot() = PvPreviewSliderRow()
+
+
+@PreviewTest
+@Preview(name = "light", showBackground = true)
+@Preview(name = "dark", showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Preview(name = "large-font", showBackground = true, fontScale = 1.3f)
+@Preview(name = "320dp", showBackground = true, widthDp = 320)
+@Composable
+fun PvProgressBarScreenshot() = PvPreviewProgressBar()
+
+
+@PreviewTest
+@Preview(name = "light", showBackground = true)
+@Preview(name = "dark", showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Preview(name = "large-font", showBackground = true, fontScale = 1.3f)
+@Preview(name = "320dp", showBackground = true, widthDp = 320)
+@Composable
+fun PvIconPlateScreenshot() = PvPreviewIconPlate()

@@ -9,7 +9,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -447,3 +449,121 @@ fun PvPreviewSnackbar() {
 @Preview(name = "320dp", showBackground = true, widthDp = 320)
 @Composable
 private fun PvSnackbarPreview() = PvPreviewSnackbar()
+
+/** Gallery body shared with the screenshot test source set. */
+@Composable
+fun PvPreviewPvFab() {
+    PvPreviewTheme {
+        PvFab(text = "Add employee", icon = Icons.Filled.Add, onClick = {})
+    }
+}
+
+
+@Preview(name = "light", showBackground = true)
+@Preview(name = "dark", showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Preview(name = "large-font", showBackground = true, fontScale = 1.3f)
+@Preview(name = "320dp", showBackground = true, widthDp = 320)
+@Composable
+private fun PvFabPreview() = PvPreviewPvFab()
+
+
+/** Gallery body shared with the screenshot test source set. */
+@Composable
+fun PvPreviewChoiceChip() {
+    PvPreviewTheme {
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+            PvChoiceChip(text = "Today", selected = true, onClick = {})
+            PvChoiceChip(text = "Week", selected = false, onClick = {})
+            PvChoiceChip(text = "Month", selected = false, onClick = {})
+        }
+    }
+}
+
+
+@Preview(name = "light", showBackground = true)
+@Preview(name = "dark", showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Preview(name = "large-font", showBackground = true, fontScale = 1.3f)
+@Preview(name = "320dp", showBackground = true, widthDp = 320)
+@Composable
+private fun PvChoiceChipPreview() = PvPreviewChoiceChip()
+
+
+/** Gallery body shared with the screenshot test source set. */
+@Composable
+fun PvPreviewIconButton() {
+    PvPreviewTheme {
+        PvIconButton(
+            icon = Icons.Filled.Settings,
+            contentDescription = "Settings",
+            onClick = {},
+        )
+    }
+}
+
+
+@Preview(name = "light", showBackground = true)
+@Preview(name = "dark", showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Preview(name = "large-font", showBackground = true, fontScale = 1.3f)
+@Preview(name = "320dp", showBackground = true, widthDp = 320)
+@Composable
+private fun PvIconButtonPreview() = PvPreviewIconButton()
+
+
+/** Gallery body shared with the screenshot test source set. */
+@Composable
+fun PvPreviewSliderRow() {
+    PvPreviewTheme {
+        PvSliderRow(
+            label = "Speech volume",
+            valueText = "80%",
+            value = 0.8f,
+            onValueChange = {},
+            valueRange = 0f..1f,
+        )
+    }
+}
+
+
+@Preview(name = "light", showBackground = true)
+@Preview(name = "dark", showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Preview(name = "large-font", showBackground = true, fontScale = 1.3f)
+@Preview(name = "320dp", showBackground = true, widthDp = 320)
+@Composable
+private fun PvSliderRowPreview() = PvPreviewSliderRow()
+
+
+/** Gallery body shared with the screenshot test source set. */
+@Composable
+fun PvPreviewProgressBar() {
+    PvPreviewTheme {
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
+            PvProgressBar(progress = 0.25f)
+            PvProgressBar(progress = 1f)
+        }
+    }
+}
+
+
+@Preview(name = "light", showBackground = true)
+@Preview(name = "dark", showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Preview(name = "large-font", showBackground = true, fontScale = 1.3f)
+@Preview(name = "320dp", showBackground = true, widthDp = 320)
+@Composable
+private fun PvProgressBarPreview() = PvPreviewProgressBar()
+
+
+/** Gallery body shared with the screenshot test source set. */
+@Composable
+fun PvPreviewIconPlate() {
+    PvPreviewTheme {
+        PvIconPlate(icon = Icons.Filled.People)
+    }
+}
+
+
+@Preview(name = "light", showBackground = true)
+@Preview(name = "dark", showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Preview(name = "large-font", showBackground = true, fontScale = 1.3f)
+@Preview(name = "320dp", showBackground = true, widthDp = 320)
+@Composable
+private fun PvIconPlatePreview() = PvPreviewIconPlate()
