@@ -16,7 +16,7 @@ editing the README.
 |---|---|
 | Name is "PayVoice" | `app/src/main/res/values/strings.xml` → `app_name` |
 | Android app, package `com.vivekray898.payvoice` | `app/build.gradle.kts:73` |
-| **Pre-release**: `versionName = "0.1.0-phase1"`, `versionCode = 1` | `app/build.gradle.kts:76-77`. Note the published tag is `v2.9.0` — see §11. |
+| **Pre-release**: `versionName = "0.1.0-phase1"`, `versionCode = 1` | `app/build.gradle.kts:76-77`. The published tag is `v0.1.0-phase1` — see §11. |
 | Single APK serves two roles: owner and employee | `core/remote/RemoteModels.kt` → `DeviceRole`; `ui/components/PvBottomNav.kt` |
 | Reads **Google Pay** payment notifications only, via a Notification Listener Service | `AndroidManifest.xml` (`PayVoiceNotificationListener`, `<queries>` for `com.google.android.apps.nbu.paisa.user`); `core/parser/GooglePayParser.kt:9` |
 | Extracts amount and sender from the notification text | `core/parser/{AmountExtractor,GooglePayParser,NotificationTextResolver}.kt` |
@@ -221,13 +221,20 @@ docs/          audit, threat model, MASVS checklist, design system, analytics
 There **is** a published GitHub release. An earlier draft of this file claimed
 otherwise; that was wrong and is corrected here.
 
+**State as of 2026-10-04, re-verified against the API:** the `v2.9.0` *release*
+no longer exists — `gh api repos/Vivekray898/PayVoice/releases` returns only
+`v0.1.0-phase1`, and `gh release view v2.9.0` now fails. The `v2.9.0` **git tag
+still exists** on the remote (annotated tag `178ff40`, pointing at commit
+`1d8f27e`), so `/releases/tag/v2.9.0` still resolves to a bare tag page. The
+`payvoice-v2.9.0.apk` asset is gone with the release. Do not describe `v2.9.0`
+as a published release in any doc; describe it as a retained tag.
+
 | Fact | Value | How checked |
 |---|---|---|
-| Tag | `v2.9.0`, an ancestor of `main` | `git tag -l`, `git merge-base --is-ancestor` |
-| Published | 2026-09-30, marked **Pre-release** | `gh release view v2.9.0` |
-| Attached asset | `payvoice-v2.9.0.apk` (superseded) | `gh release view v2.9.0` |
-| Current release | `v0.1.0-phase1`, tag at `962b544`, asset `payvoice-0.1.0-phase1.apk` | `gh release view v0.1.0-phase1` |
-| Tag commit | `1d8f27e` "new added version realse ready" | `git log -1 v2.9.0` |
+| Current release | `v0.1.0-phase1`, tag at `962b544`, asset `payvoice-0.1.0-phase1.apk` (3,168,913 B) | `gh release view v0.1.0-phase1` |
+| Retired tag | `v2.9.0`, still on the remote, commit `1d8f27e` "new added version realse ready" | `git ls-remote --tags origin`, `git log -1 v2.9.0` |
+| `v2.9.0` release | **Deleted.** No release page, no `payvoice-v2.9.0.apk` asset | `gh api repos/.../releases` |
+| Tag commit still on `main` | yes — `1d8f27e` is an ancestor of `main` | `git merge-base --is-ancestor` |
 | No Google Play listing | — | none referenced anywhere in the repo |
 
 **Canonical version:** `0.1.0-phase1` / `versionCode 1` in `app/build.gradle.kts`,
@@ -238,7 +245,9 @@ tagged at `962b544`. It is signed with the release certificate
 (`CN=PayVoice`, SHA-1 `8ddbcbed1ffd5cc76d6f19cf5fce22da060a1d8f`), R8-minified
 to a single dex, with no LeakCanary and no `READ_SMS`. Verified on an API 36
 emulator: installs, completes onboarding, renders the four-tab Home screen.
-The older `v2.9.0` page was retitled "superseded" so the two do not collide.
+The older `v2.9.0` release has since been withdrawn (release page and asset
+deleted); only its git tag remains, so it is described as a retained tag
+rather than a published release.
 
 **Inconsistencies found, and what was done about them (2026-10-04):**
 

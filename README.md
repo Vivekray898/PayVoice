@@ -10,11 +10,11 @@ PayVoice is an open-source Android app (Kotlin, Jetpack Compose) that reads Goog
 > **Status: pre-release.** The current version is **`0.1.0-phase1`**
 > (`versionCode 1`), available as
 > [`payvoice-0.1.0-phase1.apk`](https://github.com/Vivekray898/PayVoice/releases/tag/v0.1.0-phase1)
-> on a pre-release built from `main`. An earlier
-> [`v2.9.0`](https://github.com/Vivekray898/PayVoice/releases/tag/v2.9.0)
-> pre-release from 2026-09-30 is **superseded** — it predates the security
-> audit, backend rework and UI redesign, and contains an SMS fallback that
-> current code no longer has. There is no Google Play listing.
+> on a pre-release built from `main`. A superseded `v2.9.0` pre-release from
+> 2026-09-30 has been withdrawn; only its git
+> [tag](https://github.com/Vivekray898/PayVoice/releases/tag/v2.9.0) remains. It
+> predated the security audit, backend rework and UI redesign, and contained an
+> SMS fallback that current code no longer has. There is no Google Play listing.
 
 ---
 
@@ -378,13 +378,15 @@ events it may emit, all structural.
 
 Honest, and ordered by what actually blocks use. Nothing here is built.
 
-- [ ] Cut a release that matches `main`. `v2.9.0` predates the current code,
-      and its notes advertise an SMS fallback that the current build removed.
+- [x] Cut a release that matches `main` — `v0.1.0-phase1`, built from `962b544`
+      and verified on an emulator.
 - [ ] Publish the owner/employee pairing flow to end-to-end test against a real
       Supabase project — the reliability run in
       [docs/RELIABILITY_TEST_RESULTS.md](docs/RELIABILITY_TEST_RESULTS.md) is
       still partial on the webhook → FCM → employee leg.
-- [ ] Capture screenshots of the current four-tab build.
+- [x] Capture screenshots of the current four-tab build.
+- [ ] Get CI green: Gradle dependency verification fails on roughly 33
+      buildscript-classpath artifacts.
 - [ ] `SECURITY.md`, `CONTRIBUTING.md` and `CODE_OF_CONDUCT.md`.
 - [ ] `llms.txt` and `CITATION.cff` for machine-readable citation.
 - [ ] Optional parsers for additional UPI apps, behind a per-source opt-in.
