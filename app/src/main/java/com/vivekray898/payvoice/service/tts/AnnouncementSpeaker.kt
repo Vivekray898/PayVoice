@@ -261,6 +261,11 @@ class AnnouncementSpeaker(
         _status.value = Status.INITIALIZING
         val initStatus = CompletableDeferred<Int>()
         val candidate = TextToSpeech(context) { status -> initStatus.complete(status) }
+        // Route announcements as accessibility speech, matching the focus
+        // request below. Without this the engine keeps its own default
+        // attributes (USAGE_MEDIA), so the routing and the focus request
+        // disagree and the announcement can be muted or rerouted.
+        runCatching { candidate.setAudioAttributes(announcementAudioAttributes()) }
         val status = runCatching {
             withTimeoutOrNull(INIT_TIMEOUT_MS) { initStatus.await() }
         }.getOrNull() ?: TextToSpeech.ERROR
@@ -294,11 +299,19 @@ class AnnouncementSpeaker(
     private fun currentLocaleTag(): String =
         settings.settings.value.language.ttsLocaleTag
 
-    private fun requestFocus(): Boolean {
-        val attrs = AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_MEDIA)
+    private fun announcementAudioAttributes(): AudioAttributes =
+        AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY)
             .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
             .build()
+
+    private fun requestFocus(): Boolean {
+        // USAGE_MEDIA classifies a payment announcement as ordinary media, so
+        // the platform treats it as something to duck or drop and users
+        // silencing media also silence the payment voice. Accessibility speech
+        // is the correct class: it routes to the accessibility/voice stream
+        // and survives media-volume changes.
+        val attrs = announcementAudioAttributes()
         val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
             .setAudioAttributes(attrs)
             .build()
