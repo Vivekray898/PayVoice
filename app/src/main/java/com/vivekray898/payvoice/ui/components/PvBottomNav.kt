@@ -4,12 +4,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.People
-import androidx.compose.material.icons.filled.PlaylistPlay
-import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -53,12 +52,16 @@ fun PvBottomNav(
         ),
         TabSpec(
             PvTab.LIST,
-            if (isOwner) Icons.Filled.PlaylistPlay else Icons.Filled.QrCodeScanner,
+            // PlaylistPlay read as "play media", not "payments". A receipt is
+            // the same idea as the history screen behind it.
+            Icons.Filled.ReceiptLong,
             stringResource(if (isOwner) R.string.nav_payments else R.string.nav_recent),
         ),
         TabSpec(
             PvTab.TEAM,
-            if (isOwner) Icons.Filled.People else Icons.Filled.Storefront,
+            // Storefront for "Pair" was a shop awning for a screen that pairs
+            // a device. People for the owner's team; a link for the pairing.
+            if (isOwner) Icons.Filled.People else Icons.Filled.AccountTree,
             stringResource(if (isOwner) R.string.nav_team else R.string.nav_pair),
         ),
         TabSpec(

@@ -69,6 +69,9 @@ fun DiagnosticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
+                start = Spacing.lg,
+                end = Spacing.lg,
+                top = inner.calculateTopPadding() + Spacing.sm,
                 bottom = Spacing.xxl + inner.calculateBottomPadding(),
             ),
         ) {

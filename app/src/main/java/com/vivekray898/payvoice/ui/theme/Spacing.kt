@@ -60,8 +60,12 @@ object Spacing {
     /** 72dp — the onboarding step's icon plate. */
     val iconPlate: Dp = 72.dp
 
-    /** 200dp — the Home hero band height. */
-    val hero: Dp = 200.dp
+    /**
+     * 120dp — the Home hero band height. It carries the app-bar row and a
+     * gradient wash; at the original 200dp the greeting sat marooned halfway
+     * down the screen with 120dp of empty colour above it.
+     */
+    val hero: Dp = 120.dp
 
     /** Comfortable cap for content width on wide/landscape layouts. */
     val maxContent: Dp = 640.dp

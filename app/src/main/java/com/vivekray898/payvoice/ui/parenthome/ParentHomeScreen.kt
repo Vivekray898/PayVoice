@@ -54,7 +54,7 @@ import com.vivekray898.payvoice.ui.components.PvTabScaffold
 
 import com.vivekray898.payvoice.ui.components.PvDivider
 import com.vivekray898.payvoice.ui.components.PvPaymentRow
-import com.vivekray898.payvoice.ui.components.PvSecondaryButton
+import com.vivekray898.payvoice.ui.components.PvPrimaryButton
 import com.vivekray898.payvoice.ui.components.PvScaffold
 import com.vivekray898.payvoice.ui.components.StorefrontHero
 import com.vivekray898.payvoice.ui.components.timeAgo
@@ -234,74 +234,26 @@ fun ParentHomeScreen(
                         }
                         Spacer(Modifier.height(Spacing.md))
                     }
-                    PvSecondaryButton(
-                        text = "Show all payments",
+                    // Always enabled: this navigates to the Payments tab,
+                    // which is a real destination whether or not it is empty.
+                    // Greying it out looked like a broken button.
+                    PvPrimaryButton(
+                        text = "See payment history",
                         onClick = { onSelectTab(PvTab.LIST) },
-                        enabled = history.isNotEmpty(),
                     )
                 }
             }
 
-            // 6. Quick links
-            item(key = "quick-links") {
-                Column(
-                    Modifier.padding(
-                        start = Spacing.gutter,
-                        end = Spacing.gutter,
-                        top = Spacing.xxl,
-                    ),
-                ) {
-                    Text(
-                        "Quick links",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onBackground,
-                    )
-                    Spacer(Modifier.height(Spacing.lg))
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                    ) {
-                        QuickLink(icon = Icons.Filled.MonitorHeart, label = "Fix a problem", onClick = onOpenHealth)
-                        QuickLink(
-                            icon = Icons.Filled.People,
-                            label = "Employees",
-                            onClick = { onSelectTab(PvTab.TEAM) },
-                        )
-                        QuickLink(icon = Icons.Filled.Settings, label = "Settings", onClick = { onSelectTab(PvTab.SETTINGS) })
-                        QuickLink(icon = Icons.Filled.Build, label = "Payments", onClick = { onSelectTab(PvTab.LIST) })
-                    }
-                }
-            }
-
+            // 6. Quick links removed: Payments, Team and Settings are the
+            //    bottom tab bar, and "Fix a problem" is the health banner's
+            //    own action. Four tiles restating the navigation bar read as
+            //    a second, older navigation scheme.
             // 7. Bottom clearance comes from the scaffold's inner padding
             //    (tab bar height + navigation-bar inset).
             item(key = "footer") {
                 Spacer(Modifier.height(Spacing.sm))
             }
         }
-    }
-}
-
-/** Quick link: 56dp icon tile + label, >= 72dp total tap height. */
-@Composable
-private fun QuickLink(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    onClick: () -> Unit,
-) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier
-            .clickable(onClick = onClick)
-            .padding(Spacing.xs),
-    ) {
-        IconTile(icon = icon)
-        Spacer(Modifier.height(Spacing.sm))
-        Text(
-            label,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }
 

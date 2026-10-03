@@ -53,7 +53,7 @@ fun ReliabilityScreen(viewModel: MainViewModel, onBack: () -> Unit) {
             contentPadding = PaddingValues(
                 start = Spacing.lg,
                 end = Spacing.lg,
-                top = Spacing.sm,
+                top = inner.calculateTopPadding() + Spacing.sm,
                 bottom = Spacing.xxl + inner.calculateBottomPadding(),
             ),
             verticalArrangement = Arrangement.spacedBy(Spacing.md),

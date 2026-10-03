@@ -128,7 +128,9 @@ fun PaymentsScreen(
             contentPadding = PaddingValues(
                 start = Spacing.lg,
                 end = Spacing.lg,
-                top = Spacing.sm,
+                // Without this the search field and range chips were laid out
+                // UNDER the top bar and clipped by it.
+                top = inner.calculateTopPadding() + Spacing.sm,
                 bottom = Spacing.xxl + inner.calculateBottomPadding(),
             ),
             verticalArrangement = Arrangement.spacedBy(Spacing.sm),

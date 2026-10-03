@@ -89,7 +89,7 @@ fun SettingsScreen(
 
             // ---- Announcements -------------------------------------------
             item(key = "announcements") {
-                PvSectionHeader(text = "Announcements")
+                PvSectionHeader(text = "Announcements", gutter = Spacing.lg)
                 PvListItem(
                     title = "Payment announcements",
                     subtitle = if (expandedAnnouncements) {
@@ -153,7 +153,7 @@ fun SettingsScreen(
 
             // ---- Payment detection ---------------------------------------
             item(key = "detection") {
-                PvSectionHeader(text = "Payment detection")
+                PvSectionHeader(text = "Payment detection", gutter = Spacing.lg)
                 PvCard(modifier = Modifier.padding(horizontal = Spacing.lg)) {
                     PvSwitchRow(
                         label = "Google Pay notifications",
@@ -172,14 +172,16 @@ fun SettingsScreen(
 
             // ---- Device & team -------------------------------------------
             item(key = "device") {
-                PvSectionHeader(text = "Your business")
+                PvSectionHeader(text = "Your business", gutter = Spacing.lg)
                 PvCard(modifier = Modifier.padding(horizontal = Spacing.lg)) {
                     PvListItem(
-                        title = "This device is the",
+                        // "This device is the / Owner" read as a broken
+                        // sentence across two lines.
+                        title = "Your role",
                         subtitle = if (settings.role == DeviceRole.OWNER) {
-                            "Owner"
+                            "This device is the owner"
                         } else {
-                            "Employee"
+                            "This device is an employee"
                         },
                         leadingIcon = Icons.Filled.Storefront,
                         minHeight = Spacing.listRow,
@@ -223,7 +225,7 @@ fun SettingsScreen(
 
             // ---- App settings --------------------------------------------
             item(key = "storage") {
-                PvSectionHeader(text = "App settings")
+                PvSectionHeader(text = "App settings", gutter = Spacing.lg)
                 PvCard(modifier = Modifier.padding(horizontal = Spacing.lg)) {
                     PvSliderRow(
                         label = "Payment memory",
@@ -246,7 +248,7 @@ fun SettingsScreen(
 
             // ---- Support -------------------------------------------------
             item(key = "support") {
-                PvSectionHeader(text = "Support")
+                PvSectionHeader(text = "Support", gutter = Spacing.lg)
                 PvListItem(
                     title = "Fix a problem",
                     subtitle = "Permissions, battery and connection repair",
@@ -267,7 +269,7 @@ fun SettingsScreen(
 
             // ---- About ---------------------------------------------------
             item(key = "about") {
-                PvSectionHeader(text = "About")
+                PvSectionHeader(text = "About", gutter = Spacing.lg)
                 PvCard(modifier = Modifier.padding(horizontal = Spacing.lg)) {
                     AboutRow("Version", "1.0")
                     AboutRow("Android", android.os.Build.VERSION.RELEASE ?: "?")

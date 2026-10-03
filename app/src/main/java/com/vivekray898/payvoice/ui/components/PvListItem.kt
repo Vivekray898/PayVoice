@@ -65,6 +65,9 @@ fun PvListItem(
                 .weight(1f)
                 .heightIn(min = minHeight)
                 .padding(vertical = Spacing.sm),
+            // bodyLarge's line box is shorter than bodySmall's glyphs need,
+            // so a two-line row read as an overlap. One xs of air separates
+            // them without opening up single-line rows.
             verticalArrangement = Arrangement.Center,
         ) {
             Text(title, style = titleStyle, color = MaterialTheme.colorScheme.onSurface)
@@ -73,6 +76,7 @@ fun PvListItem(
                     subtitle,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = Spacing.xxs),
                 )
             }
         }

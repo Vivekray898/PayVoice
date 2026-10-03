@@ -25,17 +25,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.drawText
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.vivekray898.payvoice.ui.theme.Lemon
@@ -49,77 +42,39 @@ import com.vivekray898.payvoice.ui.theme.Spacing
  */
 
 /**
- * Full-bleed hero: a rounded-square phone silhouette with the rupee mark
- * inside and concentric sound-wave arcs to its right — the product story
- * (PayVoice announces payments out loud) in one consistent scene on a soft
- * primaryContainer wash.
+ * Full-bleed hero band: a soft two-stop wash from [MaterialTheme.colorScheme]
+ * `primaryContainer` down to `surface`, with two very low-alpha arcs bleeding
+ * off the right edge.
+ *
+ * This replaces a hand-drawn phone-and-₹-tile graphic. At 200dp tall the
+ * drawn phone read as a cartoon logo floating over the app bar rather than as
+ * a header, and it competed with the real launcher icon for attention. A
+ * gradient does the only job the band has — separating the header from the
+ * greeting below it — without pretending to be an illustration.
  */
 @Composable
 fun StorefrontHero(modifier: Modifier = Modifier) {
     // Colors are captured in composition (DrawScope is not composable).
-    val wash = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
-    val washDeep = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
-    val phoneBody = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f)
-    val phoneScreen = MaterialTheme.colorScheme.surface
-    val waves = MaterialTheme.colorScheme.primary
-    val rupee = MaterialTheme.colorScheme.onPrimaryContainer
-    val rupeeMeasurer = rememberTextMeasurer()
+    val top = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
+    val bottom = MaterialTheme.colorScheme.surface
+    val ripple = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
     Canvas(modifier = modifier.fillMaxSize()) {
-        val w = size.width
-        val h = size.height
-
-        // Background wash (soft vertical two-step)
-        drawRect(color = wash, size = Size(w, h * 0.6f))
-        drawRect(color = washDeep, topLeft = Offset(0f, h * 0.6f), size = Size(w, h * 0.4f))
-
-        // Phone silhouette (centered, slightly left to leave room for waves)
-        val phoneW = w * 0.2f
-        val phoneH = h * 0.52f
-        val phoneLeft = w * 0.34f
-        val phoneTop = h * 0.22f
-        drawRoundRect(
-            color = phoneBody,
-            topLeft = Offset(phoneLeft, phoneTop),
-            size = Size(phoneW, phoneH),
-            cornerRadius = CornerRadius(phoneW * 0.22f),
-        )
-        // Screen inset
-        val screenPad = phoneW * 0.09f
-        drawRoundRect(
-            color = phoneScreen,
-            topLeft = Offset(phoneLeft + screenPad, phoneTop + screenPad),
-            size = Size(phoneW - screenPad * 2, phoneH - screenPad * 2),
-            cornerRadius = CornerRadius(phoneW * 0.16f),
-        )
-
-        // Rupee symbol inside the screen — the real glyph, so it reads as ₹
-        // instead of an approximation drawn from three strokes.
-        val cx = phoneLeft + phoneW / 2
-        val cy = phoneTop + phoneH * 0.42f
-        val rupeeLayout = rupeeMeasurer.measure(
-            text = "₹",
-            style = TextStyle(
-                color = rupee,
-                fontSize = (phoneW * 0.52f).toSp(),
-                fontWeight = FontWeight.Bold,
+        drawRect(
+            brush = androidx.compose.ui.graphics.Brush.verticalGradient(
+                colors = listOf(top, bottom),
             ),
         )
-        drawText(
-            textLayoutResult = rupeeLayout,
-            topLeft = Offset(cx - rupeeLayout.size.width / 2f, cy - rupeeLayout.size.height / 2f),
-        )
-
-        // Sound-wave arcs (three concentric, right of the phone)
-        val arcCenter = Offset(phoneLeft + phoneW + w * 0.015f, phoneTop + phoneH * 0.5f)
-        for (i in 1..3) {
-            drawArc(
-                color = waves.copy(alpha = 0.85f - (i - 1) * 0.22f),
-                startAngle = -55f,
-                sweepAngle = 110f,
-                useCenter = false,
-                topLeft = Offset(arcCenter.x - i * w * 0.05f, arcCenter.y - i * h * 0.11f),
-                size = Size(i * w * 0.1f, i * h * 0.22f),
-                style = Stroke(width = w * 0.012f, cap = StrokeCap.Round),
+        // Two concentric arcs, anchored off the right edge so they read as a
+        // soft sound pulse rather than as an icon.
+        val cx = size.width
+        val cy = size.height * 0.5f
+        for (i in 1..2) {
+            val r = size.minDimension * (0.42f + i * 0.22f)
+            drawCircle(
+                color = ripple,
+                radius = r,
+                center = Offset(cx, cy),
+                style = Stroke(width = size.minDimension * 0.03f),
             )
         }
     }
