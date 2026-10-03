@@ -95,6 +95,11 @@ class PayVoiceAuth(private val client: SupabaseClient) {
                         return session.userId
                     }
                     lastError = IllegalStateException("no-session")
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    // Cancellation is control flow, not a failure: swallowing it
+                    // here makes a cancelled sign-in keep retrying and reporting
+                    // FAILED after the caller's scope is already gone.
+                    throw e
                 } catch (e: Exception) {
                     lastError = e
                     com.vivekray898.payvoice.core.util.DebugLog.w(

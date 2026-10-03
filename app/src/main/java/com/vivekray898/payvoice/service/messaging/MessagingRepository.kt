@@ -149,6 +149,10 @@ class MessagingRepository(private val context: Context) {
                     Log.d(TAG, "FCM token refreshed (attempt ${attempt + 1}): ${token.take(12)}…")
                 }
                 return Result.success(token)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // Cancellation is control flow: catching it as a failure would
+                // burn the remaining retries on a scope nobody is waiting on.
+                throw e
             } catch (e: Exception) {
                 lastError = e
                 // TEMPORARY (Phase 1 Check 3): release-visible DIAG — remove
