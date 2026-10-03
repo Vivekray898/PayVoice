@@ -109,3 +109,38 @@ quick links replace the Manage stack, matching the reference).
 4. **Recent payments retained on Home.** It's the product's core surface
    (announcement history) and the prompt's v3 Home dropped it; it renders
    through PvPaymentRow/MoneyText on the new primitives.
+
+## Dead-UI and misleading-label pass (5 fixes, one commit each)
+
+| # | Problem | Fix | Commit | On-device proof |
+|---|---------|-----|--------|-----------------|
+| 1 | Header row showed the device name (`sdk_gphone64_arm64`), a dead chevron, and an avatar circle with no account behind it | Replaced with a transparent 48dp row: `PayVoice` wordmark (`titleLarge`, `onBackground`) + `Icons.Filled.Settings` gear (48dp `IconButton`) | `c1ee503` | Dump shows only "PayVoice" + "Settings" |
+| 2 | Quick links: "QR code" (no QR feature exists) and "Support" (opened Reliability) | Diagnostics / Employees / Settings / Reliability | `8cc3d20` | Dump shows exactly those four labels |
+| 3 | Hero used ambiguous floating shapes | Option A: phone silhouette + 3 concentric sound-wave arcs on a `primaryContainer` wash | `5774911` | [fix5-home-light.png](screens/v3/fix5-home-light.png) |
+| 4 | "Connect to your owner" card showed a bell (reads as *notifications*) | `BellIllustration` takes an `ImageVector`; pairing card uses `Icons.Filled.Link`, notification card uses `Icons.Filled.Notifications` + badge | `0631382` | [fix4-card-bell.png](screens/v3/fix4-card-bell.png) |
+| 5 | Empty state stacked a 72dp circle illustration + a sentence repeating the button | One centered line "No payments yet" (`bodyMedium`, `onSurfaceVariant`) + the existing disabled `PvSecondaryButton("Show all payments")` | `d53a73b` | [fix5-home-light.png](screens/v3/fix5-home-light.png) |
+| — | Greeting read "Hello, sdk_gphone64_arm64" | `displayName` derivation removed entirely; greeting is "Hello", or "Welcome back" once payments exist | `d53a73b` | Dump: `text="Hello"`, zero `sdk_gphone` matches |
+
+### Spec gap found during verification
+
+Fix 3 specified a ₹ inside the phone. The committed hero drew it from three
+`drawLine` strokes, which rendered as two horizontal bars and a diagonal slash
+— not a recognizable rupee. Caught by screenshot review, not by the build.
+`StorefrontHero` now measures and draws the actual `₹` glyph via
+`rememberTextMeasurer` (`bd00789`), so it is correct for any installed font.
+
+`PaymentsEmptyIllustration` was deleted from `Illustrations.kt` (Fix 5) rather
+than left as dead code.
+
+### Verification
+
+| Check | Result |
+|-------|--------|
+| Token gate (`.dp` / `Color(0x` / `.sp` outside token files and `// structural` markers) | **0** hits |
+| `Scaffold(` outside `PvScaffold.kt` | **0** (onboarding uses `StepScaffold`, which wraps `PvScaffold`) |
+| `./gradlew test assembleDebug` | **GREEN**, 96/96 tests, 0 failures, 0 errors |
+| Light + dark Home screenshots | [light](screens/v3/fix5-home-light.png), [dark](screens/v3/fix5-home-dark.png) — both reviewed |
+| Device-name leak (`grep -c sdk_gphone` on the UI dump) | **0** |
+
+Only files under `ui/` changed; `service/`, `core/`, `supabase/`,
+`AndroidManifest.xml`, and every `.gradle.kts` are untouched.
