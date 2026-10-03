@@ -217,11 +217,15 @@ fun IconTile(
 }
 
 /**
- * Notification bell illustration with a soft circular backplate and a
- * badge dot (action-card art). 56dp structural.
+ * Action-card illustration: the given icon in a soft circular backplate,
+ * with an optional attention badge dot. 56dp structural.
  */
 @Composable
-fun BellIllustration(modifier: Modifier = Modifier) {
+fun BellIllustration(
+    modifier: Modifier = Modifier,
+    icon: ImageVector = Icons.Filled.NotificationsActive,
+    badge: Boolean = true,
+) {
     Box(
         modifier = modifier.size(Spacing.xxl + Spacing.lg + Spacing.sm), // 56dp structural
         contentAlignment = Alignment.Center,
@@ -233,20 +237,22 @@ fun BellIllustration(modifier: Modifier = Modifier) {
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
-                    Icons.Filled.NotificationsActive,
+                    icon,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(Spacing.xxl), // 32dp structural
                 )
             }
         }
-        Surface(
-            shape = CircleShape,
-            color = Lemon,
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .size(Spacing.xl + Spacing.sm), // 20dp structural badge
-        ) {}
+        if (badge) {
+            Surface(
+                shape = CircleShape,
+                color = Lemon,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .size(Spacing.xl + Spacing.sm), // 20dp structural badge
+            ) {}
+        }
     }
 }
 

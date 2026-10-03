@@ -22,7 +22,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.MonitorHeart
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
@@ -166,6 +168,11 @@ fun ParentHomeScreen(
                             end = Spacing.lg,
                             top = Spacing.xl,
                         ),
+                        icon = when (role) {
+                            DeviceRole.EMPLOYEE -> Icons.Filled.Link
+                            else -> Icons.Filled.Notifications
+                        },
+                        badge = role != DeviceRole.EMPLOYEE,
                         title = when (role) {
                             DeviceRole.EMPLOYEE -> "Connect to your owner"
                             else -> "Turn on all notifications"
@@ -288,10 +295,12 @@ fun ParentHomeScreen(
     }
 }
 
-/** The GPay-Business action card: bell art, bold headline, muted two-line
- *  description, and an inline text-link CTA below the row. */
+/** The GPay-Business action card: semantically correct icon art, bold
+ *  headline, muted two-line description, inline text-link CTA below. */
 @Composable
 private fun ActionCard(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    badge: Boolean,
     title: String,
     description: String,
     cta: String,
@@ -307,7 +316,7 @@ private fun ActionCard(
     ) {
         Column(Modifier.padding(Spacing.xl - Spacing.xs)) { // 20dp structural padding
             Row(verticalAlignment = Alignment.CenterVertically) {
-                BellIllustration()
+                BellIllustration(icon = icon, badge = badge)
                 Spacer(Modifier.width(Spacing.lg))
                 Column(Modifier.weight(1f)) {
                     Text(
