@@ -84,6 +84,12 @@ after the redesign — proof that the migration changed no component render.
 | `screenshots/03-team-owner.png` | Team: empty state + "Try it out" test announcement |
 | `screenshots/04-settings.png` | Settings: announcements, detection, business, support |
 
+**Update (2026-10-04):** this table records the state verified during the
+redesign, not the files in the repo. The screenshot set was later recaptured
+for the README and `docs/screenshots/03-team-owner.png` was **deleted** — the
+Team screen holds `FLAG_SECURE` (see `PvSecureWindow`), so Android refuses to
+capture it. The surviving set is Home, Payments and Settings.
+
 The employee Pair tab was verified live as well (status card, volume
 slider, test voice, last payment, health banner) and the nav labels were
 confirmed to switch to Home / Recent / Pair / Settings.

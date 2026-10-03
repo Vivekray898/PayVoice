@@ -205,7 +205,7 @@ docs/          audit, threat model, MASVS checklist, design system, analytics
 | `docs/MASVS_CHECKLIST.md` | MASVS-aligned checklist with per-control verdicts |
 | `docs/DESIGN_SYSTEM.md` | Component library and its Gradle enforcement gates |
 | `docs/ANALYTICS.md` | Closed catalogue of the analytics events the app may send |
-| `docs/screenshots/*.png` | 4 real screenshots (home, payments, team, settings) |
+| `docs/screenshots/*.png` | 3 real screenshots (home, payments, settings), recaptured from the current build on 2026-10-04 |
 | `supabase/README.md` | Backend setup and deployment |
 
 ---
@@ -247,8 +247,12 @@ shipped a visibly broken badge. The status is stated as text instead.
 1. **No `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `CHANGELOG.md`,
    `CITATION.cff`, or `llms.txt`** — all to be created.
 2. **Hindi README** — skipped by maintainer decision on 2026-10-04.
-3. **Screenshots are the 4 in `docs/screenshots/`** and predate the four-tab
-   redesign; recapture before publishing.
+3. **Screenshots are the 3 in `docs/screenshots/`** — recaptured from the
+   current four-tab build on 2026-10-04 (API 36 emulator, 1344x2992). There is
+   deliberately **no** Team screenshot: that screen renders a live single-use
+   pairing code behind `FLAG_SECURE` (`PvSecureWindow`), and Android refuses to
+   capture a secure window. The old stale set (1080x2400, 40-86KB) and
+   `03-team-owner.png` were deleted rather than kept alongside the new ones.
 4. **No repository description, topics, or website URL set** (outside the files).
 5. **Security finding, not a README fact:** a Firebase **service-account** key
    (`payment-announcer-43071-firebase-adminsdk-fbsvc-*.json`) sits in the

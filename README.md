@@ -19,15 +19,15 @@ PayVoice is an open-source Android app (Kotlin, Jetpack Compose) that reads Goog
 
 <table>
 <tr>
-<td width="25%"><img src="docs/screenshots/01-home-owner.png" alt="PayVoice owner Home screen showing the shop name, today's total received, a health banner and a recent payments list" width="100%"></td>
-<td width="25%"><img src="docs/screenshots/02-payments-owner.png" alt="PayVoice Payments screen with a search field, Today Week Month All range filters and a list of received payments" width="100%"></td>
-<td width="25%"><img src="docs/screenshots/03-team-owner.png" alt="PayVoice Team screen listing paired employee devices with the option to add or remove an employee" width="100%"></td>
-<td width="25%"><img src="docs/screenshots/04-settings.png" alt="PayVoice Settings screen with voice style and language pickers, speech speed and volume sliders and retention settings" width="100%"></td>
+<td width="33%"><img src="docs/screenshots/01-home-owner.png" alt="PayVoice owner Home screen showing the shop name, today's total received, a health banner and a recent payments list" width="100%"></td>
+<td width="33%"><img src="docs/screenshots/02-payments-owner.png" alt="PayVoice Payments screen with a search field, Today Week Month All range filters and a list of received payments" width="100%"></td>
+<td width="33%"><img src="docs/screenshots/04-settings.png" alt="PayVoice Settings screen with voice style and language pickers, speech speed and volume sliders and retention settings" width="100%"></td>
 </tr>
 </table>
 
-**TODO before publishing:** these predate the four-tab redesign — recapture from
-the current build (Home, Payments, Team, Settings, Pair, Health).
+Captured from the current `main` build (API 36 emulator, 1344x2992). The Team
+tab is not pictured: it renders a live pairing code behind `FLAG_SECURE`, so
+Android blocks screenshots of it by design.
 
 ---
 
