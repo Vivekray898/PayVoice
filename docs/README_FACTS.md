@@ -16,7 +16,7 @@ editing the README.
 |---|---|
 | Name is "PayVoice" | `app/src/main/res/values/strings.xml` → `app_name` |
 | Android app, package `com.vivekray898.payvoice` | `app/build.gradle.kts:73` |
-| **Pre-release**: `versionName = "0.1.0-phase1"`, `versionCode = 1` | `app/build.gradle.kts:76-77` |
+| **Pre-release**: `versionName = "0.1.0-phase1"`, `versionCode = 1` | `app/build.gradle.kts:76-77`. Note the published tag is `v2.9.0` — see §11. |
 | Single APK serves two roles: owner and employee | `core/remote/RemoteModels.kt` → `DeviceRole`; `ui/components/PvBottomNav.kt` |
 | Reads **Google Pay** payment notifications only, via a Notification Listener Service | `AndroidManifest.xml` (`PayVoiceNotificationListener`, `<queries>` for `com.google.android.apps.nbu.paisa.user`); `core/parser/GooglePayParser.kt:9` |
 | Extracts amount and sender from the notification text | `core/parser/{AmountExtractor,GooglePayParser,NotificationTextResolver}.kt` |
@@ -36,7 +36,6 @@ editing the README.
 - Does not read SMS, and does not read PhonePe or any other UPI app.
   One capture source: Google Pay.
 - No hardware. It is an Android app, not an IoT device.
-- No Play Store release exists. Nothing is published or downloadable yet.
 - No user count, download count, or star count exists.
 
 ---
@@ -211,25 +210,47 @@ docs/          audit, threat model, MASVS checklist, design system, analytics
 
 ---
 
-## 11. Blocking gaps — README cannot be finished without these
+## 11. Release status — verify before adding any release badge
 
-1. **No LICENSE file exists in the repository.** Nothing can be published as
-   open source until the maintainer chooses one. Recommended: **Apache-2.0**,
-   because it includes an explicit patent grant and matches the maturity of the
-   dependency set; MIT is the simpler alternative. Must be the maintainer's
-   decision, not mine.
-2. **No releases and no tags.** A "latest release" badge would be fake, so it
-   must not be added until a real tagged release exists.
-3. **No repository description, topics, or website URL set** (outside the
-   files).
-4. **No `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `CHANGELOG.md`,
+There **is** a published GitHub release. An earlier draft of this file claimed
+otherwise; that was wrong and is corrected here.
+
+| Fact | Value | How checked |
+|---|---|---|
+| Tag | `v2.9.0`, an ancestor of `main` | `git tag -l`, `git merge-base --is-ancestor` |
+| Published | 2026-09-30, marked **Pre-release** | `gh release view v2.9.0` |
+| Attached asset | `payvoice-v2.9.0.apk` | `gh release view v2.9.0` |
+| Tag commit | `1d8f27e` "new added version realse ready" | `git log -1 v2.9.0` |
+| No Google Play listing | — | none referenced anywhere in the repo |
+
+**Three inconsistencies this exposes, all for the maintainer to decide:**
+
+1. **`v2.9.0` is not built from `main` as it stands.** The tag predates the
+   security audit, the Supabase/Firebase rework and the UI redesign. `minSdk` was
+   `24` at the tag and is `26` now.
+2. **The v2.9.0 release notes are inaccurate about the current project.** They
+   advertise an "SMS fallback" and instruct users to grant SMS permission. That
+   was true at the tag (`v2.9.0:app/src/main/AndroidManifest.xml` carries
+   `READ_SMS`), but the current tree has **no** SMS permission, no `SmsManager`
+   and no SMS parser. Current code reads Google Pay notifications only.
+3. **The tag and the in-app version disagree.** The tag is `v2.9.0`, but
+   `versionName` is `"0.1.0-phase1"` both at the tag and at `main`, so an APK
+   built today self-reports as `0.1.0-phase1`, not `2.9.0`.
+
+**Why there is still no release badge:** shields.io's
+`github/v/release` endpoint ignores pre-releases and returned the literal text
+`"no releases or repo not found"` for this repository. Adding it would have
+shipped a visibly broken badge. The status is stated as text instead.
+
+## 12. Remaining gaps
+
+1. **No `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `CHANGELOG.md`,
    `CITATION.cff`, or `llms.txt`** — all to be created.
-5. **Hindi README (`README.hi.md`)** — the app supports Hindi announcements,
-   but a translated README needs explicit approval and a named translator or
-   review owner.
-6. **Screenshots are the 4 in `docs/screenshots/`** and are pre-redesign for at
-   least one surface; confirm they are current, or recapture.
-7. **Security finding, not a README fact:** a Firebase **service-account** key
+2. **Hindi README** — skipped by maintainer decision on 2026-10-04.
+3. **Screenshots are the 4 in `docs/screenshots/`** and predate the four-tab
+   redesign; recapture before publishing.
+4. **No repository description, topics, or website URL set** (outside the files).
+5. **Security finding, not a README fact:** a Firebase **service-account** key
    (`payment-announcer-43071-firebase-adminsdk-fbsvc-*.json`) sits in the
    working tree. It is untracked and gitignored, so it has never been committed,
    but `AGENTS.md` states FCM secrets belong in Supabase Edge Function Secrets

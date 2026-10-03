@@ -7,8 +7,11 @@ PayVoice is an open-source Android app (Kotlin, Jetpack Compose) that reads Goog
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.2.10-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org)
 [![Min SDK](https://img.shields.io/badge/minSdk-26%20%28Android%208.0%2B%29-3DDC84)](https://developer.android.com)
 
-> **Status: pre-release (`0.1.0-phase1`).** No tagged release exists yet, and
-> nothing is published to Google Play. There is no installable APK on this page.
+> **Status: pre-release.** The current build reports `0.1.0-phase1`. The only
+> published artefact is [`v2.9.0`](https://github.com/Vivekray898/PayVoice/releases/tag/v2.9.0),
+> a pre-release with an APK attached from 2026-09-30 — **it predates the current
+> security audit, backend rework and UI redesign**, so it does not represent
+> what is on `main` today. There is no Google Play listing.
 
 ---
 
@@ -359,7 +362,8 @@ events it may emit, all structural.
 
 Honest, and ordered by what actually blocks use. Nothing here is built.
 
-- [ ] Cut a tagged release with a signed APK and a changelog.
+- [ ] Cut a release that matches `main`. `v2.9.0` predates the current code,
+      and its notes advertise an SMS fallback that the current build removed.
 - [ ] Publish the owner/employee pairing flow to end-to-end test against a real
       Supabase project — the reliability run in
       [docs/RELIABILITY_TEST_RESULTS.md](docs/RELIABILITY_TEST_RESULTS.md) is
