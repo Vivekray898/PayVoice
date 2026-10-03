@@ -73,17 +73,17 @@ class EmployeeRepository(
 
         coroutineScope {
             val poll = launch {
-                // Lightweight fallback while Realtime is not LIVE. Once the
-                // socket is live the poll idles; if the socket drops, it
-                // resumes after the REALTIME_FALLBACK_MS grace (no tight
-                // retry loop against deterministic failures).
+                // Lightweight fallback while Realtime is not LIVE. While the
+                // socket is healthy this suspends on the status flow instead of
+                // waking on a timer: previously it woke every 60 s per flow
+                // purely to re-read a boolean that had not changed, which on a
+                // backgrounded app is a periodic wakeup that buys nothing.
+                // The Realtime collector below owns state whenever it is LIVE.
                 while (isActive) {
-                    val live = realtime.status.value.state ==
-                        SupabaseRealtime.Status.State.LIVE
-                    delay(if (live) POLL_IDLE_WHEN_LIVE_MS else POLL_INTERVAL_MS)
-                    if (live) continue
+                    realtime.awaitNotLive()
                     val fresh = runCatching { fetchEmployees() }.getOrNull() ?: continue
                     publish(fresh)
+                    delay(POLL_INTERVAL_MS)
                 }
             }
             if (uid != null) {
@@ -127,12 +127,10 @@ class EmployeeRepository(
             val poll = launch {
                 // Same LIVE-gated fallback as the owner flow above.
                 while (isActive) {
-                    val live = realtime.status.value.state ==
-                        SupabaseRealtime.Status.State.LIVE
-                    delay(if (live) POLL_IDLE_WHEN_LIVE_MS else OWN_POLL_INTERVAL_MS)
-                    if (live) continue
+                    realtime.awaitNotLive()
                     val fresh = runCatching { fetchOwnDevice() }.getOrNull() ?: continue
                     publish(fresh)
+                    delay(OWN_POLL_INTERVAL_MS)
                 }
             }
             if (uid != null) {
@@ -440,7 +438,6 @@ class EmployeeRepository(
         const val TAG = "EmployeeRepo"
         const val POLL_INTERVAL_MS = 15_000L
         const val OWN_POLL_INTERVAL_MS = 10_000L
-        const val POLL_IDLE_WHEN_LIVE_MS = 60_000L
         const val AUTH_CACHE_TTL_MS = 30_000L
         const val AUTH_FETCH_TIMEOUT_MS = 5_000L
     }

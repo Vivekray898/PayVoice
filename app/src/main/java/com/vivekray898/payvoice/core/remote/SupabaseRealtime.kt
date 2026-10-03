@@ -5,6 +5,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -78,6 +80,21 @@ class SupabaseRealtime {
     val status: StateFlow<Status> = _status
 
     private val msgRef = AtomicLong(0)
+
+    /**
+     * Suspends while the socket is healthy and returns as soon as it is not —
+     * i.e. the caller can wait for "time to fall back to polling" without a
+     * timer. Callers that poll as a Realtime fallback use this instead of
+     * waking on an interval just to re-read a boolean that has not changed.
+     *
+     * [maxWaitMs] bounds the wait so a status left stale at LIVE (server-side
+     * half-open, collector cancelled without awaitClose running) still
+     * produces an occasional refresh instead of wedging the fallback forever.
+     */
+    suspend fun awaitNotLive(maxWaitMs: Long = MAX_LIVE_WAIT_MS): Status =
+        withTimeoutOrNull(maxWaitMs) {
+            status.first { it.state != Status.State.LIVE }
+        } ?: status.value
 
     private val client: OkHttpClient by lazy {
         OkHttpClient.Builder()
@@ -239,5 +256,8 @@ class SupabaseRealtime {
 
     private companion object {
         const val TAG = "SupabaseRealtime"
+
+        /** Upper bound on a single LIVE wait; see [awaitNotLive]. */
+        const val MAX_LIVE_WAIT_MS = 15 * 60_000L
     }
 }
