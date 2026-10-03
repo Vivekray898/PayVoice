@@ -7,14 +7,14 @@ PayVoice is an open-source Android app (Kotlin, Jetpack Compose) that reads Goog
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.2.10-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org)
 [![Min SDK](https://img.shields.io/badge/minSdk-26%20%28Android%208.0%2B%29-3DDC84)](https://developer.android.com)
 
-> **Status: pre-release.** The canonical version is **`0.1.0-phase1`**
-> (`versionCode 1`), and **no signed APK has been published for it**. The only
-> attached artefact is
-> [`payvoice-v2.9.0.apk`](https://github.com/Vivekray898/PayVoice/releases/tag/v2.9.0)
-> on the `v2.9.0` pre-release from 2026-09-30 — **it predates the current
-> security audit, backend rework and UI redesign, so it does not represent what
-> is on `main` today**. In particular it contains an SMS fallback that current
-> code no longer has. There is no Google Play listing.
+> **Status: pre-release.** The current version is **`0.1.0-phase1`**
+> (`versionCode 1`), available as
+> [`payvoice-0.1.0-phase1.apk`](https://github.com/Vivekray898/PayVoice/releases/tag/v0.1.0-phase1)
+> on a pre-release built from `main`. An earlier
+> [`v2.9.0`](https://github.com/Vivekray898/PayVoice/releases/tag/v2.9.0)
+> pre-release from 2026-09-30 is **superseded** — it predates the security
+> audit, backend rework and UI redesign, and contains an SMS fallback that
+> current code no longer has. There is no Google Play listing.
 
 ---
 

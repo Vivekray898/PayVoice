@@ -225,13 +225,20 @@ otherwise; that was wrong and is corrected here.
 |---|---|---|
 | Tag | `v2.9.0`, an ancestor of `main` | `git tag -l`, `git merge-base --is-ancestor` |
 | Published | 2026-09-30, marked **Pre-release** | `gh release view v2.9.0` |
-| Attached asset | `payvoice-v2.9.0.apk` | `gh release view v2.9.0` |
+| Attached asset | `payvoice-v2.9.0.apk` (superseded) | `gh release view v2.9.0` |
+| Current release | `v0.1.0-phase1`, tag at `962b544`, asset `payvoice-0.1.0-phase1.apk` | `gh release view v0.1.0-phase1` |
 | Tag commit | `1d8f27e` "new added version realse ready" | `git log -1 v2.9.0` |
 | No Google Play listing | — | none referenced anywhere in the repo |
 
 **Canonical version:** `0.1.0-phase1` / `versionCode 1` in `app/build.gradle.kts`,
 adopted by maintainer decision on 2026-10-04. The `v2.9.0` number is retired.
-**No signed APK has been published for `0.1.0-phase1`.**
+A signed pre-release **was** published on 2026-10-04:
+`releases/tag/v0.1.0-phase1`, asset `payvoice-0.1.0-phase1.apk` (3,168,913 B),
+tagged at `962b544`. It is signed with the release certificate
+(`CN=PayVoice`, SHA-1 `8ddbcbed1ffd5cc76d6f19cf5fce22da060a1d8f`), R8-minified
+to a single dex, with no LeakCanary and no `READ_SMS`. Verified on an API 36
+emulator: installs, completes onboarding, renders the four-tab Home screen.
+The older `v2.9.0` page was retitled "superseded" so the two do not collide.
 
 **Inconsistencies found, and what was done about them (2026-10-04):**
 
