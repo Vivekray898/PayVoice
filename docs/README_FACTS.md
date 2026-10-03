@@ -229,19 +229,33 @@ otherwise; that was wrong and is corrected here.
 | Tag commit | `1d8f27e` "new added version realse ready" | `git log -1 v2.9.0` |
 | No Google Play listing | — | none referenced anywhere in the repo |
 
-**Three inconsistencies this exposes, all for the maintainer to decide:**
+**Canonical version:** `0.1.0-phase1` / `versionCode 1` in `app/build.gradle.kts`,
+adopted by maintainer decision on 2026-10-04. The `v2.9.0` number is retired.
+**No signed APK has been published for `0.1.0-phase1`.**
+
+**Inconsistencies found, and what was done about them (2026-10-04):**
 
 1. **`v2.9.0` is not built from `main` as it stands.** The tag predates the
    security audit, the Supabase/Firebase rework and the UI redesign. `minSdk` was
-   `24` at the tag and is `26` now.
-2. **The v2.9.0 release notes are inaccurate about the current project.** They
-   advertise an "SMS fallback" and instruct users to grant SMS permission. That
-   was true at the tag (`v2.9.0:app/src/main/AndroidManifest.xml` carries
+   `24` at the tag and is `26` now. The release page was retitled to carry the
+   canonical version, with the artefact's real identity and its superseded
+   status stated in the first section of the body.
+2. **The release notes were inaccurate about the current project.** They
+   advertised an "SMS fallback" and instructed users to grant SMS permission.
+   That was true at the tag (`v2.9.0:app/src/main/AndroidManifest.xml` carries
    `READ_SMS`), but the current tree has **no** SMS permission, no `SmsManager`
-   and no SMS parser. Current code reads Google Pay notifications only.
-3. **The tag and the in-app version disagree.** The tag is `v2.9.0`, but
-   `versionName` is `"0.1.0-phase1"` both at the tag and at `main`, so an APK
-   built today self-reports as `0.1.0-phase1`, not `2.9.0`.
+   and no SMS parser. Current code reads Google Pay notifications only. The
+   notes were rewritten; the false claims now appear only inside an explicit
+   "Corrections" list that retracts them.
+3. **Title/tag disagreement.** The release was titled "PayVoice v1.0.0" while
+   the tag was `v2.9.0`, and the body's `Full Changelog` link pointed at
+   `commits/v1.0.0`, a tag that does not exist — a dead link. Both fixed; the
+   broken link was dropped rather than repointed.
+4. **Other stale claims removed at the same time:** "end-to-end delivery
+   confirmed, `fcmLatency=1710ms`" (the reliability doc records that leg as NOT
+   VERIFIED), "release build is unminified" (`isShrinkResources = true` with
+   `app/proguard-rules.pro`), and "unit test suite: 152/152 passing" (re-ran
+   2026-10-04: **129 tests, 0 failures, 0 skipped**, 12 suites).
 
 **Why there is still no release badge:** shields.io's
 `github/v/release` endpoint ignores pre-releases and returned the literal text
