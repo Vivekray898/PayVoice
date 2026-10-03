@@ -19,12 +19,15 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.vivekray898.payvoice.core.remote.DeviceRole
 import com.vivekray898.payvoice.ui.MainViewModel
+import com.vivekray898.payvoice.ui.components.PvTab
 import com.vivekray898.payvoice.ui.diagnostics.DiagnosticsScreen
 import com.vivekray898.payvoice.ui.employee.EmployeeScreen
 import com.vivekray898.payvoice.ui.onboarding.OnboardingScreen
 import com.vivekray898.payvoice.ui.owner.OwnerRemoteScreen
 import com.vivekray898.payvoice.ui.parenthome.ParentHomeScreen
+import com.vivekray898.payvoice.ui.payments.PaymentsScreen
 import com.vivekray898.payvoice.ui.reliability.ReliabilityScreen
 import com.vivekray898.payvoice.ui.settings.SettingsScreen
 import com.vivekray898.payvoice.ui.theme.PayVoiceTheme
@@ -97,6 +100,7 @@ class MainActivity : ComponentActivity() {
     /**
      * Spec: permission statuses must refresh when the user returns from
      * system settings. Cheap + off-main (DeviceStatusMonitor.snapshot).
+     * Also re-runs the health checklist, so the Home banner updates at once.
      */
     override fun onResume() {
         super.onResume()
@@ -120,25 +124,58 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/**
+ * The navigation graph: onboarding ahead of the tabs, four tab destinations,
+ * two pushed screens (health checklist, diagnostics).
+ *
+ * The tab *slots* are identical for both roles; only the label, icon and
+ * screen behind slot 2 and 3 change. That keeps the bar to exactly four
+ * destinations per role, as specified, instead of a different navigation
+ * model per user.
+ */
 private object Routes {
     const val ONBOARDING = "onboarding"
     const val HOME = "home"
+    const val LIST = "list" // owner: payments history · employee: recent
+    const val TEAM = "team" // owner: employees · employee: this device / pair
     const val SETTINGS = "settings"
+    const val HEALTH = "health"
     const val DIAGNOSTICS = "diagnostics"
-    const val RELIABILITY = "reliability"
-    const val OWNER_REMOTE = "owner_remote"
-    const val EMPLOYEE_REMOTE = "employee_remote"
+}
+
+private fun routeFor(tab: PvTab): String = when (tab) {
+    PvTab.HOME -> Routes.HOME
+    PvTab.LIST -> Routes.LIST
+    PvTab.TEAM -> Routes.TEAM
+    PvTab.SETTINGS -> Routes.SETTINGS
+}
+
+private fun tabFor(route: String): PvTab = when (route) {
+    Routes.HOME -> PvTab.HOME
+    Routes.LIST -> PvTab.LIST
+    Routes.TEAM -> PvTab.TEAM
+    Routes.SETTINGS -> PvTab.SETTINGS
+    else -> PvTab.HOME
 }
 
 @Composable
 private fun PayVoiceNavHost(viewModel: MainViewModel) {
     val nav = rememberNavController()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val role = settings.role
 
     // Start at ONBOARDING until DataStore confirms setup is complete. Composing
     // only ONE screen eliminates the HOME→ONBOARDING double composition that
     // caused the first-frame frame skips (jank fix, spec: PERFORMANCE ISSUE).
     val startRoute = if (settings.onboardingComplete) Routes.HOME else Routes.ONBOARDING
+
+    val selectTab: (PvTab) -> Unit = { tab ->
+        nav.navigate(routeFor(tab)) {
+            popUpTo(Routes.HOME) { saveState = true }
+            launchSingleTop = true
+            restoreState = true
+        }
+    }
 
     NavHost(nav, startDestination = startRoute) {
         composable(Routes.ONBOARDING) {
@@ -150,35 +187,58 @@ private fun PayVoiceNavHost(viewModel: MainViewModel) {
             }
             OnboardingScreen(viewModel)
         }
+
         composable(Routes.HOME) {
             ParentHomeScreen(
                 viewModel = viewModel,
-                onOpenSettings = { nav.navigate(Routes.SETTINGS) },
-                onOpenDiagnostics = { nav.navigate(Routes.DIAGNOSTICS) },
-                onOpenReliability = { nav.navigate(Routes.RELIABILITY) },
-                onOpenOwnerRemote = { nav.navigate(Routes.OWNER_REMOTE) },
-                onOpenEmployeeRemote = { nav.navigate(Routes.EMPLOYEE_REMOTE) },
+                selected = tabFor(Routes.HOME),
+                onSelectTab = selectTab,
+                onOpenHealth = { nav.navigate(Routes.HEALTH) },
             )
         }
-        composable(Routes.OWNER_REMOTE) {
-            OwnerRemoteScreen(viewModel, onBack = { nav.popBackStack() })
+
+        composable(Routes.LIST) {
+            PaymentsScreen(
+                viewModel = viewModel,
+                selected = tabFor(Routes.LIST),
+                onSelectTab = selectTab,
+                role = role,
+                readOnly = role != DeviceRole.OWNER,
+            )
         }
-        composable(Routes.EMPLOYEE_REMOTE) {
-            EmployeeScreen(viewModel, onBack = { nav.popBackStack() })
+
+        composable(Routes.TEAM) {
+            when (role) {
+                DeviceRole.OWNER -> OwnerRemoteScreen(
+                    viewModel = viewModel,
+                    selected = tabFor(Routes.TEAM),
+                    onSelectTab = selectTab,
+                )
+                else -> EmployeeScreen(
+                    viewModel = viewModel,
+                    selected = tabFor(Routes.TEAM),
+                    onSelectTab = selectTab,
+                    onOpenHealth = { nav.navigate(Routes.HEALTH) },
+                )
+            }
         }
+
         composable(Routes.SETTINGS) {
             SettingsScreen(
-                viewModel,
-                onBack = { nav.popBackStack() },
+                viewModel = viewModel,
+                selected = tabFor(Routes.SETTINGS),
+                onSelectTab = selectTab,
                 onOpenDiagnostics = { nav.navigate(Routes.DIAGNOSTICS) },
-                onOpenReliability = { nav.navigate(Routes.RELIABILITY) },
+                onOpenHealth = { nav.navigate(Routes.HEALTH) },
             )
         }
+
+        composable(Routes.HEALTH) {
+            ReliabilityScreen(viewModel, onBack = { nav.popBackStack() })
+        }
+
         composable(Routes.DIAGNOSTICS) {
             DiagnosticsScreen(viewModel, onBack = { nav.popBackStack() })
-        }
-        composable(Routes.RELIABILITY) {
-            ReliabilityScreen(viewModel, onBack = { nav.popBackStack() })
         }
     }
 }

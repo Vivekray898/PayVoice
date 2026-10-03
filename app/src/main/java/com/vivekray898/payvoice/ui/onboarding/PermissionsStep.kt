@@ -8,7 +8,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
@@ -17,6 +16,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vivekray898.payvoice.service.setup.SetupNotifications
 import com.vivekray898.payvoice.ui.MainViewModel
 import com.vivekray898.payvoice.ui.components.PvPrimaryButton
+import com.vivekray898.payvoice.ui.components.PvTextButton
 
 /**
  * Wizard step: POST_NOTIFICATIONS. Auto-advances on grant (the activity
@@ -66,9 +66,11 @@ fun PermissionsStep(viewModel: MainViewModel, onBack: () -> Unit, onNext: () -> 
             )
         },
         secondaryAction = {
-            TextButton(onClick = onNext) {
-                Text("Skip for now", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+            PvTextButton(
+                text = "Skip for now",
+                onClick = onNext,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         },
     )
 }

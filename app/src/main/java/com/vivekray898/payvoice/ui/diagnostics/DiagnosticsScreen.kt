@@ -32,7 +32,11 @@ import com.vivekray898.payvoice.core.model.PaymentSource
 import com.vivekray898.payvoice.core.remote.PayVoiceAuth
 import com.vivekray898.payvoice.core.remote.RemoteEventSender
 import com.vivekray898.payvoice.ui.MainViewModel
+import com.vivekray898.payvoice.ui.components.PvCard
 import com.vivekray898.payvoice.ui.components.PvEmptyHint
+import com.vivekray898.payvoice.ui.components.PvPrimaryButton
+import com.vivekray898.payvoice.ui.components.PvSecondaryButton
+import com.vivekray898.payvoice.ui.components.StatusDot
 import com.vivekray898.payvoice.ui.components.PvScaffold
 import com.vivekray898.payvoice.ui.components.PvTopBar
 import com.vivekray898.payvoice.ui.components.PvSectionHeader
@@ -75,10 +79,7 @@ fun DiagnosticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                     InfoRow("Android", "${status?.androidVersion ?: "?"} (SDK ${android.os.Build.VERSION.SDK_INT})")
                     InfoRow("App", "1.0 · ${if (viewModel.isDebugBuild) "debug" else "release"}")
                     InfoRow("Package", "com.vivekray898.payvoice")
-                    OutlinedButton(
-                        onClick = { viewModel.refreshStatus() },
-                        shape = androidx.compose.foundation.shape.RoundedCornerShape(percent = 50),
-                    ) { Text("Refresh") }
+                    PvSecondaryButton(text = "Refresh", onClick = { viewModel.refreshStatus() })
                 }
             }
 
@@ -166,10 +167,7 @@ fun DiagnosticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                         checked = settings.captureUnknownPackages,
                         onCheckedChange = viewModel::setCaptureUnknownPackages,
                     )
-                    OutlinedButton(
-                        onClick = { viewModel.clearCaptures() },
-                        shape = androidx.compose.foundation.shape.RoundedCornerShape(percent = 50),
-                    ) { Text("Clear captures") }
+                    PvSecondaryButton(text = "Clear captures", onClick = { viewModel.clearCaptures() })
                 }
             }
 
@@ -177,10 +175,10 @@ fun DiagnosticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                 item(key = "gpay-test") {
                     PvSectionHeader(text = "GPay parser test (debug)")
                     DiagCard {
-                        Button(
+                        PvPrimaryButton(
+                            text = "Simulate GPay ₹500",
                             onClick = { viewModel.simulate(PaymentSource.GOOGLE_PAY) },
-                            shape = androidx.compose.foundation.shape.RoundedCornerShape(percent = 50),
-                        ) { Text("Simulate GPay ₹500") }
+                        )
                     }
                 }
             }
@@ -244,19 +242,11 @@ fun DiagnosticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
 
 @Composable
 private fun DiagCard(
+    modifier: Modifier = Modifier,
     content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
 ) {
-    Surface(
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = Spacing.xxs,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(
-            Modifier.padding(Spacing.lg),
-            verticalArrangement = Arrangement.spacedBy(Spacing.md),
-            content = content,
-        )
+    PvCard(modifier = modifier, contentPadding = PaddingValues(Spacing.lg)) {
+        content()
     }
 }
 
@@ -282,14 +272,7 @@ private fun EventRow(tone: StatusTone, time: String, kind: String, message: Stri
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
-        androidx.compose.foundation.layout.Box(
-            Modifier
-                .size(Spacing.sm + Spacing.xxs - Spacing.xs) // 6dp dot, structural
-                .background(
-                    statusToneContainer(tone),
-                    CircleShape,
-                ),
-        )
+        StatusDot(tone)
         Column {
             Text(
                 "$time · $kind",

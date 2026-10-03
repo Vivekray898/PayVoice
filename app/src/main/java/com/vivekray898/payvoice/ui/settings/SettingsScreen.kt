@@ -1,41 +1,24 @@
 package com.vivekray898.payvoice.ui.settings
 
 import android.os.Build
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material3.Button
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -44,181 +27,161 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vivekray898.payvoice.core.announce.AnnouncementLanguage
 import com.vivekray898.payvoice.core.announce.AnnouncementStyle
 import com.vivekray898.payvoice.core.remote.DeviceRole
 import com.vivekray898.payvoice.ui.MainViewModel
-import com.vivekray898.payvoice.ui.components.IconTile
-import com.vivekray898.payvoice.ui.components.PvPrimaryButton
-import com.vivekray898.payvoice.ui.components.PvScaffold
+import com.vivekray898.payvoice.ui.components.PvCard
+import com.vivekray898.payvoice.ui.components.PvChoiceChip
+import com.vivekray898.payvoice.ui.components.PvListItem
+import com.vivekray898.payvoice.ui.components.PvSecondaryButton
 import com.vivekray898.payvoice.ui.components.PvSectionHeader
+import com.vivekray898.payvoice.ui.components.PvSliderRow
+import com.vivekray898.payvoice.ui.components.PvSwitchRow
+import com.vivekray898.payvoice.ui.components.PvTab
+import com.vivekray898.payvoice.ui.components.PvTabScaffold
 import com.vivekray898.payvoice.ui.theme.Spacing
 
-private val rowTarget = Spacing.xxl + Spacing.xxl + Spacing.sm // 72dp structural
-
 /**
- * Settings (GPay-Business treatment): displaySmall headline with a floating
- * back chevron in the header row, uppercase muted section headers, 72dp
- * rows with 40dp icon tiles, 32dp section gaps. Content controls (voice,
- * language, toggles) live inline on the row; support entries navigate.
+ * Settings tab (both roles): voice, detection, role, retention and the two
+ * support screens.
+ *
+ * Under the tab map in `docs/UI_INVENTORY.md` §6 this is a bottom destination,
+ * so there is no back chevron — the previous floating arrow was the only way
+ * out of a screen reached from four quick links, and it disappears with them.
+ * Diagnostics and Health moved down here as rows rather than being reachable
+ * only from Home.
  */
 @Composable
 fun SettingsScreen(
     viewModel: MainViewModel,
-    onBack: () -> Unit,
+    selected: PvTab,
+    onSelectTab: (PvTab) -> Unit,
     onOpenDiagnostics: () -> Unit = {},
-    onOpenReliability: () -> Unit = {},
+    onOpenHealth: () -> Unit = {},
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
-    val statusBarPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     var expandedAnnouncements by remember { mutableStateOf(false) }
 
-    PvScaffold(topBar = {}) { _ ->
-        LazyColumn(Modifier.fillMaxSize()) {
-            // Header: floating back + displaySmall headline (no TopAppBar)
-            item(key = "header") {
-                Column(
-                    Modifier.padding(
-                        start = Spacing.xl - Spacing.xs,
-                        end = Spacing.xl - Spacing.xs,
-                        top = statusBarPadding + Spacing.lg,
-                    ),
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = onBack) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.KeyboardArrowLeft,
-                                contentDescription = "Back",
-                                tint = MaterialTheme.colorScheme.onBackground,
-                            )
-                        }
-                        Spacer(Modifier.width(Spacing.sm))
-                        Text(
-                            "Settings",
-                            style = MaterialTheme.typography.displaySmall,
-                            color = MaterialTheme.colorScheme.onBackground,
-                        )
-                    }
-                }
+    PvTabScaffold(
+        role = settings.role,
+        selected = selected,
+        onSelect = onSelectTab,
+    ) { inner ->
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = Spacing.xxl + inner.calculateBottomPadding()),
+        ) {
+            item(key = "title") {
+                Text(
+                    text = "Settings",
+                    style = MaterialTheme.typography.displaySmall,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.md),
+                )
             }
 
-            // ---- Announcements (expandable: voice + language + sliders) ----
+            // ---- Announcements -------------------------------------------
             item(key = "announcements") {
-                PvSectionHeader("Announcements", gutter = Spacing.gutter)
-                SettingsRow(
-                    icon = Icons.Filled.NotificationsActive,
+                PvSectionHeader(text = "Announcements")
+                PvListItem(
                     title = "Payment announcements",
-                    subtitle = when {
-                        expandedAnnouncements -> "Hide voice options"
-                        else -> "Voice style, language, speed & volume"
+                    subtitle = if (expandedAnnouncements) {
+                        "Hide voice options"
+                    } else {
+                        "Voice style, language, speed & volume"
                     },
+                    leadingIcon = Icons.Filled.NotificationsActive,
                     onClick = { expandedAnnouncements = !expandedAnnouncements },
-                ) {
-                    Text(
-                        if (settings.gpayEnabled) "On" else "Off",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                    minHeight = Spacing.listRow,
+                )
                 if (expandedAnnouncements) {
-                    SettingsGroup {
-                        Text("Voice style", style = MaterialTheme.typography.bodyLarge)
+                    PvCard(modifier = Modifier.padding(horizontal = Spacing.lg)) {
+                        Text(
+                            text = "Voice style",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
                         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                             AnnouncementStyle.entries.forEach { style ->
-                                FilterChip(
+                                PvChoiceChip(
+                                    text = style.label,
                                     selected = settings.style == style,
                                     onClick = { viewModel.setStyle(style) },
-                                    label = { Text(style.label) },
                                 )
                             }
                         }
-                        Text("Language", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            text = "Language",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
                         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                             AnnouncementLanguage.entries.forEach { lang ->
-                                FilterChip(
+                                PvChoiceChip(
+                                    text = lang.label,
                                     selected = settings.language == lang,
                                     onClick = { viewModel.setLanguage(lang) },
-                                    label = { Text(lang.label) },
                                 )
                             }
                         }
-                        SliderSetting("Speech speed", "%.1fx".format(settings.speechRate)) {
-                            Slider(
-                                value = settings.speechRate,
-                                onValueChange = { viewModel.setSpeechRate(it) },
-                                valueRange = 0.8f..1.5f,
-                                colors = SliderDefaults.colors(
-                                    inactiveTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                ),
-                            )
-                        }
-                        SliderSetting("Speech volume", "%d%%".format((settings.speechVolume * 100).toInt())) {
-                            Slider(
-                                value = settings.speechVolume,
-                                onValueChange = { viewModel.setSpeechVolume(it) },
-                                valueRange = 0f..1f,
-                                colors = SliderDefaults.colors(
-                                    inactiveTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                ),
-                            )
-                        }
-                        Button(
+                        PvSliderRow(
+                            label = "Speech speed",
+                            valueText = "%.1fx".format(settings.speechRate),
+                            value = settings.speechRate,
+                            onValueChange = viewModel::setSpeechRate,
+                            valueRange = 0.8f..1.5f,
+                        )
+                        PvSliderRow(
+                            label = "Speech volume",
+                            valueText = "%d%%".format((settings.speechVolume * 100).toInt()),
+                            value = settings.speechVolume,
+                            onValueChange = viewModel::setSpeechVolume,
+                            valueRange = 0f..1f,
+                        )
+                        PvSecondaryButton(
+                            text = "Preview voice",
                             onClick = { viewModel.speakTest() },
-                            shape = RoundedCornerShape(percent = 50),
-                        ) { Text("Preview voice") }
+                        )
                     }
                 }
             }
 
-            // ---- Payment detection ----
+            // ---- Payment detection ---------------------------------------
             item(key = "detection") {
-                PvSectionHeader("Payment detection", gutter = Spacing.gutter)
-                SettingsGroup {
-                    ToggleRow(
-                        title = "Google Pay notifications",
-                        subtitle = "Announce as GPay notifies you",
+                PvSectionHeader(text = "Payment detection")
+                PvCard(modifier = Modifier.padding(horizontal = Spacing.lg)) {
+                    PvSwitchRow(
+                        label = "Google Pay notifications",
+                        supporting = "Announce as GPay notifies you",
                         checked = settings.gpayEnabled,
-                        onChecked = viewModel::setGpayEnabled,
+                        onCheckedChange = viewModel::setGpayEnabled,
                     )
-                    ToggleRow(
-                        title = "Only confident detections",
-                        subtitle = "Off also announces less certain payments",
+                    PvSwitchRow(
+                        label = "Only confident detections",
+                        supporting = "Off also announces less certain payments",
                         checked = settings.announceHighConfidenceOnly,
-                        onChecked = viewModel::setHighConfidenceOnly,
+                        onCheckedChange = viewModel::setHighConfidenceOnly,
                     )
                 }
             }
 
-            // ---- Device & team (role lives here; Home is read-only) ----
+            // ---- Device & team -------------------------------------------
             item(key = "device") {
-                PvSectionHeader("Your business", gutter = Spacing.gutter)
-                SettingsGroup {
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = rowTarget)
-                            .padding(horizontal = Spacing.lg, vertical = Spacing.md),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        IconTile(
-                            icon = Icons.Filled.Storefront,
-                            tile = Spacing.xxl, // 40dp structural
-                            iconSize = Spacing.xl - Spacing.xs, // 20dp structural
-                            container = MaterialTheme.colorScheme.primaryContainer,
-                        )
-                        Spacer(Modifier.width(Spacing.lg))
-                        Column(Modifier.weight(1f)) {
-                            Text("This device is the", style = MaterialTheme.typography.bodyLarge)
-                            Text(
-                                if (settings.role == DeviceRole.OWNER) "Owner" else "Employee",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        FilterChip(
+                PvSectionHeader(text = "Your business")
+                PvCard(modifier = Modifier.padding(horizontal = Spacing.lg)) {
+                    PvListItem(
+                        title = "This device is the",
+                        subtitle = if (settings.role == DeviceRole.OWNER) {
+                            "Owner"
+                        } else {
+                            "Employee"
+                        },
+                        leadingIcon = Icons.Filled.Storefront,
+                        minHeight = Spacing.listRow,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                        PvChoiceChip(
+                            text = "Owner",
                             selected = settings.role == DeviceRole.OWNER,
                             onClick = {
                                 viewModel.setRole(
@@ -226,9 +189,9 @@ fun SettingsScreen(
                                     settings.deviceName.ifBlank { Build.MODEL ?: "Owner" },
                                 )
                             },
-                            label = { Text("Owner") },
                         )
-                        FilterChip(
+                        PvChoiceChip(
+                            text = "Employee",
                             selected = settings.role == DeviceRole.EMPLOYEE,
                             onClick = {
                                 viewModel.setRole(
@@ -236,231 +199,108 @@ fun SettingsScreen(
                                     settings.deviceName.ifBlank { Build.MODEL ?: "Employee" },
                                 )
                             },
-                            label = { Text("Employee") },
                         )
                     }
-                    ToggleRow(
-                        title = "Send payments to employee phones",
-                        subtitle = "Announce on connected employee devices",
+                    PvSwitchRow(
+                        label = "Send payments to employee phones",
+                        supporting = "Announce on connected employee devices",
                         checked = settings.remoteAnnouncementsEnabled,
-                        onChecked = viewModel::setRemoteAnnouncementsEnabled,
+                        onCheckedChange = viewModel::setRemoteAnnouncementsEnabled,
                     )
-                    ToggleRow(
-                        title = "Show payment on lock screen",
-                        subtitle = "Off hides the amount until you unlock",
+                    PvSwitchRow(
+                        label = "Show payment on lock screen",
+                        supporting = "Off hides the amount until you unlock",
                         checked = settings.showPaymentOnLockScreen,
-                        onChecked = viewModel::setShowPaymentOnLockScreen,
+                        onCheckedChange = viewModel::setShowPaymentOnLockScreen,
                     )
                 }
             }
 
-            // ---- Storage ----
+            // ---- App settings --------------------------------------------
             item(key = "storage") {
-                PvSectionHeader("App settings", gutter = Spacing.gutter)
-                SettingsGroup {
-                    SliderSetting("Payment memory", "%d h".format(settings.dedupRetentionHours)) {
-                        Slider(
-                            value = settings.dedupRetentionHours.toFloat(),
-                            onValueChange = { viewModel.setDedupHours(it.toInt()) },
-                            valueRange = 1f..72f,
-                            steps = 70,
-                            colors = SliderDefaults.colors(
-                                inactiveTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                            ),
-                        )
-                    }
-                    SliderSetting("Keep history", "%d days".format(settings.historyRetentionDays)) {
-                        Slider(
-                            value = settings.historyRetentionDays.toFloat(),
-                            onValueChange = { viewModel.setHistoryDays(it.toInt()) },
-                            valueRange = 1f..30f,
-                            steps = 28,
-                            colors = SliderDefaults.colors(
-                                inactiveTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                            ),
-                        )
-                    }
+                PvSectionHeader(text = "App settings")
+                PvCard(modifier = Modifier.padding(horizontal = Spacing.lg)) {
+                    PvSliderRow(
+                        label = "Payment memory",
+                        valueText = "%d h".format(settings.dedupRetentionHours),
+                        value = settings.dedupRetentionHours.toFloat(),
+                        onValueChange = { viewModel.setDedupHours(it.toInt()) },
+                        valueRange = 1f..72f,
+                        steps = 70,
+                    )
+                    PvSliderRow(
+                        label = "Keep history",
+                        valueText = "%d days".format(settings.historyRetentionDays),
+                        value = settings.historyRetentionDays.toFloat(),
+                        onValueChange = { viewModel.setHistoryDays(it.toInt()) },
+                        valueRange = 1f..30f,
+                        steps = 28,
+                    )
                 }
             }
 
-            // ---- Support: Diagnostics + Reliability as 72dp rows ----
+            // ---- Support -------------------------------------------------
             item(key = "support") {
-                PvSectionHeader("Support", gutter = Spacing.gutter)
-                SettingsRow(
-                    icon = Icons.Filled.Visibility,
-                    title = "Diagnostics",
-                    subtitle = "Technical logs and captured notifications",
-                    onClick = onOpenDiagnostics,
-                )
-                SettingsRow(
-                    icon = Icons.Filled.VisibilityOff,
+                PvSectionHeader(text = "Support")
+                PvListItem(
                     title = "Fix a problem",
                     subtitle = "Permissions, battery and connection repair",
-                    onClick = onOpenReliability,
-                    trailing = {
-                        Icon(
-                            Icons.Filled.ChevronRight,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    },
+                    leadingIcon = Icons.Filled.VisibilityOff,
+                    onClick = onOpenHealth,
+                    minHeight = Spacing.listRow,
+                    trailing = { PvChevron() },
                 )
-                PvSecondaryPill(
-                    text = "Preview voice",
-                    onClick = { viewModel.speakTest() },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = Spacing.lg),
+                PvListItem(
+                    title = "Diagnostics",
+                    subtitle = "Technical logs and captured notifications",
+                    leadingIcon = Icons.Filled.Visibility,
+                    onClick = onOpenDiagnostics,
+                    minHeight = Spacing.listRow,
+                    trailing = { PvChevron() },
                 )
             }
 
-            // ---- About ----
+            // ---- About ---------------------------------------------------
             item(key = "about") {
-                PvSectionHeader("About", gutter = Spacing.gutter)
-                SettingsGroup {
+                PvSectionHeader(text = "About")
+                PvCard(modifier = Modifier.padding(horizontal = Spacing.lg)) {
                     AboutRow("Version", "1.0")
                     AboutRow("Android", android.os.Build.VERSION.RELEASE ?: "?")
                     AboutRow("Device", Build.MODEL ?: "?")
                 }
-                Spacer(Modifier.height(Spacing.xxl))
+                Spacer(Modifier.height(Spacing.lg))
             }
         }
     }
 }
 
-/** 72dp row: 40dp icon tile, title + subtitle, optional trailing. */
+/** Chevron affordance for a row that navigates. */
 @Composable
-private fun SettingsRow(
-    icon: ImageVector,
-    title: String,
-    subtitle: String? = null,
-    onClick: (() -> Unit)? = null,
-    trailing: @Composable (() -> Unit)? = null,
-    content: (@Composable () -> Unit)? = null,
-) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .heightIn(min = rowTarget)
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-            .padding(horizontal = Spacing.xl - Spacing.xs, vertical = Spacing.md),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        IconTile(
-            icon = icon,
-            tile = Spacing.xxl, // 40dp structural
-            iconSize = Spacing.xl - Spacing.xs, // 20dp structural
-            container = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
-        )
-        Spacer(Modifier.width(Spacing.lg))
-        Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge)
-            if (subtitle != null) {
-                Text(
-                    subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-        if (trailing != null) trailing()
-    }
-}
-
-/** Carded group for inline controls. */
-@Composable
-private fun SettingsGroup(
-    content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
-) {
-    Surface(
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = Spacing.xxs,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = Spacing.lg),
-    ) {
-        Column(
-            Modifier.padding(Spacing.lg),
-            verticalArrangement = Arrangement.spacedBy(Spacing.md),
-            content = content,
-        )
-    }
-}
-
-@Composable
-private fun ToggleRow(
-    title: String,
-    subtitle: String,
-    checked: Boolean,
-    onChecked: (Boolean) -> Unit,
-) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .heightIn(min = rowTarget)
-            .padding(horizontal = Spacing.xs, vertical = Spacing.md),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge)
-            Text(
-                subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Switch(checked = checked, onCheckedChange = onChecked)
-    }
-}
-
-@Composable
-private fun SliderSetting(
-    label: String,
-    value: String,
-    slider: @Composable () -> Unit,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(Spacing.xxs)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-            Surface(
-                color = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                shape = RoundedCornerShape(percent = 50),
-            ) {
-                Text(
-                    value,
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.xxs),
-                )
-            }
-        }
-        slider()
-    }
+private fun PvChevron() {
+    Icon(
+        imageVector = Icons.Filled.ChevronRight,
+        contentDescription = null,
+        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
 
 @Composable
 private fun AboutRow(label: String, value: String) {
     Row(
-        Modifier.fillMaxWidth(),
+        modifier = Modifier.padding(vertical = Spacing.xs),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text(label, style = MaterialTheme.typography.bodyLarge)
         Text(
-            value,
+            text = label,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Spacer(Modifier.width(Spacing.md))
+        Text(
+            text = value,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
-}
-
-/** Local alias to keep the preview pill call sites short. */
-@Composable
-private fun PvSecondaryPill(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    androidx.compose.material3.OutlinedButton(
-        onClick = onClick,
-        shape = RoundedCornerShape(percent = 50),
-        modifier = modifier,
-    ) { Text(text) }
 }

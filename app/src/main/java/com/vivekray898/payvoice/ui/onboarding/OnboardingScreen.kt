@@ -32,6 +32,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vivekray898.payvoice.core.remote.DeviceRole
 import com.vivekray898.payvoice.ui.MainViewModel
+import com.vivekray898.payvoice.ui.components.PvIconButton
+import com.vivekray898.payvoice.ui.components.PvIconPlate
+import com.vivekray898.payvoice.ui.components.PvProgressBar
 import com.vivekray898.payvoice.ui.components.PvScaffold
 import com.vivekray898.payvoice.ui.theme.Spacing
 
@@ -126,13 +129,12 @@ internal fun StepScaffold(
                 androidx.compose.foundation.layout.Row(
                     Modifier.fillMaxWidth(),
                 ) {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = MaterialTheme.colorScheme.onBackground,
-                        )
-                    }
+                    PvIconButton(
+                        icon = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back",
+                        onClick = onBack,
+                        tint = MaterialTheme.colorScheme.onBackground,
+                    )
                 }
             }
         },
@@ -158,14 +160,7 @@ internal fun StepScaffold(
                 .padding(horizontal = Spacing.xl),
         ) {
             if (step in WizardStep.ROLE..WizardStep.BATTERY) {
-                LinearProgressIndicator(
-                    progress = { step.toFloat() / WizardStep.LAST_NUMBERED },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(Spacing.xs), // structural: 4dp track
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                )
+                PvProgressBar(progress = step.toFloat() / WizardStep.LAST_NUMBERED)
                 Spacer(Modifier.height(Spacing.sm))
                 Text(
                     text = "Step $step of ${WizardStep.LAST_NUMBERED}",
@@ -175,20 +170,7 @@ internal fun StepScaffold(
             }
             Spacer(Modifier.height(Spacing.xxl))
 
-            Surface(
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.primaryContainer,
-                modifier = Modifier.size(Spacing.huge + Spacing.sm), // 72dp structural
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        icon,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(Spacing.xxl), // 32dp structural
-                    )
-                }
-            }
+            PvIconPlate(icon = icon)
             Spacer(Modifier.height(Spacing.xl))
 
             Text(

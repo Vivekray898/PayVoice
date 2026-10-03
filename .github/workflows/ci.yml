@@ -51,11 +51,14 @@ jobs:
       # The build degrades gracefully (no FCM receive, debug-signed release) so
       # a clean checkout compiles without any secret being present.
       # Design-system gate (docs/DESIGN_SYSTEM.md §Enforcement gate).
-      # Fails on Color(0x…, raw .dp/.sp outside ui/theme, or a bare Scaffold
-      # outside ui/components/PvScaffold.kt. This used to be a bash one-liner
-      # in a document that nobody ran.
+      # verifyDesignTokens fails on Color(0x…, raw .dp/.sp outside ui/theme,
+      # or a bare Scaffold outside ui/components/PvScaffold.kt. This used to
+      # be a bash one-liner in a document that nobody ran.
+      # verifyDesignComponents is the second half of the same gate: no raw
+      # Material widget and no spacing arithmetic inside a screen file, so a
+      # new screen cannot quietly reintroduce Button( / Surface( / 13.dp.
       - name: Design system gate
-        run: ./gradlew verifyDesignTokens --stacktrace
+        run: ./gradlew verifyDesignTokens verifyDesignComponents --stacktrace
 
       - name: Test (JVM)
         run: ./gradlew testDebugUnitTest --stacktrace

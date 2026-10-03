@@ -8,18 +8,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material3.Button
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -30,291 +25,244 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vivekray898.payvoice.core.parser.AmountExtractor
-import com.vivekray898.payvoice.service.setup.SetupNotifications
+import com.vivekray898.payvoice.core.remote.DeviceRole
 import com.vivekray898.payvoice.ui.MainViewModel
-import com.vivekray898.payvoice.ui.components.PvDivider
+import com.vivekray898.payvoice.ui.components.PvBottomSheet
+import com.vivekray898.payvoice.ui.components.PvCard
+import com.vivekray898.payvoice.ui.components.PvCodeField
+import com.vivekray898.payvoice.ui.components.PvDialog
 import com.vivekray898.payvoice.ui.components.PvEmptyHint
+import com.vivekray898.payvoice.ui.components.PvHealthBanner
+import com.vivekray898.payvoice.ui.components.PvListItem
 import com.vivekray898.payvoice.ui.components.PvLoadingRow
 import com.vivekray898.payvoice.ui.components.PvPaymentRow
-import com.vivekray898.payvoice.ui.components.HeroBanner
-import com.vivekray898.payvoice.ui.components.PvScaffold
-import com.vivekray898.payvoice.ui.components.PvSecureWindow
+import com.vivekray898.payvoice.ui.components.PvPrimaryButton
 import com.vivekray898.payvoice.ui.components.PvSecondaryButton
-import com.vivekray898.payvoice.ui.components.ScreenHeader
-import com.vivekray898.payvoice.ui.components.PvSectionHeader
-import com.vivekray898.payvoice.ui.components.StatusLine
+import com.vivekray898.payvoice.ui.components.PvSecureWindow
+import com.vivekray898.payvoice.ui.components.PvSliderRow
+import com.vivekray898.payvoice.ui.components.PvSupportingText
+import com.vivekray898.payvoice.ui.components.PvTab
+import com.vivekray898.payvoice.ui.components.PvTabScaffold
 import com.vivekray898.payvoice.ui.components.StatusPill
 import com.vivekray898.payvoice.ui.components.StatusTone
-import com.vivekray898.payvoice.ui.components.statusToneOf
 import com.vivekray898.payvoice.ui.components.timeAgo
 import com.vivekray898.payvoice.ui.theme.Spacing
 
 /**
- * This device (DESIGN.md rebuild, Phase 3d): PvScaffold + PvTopBar, hero
- * surface with pairing StatusPill, status cards (Connection / Battery /
- * Notifications) with inline Fix actions, last payment, and a destructive
- * leave action. Join/leave stay in ModalBottomSheets; all VM calls
- * unchanged.
+ * Pair tab (employee role): what this phone is connected to, how to join an
+ * owner, and the one control an employee actually needs on a phone they do
+ * not control — the announcement volume.
+ *
+ * Health lives here as the same [PvHealthBanner] Home shows, because for an
+ * employee "is this phone ready" and "am I paired" are the same question: a
+ * phone that has lost notification access loses payments silently.
+ *
+ * [PvSecureWindow] stays while the pairing sheet is on screen — the code
+ * being typed is a live single-use credential.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun EmployeeScreen(viewModel: MainViewModel, onBack: () -> Unit) {
+fun EmployeeScreen(
+    viewModel: MainViewModel,
+    selected: PvTab,
+    onSelectTab: (PvTab) -> Unit,
+    onOpenHealth: () -> Unit = {},
+) {
     val context = LocalContext.current
     val ownDevice by viewModel.ownDevice.collectAsStateWithLifecycle()
     val joinState by viewModel.joinState.collectAsStateWithLifecycle()
-    val status by viewModel.status.collectAsStateWithLifecycle()
+    val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val health by viewModel.health.collectAsStateWithLifecycle()
+    val healthLoading by viewModel.healthLoading.collectAsStateWithLifecycle()
     var showJoinSheet by remember { mutableStateOf(false) }
     var code by remember { mutableStateOf("") }
     var confirmLeave by remember { mutableStateOf(false) }
 
     val paired = ownDevice?.isActive == true
 
-    // The join sheet takes a pairing code: single-use, 10-minute, and it
-    // grants this device standing in the owner's business. Keep it out of
-    // Recents thumbnails and screenshots while this screen is up.
     PvSecureWindow()
 
-    PvScaffold(
-        topBar = {},
+    PvTabScaffold(
+        role = DeviceRole.EMPLOYEE,
+        selected = selected,
+        onSelect = onSelectTab,
     ) { inner ->
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(
-                bottom = Spacing.xxl + inner.calculateBottomPadding(),
-            ),
-            verticalArrangement = Arrangement.spacedBy(Spacing.md),
+            contentPadding = PaddingValues(bottom = Spacing.xxl + inner.calculateBottomPadding()),
         ) {
-            item(key = "header") {
-                ScreenHeader(title = "This device", onBack = onBack)
-                HeroBanner(modifier = Modifier.padding(top = Spacing.md))
+            item(key = "title") {
+                Text(
+                    text = "This device",
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.md),
+                )
             }
 
-            item(key = "hero") {
-                Surface(
-                    shape = MaterialTheme.shapes.extraLarge,
-                    color = MaterialTheme.colorScheme.surface,
-                    tonalElevation = Spacing.xxs,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Column(
-                        Modifier.padding(Spacing.xl),
-                        verticalArrangement = Arrangement.spacedBy(Spacing.sm),
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                "This device",
-                                style = MaterialTheme.typography.headlineMedium,
-                                modifier = Modifier.weight(1f),
-                            )
-                            StatusPill(
-                                text = if (paired) "Live" else "Not connected",
-                                tone = if (paired) StatusTone.Success else StatusTone.Warning,
-                            )
+            item(key = "health") {
+                PvHealthBanner(
+                    summary = health ?: com.vivekray898.payvoice.core.health.HealthSummary(
+                        emptyList(),
+                    ),
+                    loading = healthLoading,
+                    onFix = { item ->
+                        if (item.inAppAction ==
+                            com.vivekray898.payvoice.core.health.InAppAction.PAIR_DEVICE
+                        ) {
+                            // An employee never mints a code — they enter one.
+                            viewModel.clearJoinResult()
+                            showJoinSheet = true
+                        } else {
+                            viewModel.applyHealthFix(context, item)
                         }
+                    },
+                    onOpenDetail = onOpenHealth,
+                    modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.sm),
+                )
+            }
+
+            item(key = "status") {
+                PvCard(modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.sm)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            if (paired) "This phone announces payments for your owner."
-                            else "Join with a code from your owner to start announcing.",
+                            text = if (paired) {
+                                "This phone announces payments for your owner."
+                            } else {
+                                "Join with a code from your owner to start announcing."
+                            },
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f),
                         )
-                        if (!paired) {
-                            Spacer(Modifier.height(Spacing.xs))
-                            Button(
-                                onClick = { showJoinSheet = true },
-                                shape = androidx.compose.foundation.shape.RoundedCornerShape(percent = 50),
-                            ) { Text("Enter code") }
-                        }
+                        Spacer(Modifier.width(Spacing.md))
+                        StatusPill(
+                            text = if (paired) "Live" else "Not connected",
+                            tone = if (paired) StatusTone.Success else StatusTone.Warning,
+                        )
                     }
-                }
-            }
-
-            item(key = "connection") {
-                StatusCard(title = "Connection") {
-                    StatusLine(paired, if (paired) "Connected" else "Degraded — not paired")
-                    Text(
-                        if (paired) "Payments received by the owner phone are announced here."
-                        else "Join a business to start receiving announcements.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-
-            item(key = "battery") {
-                StatusCard(title = "Battery") {
-                    val exempt = status?.batteryExempt == true
-                    StatusLine(exempt, if (exempt) "Unrestricted" else "Restricted — payments may arrive late")
-                    if (!exempt) {
-                        OutlinedButton(
-                            onClick = { viewModel.fixBattery(context) },
-                            shape = androidx.compose.foundation.shape.RoundedCornerShape(percent = 50),
-                        ) { Text("Fix") }
-                    }
-                }
-            }
-
-            item(key = "notifications") {
-                StatusCard(title = "Notifications") {
-                    val granted = status?.notificationsEnabled == true
-                    StatusLine(granted, if (granted) "Allowed" else "Not allowed")
-                    if (!granted) {
-                        OutlinedButton(
+                    if (!paired) {
+                        PvPrimaryButton(
+                            text = "Enter code",
                             onClick = {
-                                SetupNotifications.ensureChannels(context)
-                                viewModel.openAppNotificationSettings(context)
+                                showJoinSheet = true
+                                viewModel.clearJoinResult()
                             },
-                            shape = androidx.compose.foundation.shape.RoundedCornerShape(percent = 50),
-                        ) { Text("Fix") }
+                        )
                     }
                 }
+            }
+
+            item(key = "voice") {
+                PvCard(modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.sm)) {
+                    Text(text = "Announcement volume", style = MaterialTheme.typography.titleMedium)
+                    PvSliderRow(
+                        label = "How loud",
+                        valueText = "%d%%".format((settings.speechVolume * 100).toInt()),
+                        value = settings.speechVolume,
+                        onValueChange = viewModel::setSpeechVolume,
+                        valueRange = 0f..1f,
+                    )
+                    PvSecondaryButton(text = "Test voice", onClick = viewModel::speakTest)
+                }
+            }
+
+            item(key = "last") {
+                PvCard(modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.sm)) {
+                    val history by viewModel.history.collectAsStateWithLifecycle()
+                    val last = history.firstOrNull()
+                    Text(
+                        text = "Last payment announced",
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    if (last == null) {
+                        PvEmptyHint(text = "Nothing yet — payments announced here appear below.")
+                    } else {
+                        PvPaymentRow(
+                            amountText = AmountExtractor.formatMinor(last.amountMinor, last.currency),
+                            source = last.sourceName,
+                            sender = last.senderName,
+                            timeText = timeAgo(last.announcedAtMs),
+                        )
+                    }
+                }
+            }
+
+            item(key = "settings") {
+                PvListItem(
+                    title = "Notifications",
+                    subtitle = "Without these, payments arrive late",
+                    leadingIcon = Icons.Filled.Link,
+                    onClick = { onSelectTab(PvTab.SETTINGS) },
+                    minHeight = Spacing.listRow,
+                )
             }
 
             if (paired) {
-                item(key = "test") {
-                    StatusCard(title = "Try it out") {
-                        OutlinedButton(
-                            onClick = { viewModel.speakTest() },
-                            shape = androidx.compose.foundation.shape.RoundedCornerShape(percent = 50),
-                        ) { Text("Hear a test announcement") }
-                    }
+                item(key = "leave") {
+                    PvSecondaryButton(
+                        text = "Leave pairing",
+                        onClick = { confirmLeave = true },
+                        modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.sm),
+                    )
                 }
-                item(key = "last-payment") {
-                    StatusCard(title = "Last payment announced") {
-                        val history by viewModel.history.collectAsStateWithLifecycle()
-                        val last = history.firstOrNull()
-                        if (last == null) {
-                            PvEmptyHint(text = "Nothing yet — payments announced here appear below.")
-                        } else {
-                            PvPaymentRow(
-                                amountText = AmountExtractor.formatMinor(last.amountMinor, last.currency),
-                                source = last.sourceName,
-                                sender = last.senderName,
-                                timeText = timeAgo(last.announcedAtMs),
-                            )
-                        }
-                    }
-                }
-            }
-
-            item(key = "leave") {
-                OutlinedButton(
-                    onClick = { confirmLeave = true },
-                    shape = androidx.compose.foundation.shape.RoundedCornerShape(percent = 50),
-                    colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error,
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = Spacing.md),
-                ) { Text("Leave pairing") }
             }
         }
     }
 
     // ---- Join sheet ---------------------------------------------------------
     if (showJoinSheet) {
-        ModalBottomSheet(
+        PvBottomSheet(
             onDismissRequest = {
                 if (joinState !is MainViewModel.JoinState.Joining) {
                     showJoinSheet = false
                     viewModel.clearJoinResult()
                 }
             },
+            title = "Join an owner",
         ) {
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = Spacing.xl)
-                    .padding(bottom = Spacing.xxl),
-                verticalArrangement = Arrangement.spacedBy(Spacing.md),
-            ) {
-                Text("Join an owner", style = MaterialTheme.typography.headlineSmall)
-                Text(
-                    "Enter the code provided by your owner.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+            PvSupportingText(text = "Enter the code provided by your owner.")
+            val failed = joinState as? MainViewModel.JoinState.Failed
+            PvCodeField(
+                value = code,
+                onValueChange = { code = it },
+                enabled = joinState !is MainViewModel.JoinState.Joining,
+                isError = failed != null,
+                supportingText = failed?.message,
+            )
+            when (joinState) {
+                is MainViewModel.JoinState.Joining -> PvLoadingRow("Connecting…")
+                else -> Unit
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                PvPrimaryButton(
+                    text = "Connect",
+                    onClick = { viewModel.joinOwner(code) },
+                    enabled = joinState !is MainViewModel.JoinState.Joining && code.isNotBlank(),
+                    modifier = Modifier.weight(1f),
                 )
-                OutlinedTextField(
-                    value = code,
-                    onValueChange = { code = it.uppercase().take(10) },
-                    label = { Text("Pairing code") },
-                    singleLine = true,
-                    enabled = joinState !is MainViewModel.JoinState.Joining,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                when (val s = joinState) {
-                    is MainViewModel.JoinState.Joining -> PvLoadingRow("Connecting…")
-                    is MainViewModel.JoinState.Failed -> Text(
-                        s.message,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                    else -> Unit
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
-                    Button(
-                        onClick = { viewModel.joinOwner(code) },
-                        enabled = joinState !is MainViewModel.JoinState.Joining && code.isNotBlank(),
-                        shape = androidx.compose.foundation.shape.RoundedCornerShape(percent = 50),
-                    ) { Text("Connect") }
-                    TextButton(onClick = {
+                PvSecondaryButton(
+                    text = "Cancel",
+                    onClick = {
                         showJoinSheet = false
                         viewModel.clearJoinResult()
-                    }) { Text("Cancel") }
-                }
-            }
-        }
-    }
-
-    // ---- Leave confirmation sheet -------------------------------------------
-    if (confirmLeave) {
-        ModalBottomSheet(onDismissRequest = { confirmLeave = false }) {
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = Spacing.xl)
-                    .padding(bottom = Spacing.xxl),
-                verticalArrangement = Arrangement.spacedBy(Spacing.md),
-            ) {
-                Text("Leave this business?", style = MaterialTheme.typography.headlineSmall)
-                Text(
-                    "You'll stop hearing payment announcements from your owner.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    },
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
-                    OutlinedButton(
-                        onClick = {
-                            viewModel.leaveOwner()
-                            confirmLeave = false
-                        },
-                        shape = androidx.compose.foundation.shape.RoundedCornerShape(percent = 50),
-                    ) { Text("Leave", color = MaterialTheme.colorScheme.error) }
-                    TextButton(onClick = { confirmLeave = false }) { Text("Cancel") }
-                }
             }
+            Spacer(Modifier.height(Spacing.xs))
         }
     }
-}
 
-@Composable
-private fun StatusCard(
-    title: String,
-    content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
-) {
-    Column {
-        PvSectionHeader(text = title)
-        Surface(
-            shape = MaterialTheme.shapes.large,
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = Spacing.xxs,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Column(
-                Modifier.padding(Spacing.lg),
-                verticalArrangement = Arrangement.spacedBy(Spacing.md),
-                content = content,
-            )
-        }
+    // ---- Leave confirmation ------------------------------------------------
+    if (confirmLeave) {
+        PvDialog(
+            onDismissRequest = { confirmLeave = false },
+            title = "Leave this business?",
+            body = "You'll stop hearing payment announcements from your owner.",
+            confirmText = "Leave",
+            onConfirm = {
+                viewModel.leaveOwner()
+                confirmLeave = false
+            },
+        )
     }
 }

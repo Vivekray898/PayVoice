@@ -4,13 +4,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vivekray898.payvoice.ui.MainViewModel
 import com.vivekray898.payvoice.ui.components.PvPrimaryButton
+import com.vivekray898.payvoice.ui.components.PvTextButton
 
 /**
  * Wizard step: battery optimization exemption. Auto-advances when the
@@ -42,9 +42,11 @@ fun BatteryStep(viewModel: MainViewModel, onBack: () -> Unit, onNext: () -> Unit
             )
         },
         secondaryAction = {
-            TextButton(onClick = onNext) {
-                Text("Skip for now", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+            PvTextButton(
+                text = "Skip for now",
+                onClick = onNext,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         },
     )
 }

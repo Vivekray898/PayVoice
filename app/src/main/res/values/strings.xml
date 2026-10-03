@@ -63,4 +63,30 @@
     <string name="health_check_error">Couldn\'t check everything</string>
     <string name="health_check_error_why">Try again in a moment — your payments are unaffected.</string>
     <string name="health_retry">Try again</string>
+
+    <!-- ===================================================================
+         Navigation and screen chrome
+         =================================================================== -->
+    <string name="nav_home">Home</string>
+    <string name="nav_payments">Payments</string>
+    <string name="nav_recent">Recent</string>
+    <string name="nav_team">Team</string>
+    <string name="nav_pair">Pair</string>
+    <string name="nav_settings">Settings</string>
+
+    <!-- ================= Payments / recent history ====================== -->
+    <string name="payments_title">Payments</string>
+    <string name="payments_search">Search</string>
+    <string name="payments_search_hint">Name or payment app</string>
+    <string name="payments_summary">%1$d payments · %2$s</string>
+    <string name="payments_error_title">Couldn\'t load payments</string>
+    <string name="payments_error_body">Your history is safe on this phone. Try again in a moment.</string>
+    <string name="payments_empty_title">No payments here yet</string>
+    <string name="payments_empty_body">When a customer pays, the amount appears here straight away.</string>
+    <string name="payments_empty_search">Nothing matches \'%1$s\'. Try a different name.</string>
+    <string name="payments_load_more">Show more</string>
+    <string name="range_today">Today</string>
+    <string name="range_week">Week</string>
+    <string name="range_month">Month</string>
+    <string name="range_all">All</string>
 </resources>

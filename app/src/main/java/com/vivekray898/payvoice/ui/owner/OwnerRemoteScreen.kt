@@ -2,7 +2,6 @@ package com.vivekray898.payvoice.ui.owner
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -11,19 +10,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PersonRemove
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -34,32 +27,49 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.vivekray898.payvoice.core.remote.DeviceRole
 import com.vivekray898.payvoice.core.remote.EmployeeDevice
 import com.vivekray898.payvoice.core.remote.RemoteEventSender
 import com.vivekray898.payvoice.ui.MainViewModel
-import com.vivekray898.payvoice.ui.components.PvEmptyHint
+import com.vivekray898.payvoice.ui.components.MoneyText
+import com.vivekray898.payvoice.ui.components.PvBottomSheet
+import com.vivekray898.payvoice.ui.components.PvCard
+import com.vivekray898.payvoice.ui.components.PvEmptyState
+import com.vivekray898.payvoice.ui.components.PvFab
+import com.vivekray898.payvoice.ui.components.PvIconCircle
 import com.vivekray898.payvoice.ui.components.PvLoadingRow
 import com.vivekray898.payvoice.ui.components.PvPrimaryButton
-import com.vivekray898.payvoice.ui.components.PvScaffold
-import com.vivekray898.payvoice.ui.components.PvSecureWindow
-import com.vivekray898.payvoice.ui.components.HeroBanner
 import com.vivekray898.payvoice.ui.components.PvSecondaryButton
-import com.vivekray898.payvoice.ui.components.ScreenHeader
 import com.vivekray898.payvoice.ui.components.PvSectionHeader
+import com.vivekray898.payvoice.ui.components.PvSecureWindow
+import com.vivekray898.payvoice.ui.components.PvSupportingText
+import com.vivekray898.payvoice.ui.components.PvTab
+import com.vivekray898.payvoice.ui.components.PvTabScaffold
+import com.vivekray898.payvoice.ui.components.PvTextButton
 import com.vivekray898.payvoice.ui.components.StatusPill
 import com.vivekray898.payvoice.ui.components.StatusTone
-import com.vivekray898.payvoice.ui.components.MoneyText
 import com.vivekray898.payvoice.ui.components.timeAgo
 import com.vivekray898.payvoice.ui.theme.Spacing
 
 /**
- * Employees (DESIGN.md rebuild, Phase 3c): PvScaffold + PvTopBar, employee
- * rows as rounded.lg surfaces with StatusPill, bottom-sheet actions, pill
- * FAB, centered empty state with the primary pill.
+ * Team tab (owner role): the devices that announce this business's payments,
+ * plus pairing and a real end-to-end test announcement.
+ *
+ * Rewritten for the tab map in `docs/UI_INVENTORY.md` §6: this is one of the
+ * four bottom destinations rather than a push off Home, so the screen no
+ * longer carries a back chevron and its primary action ("Add employee") sits
+ * in the scaffold's FAB slot — permanently visible, as the layout rules in
+ * AGENTS.md require.
+ *
+ * [PvSecureWindow] stays: this screen displays a live single-use pairing code,
+ * which would otherwise end up in the Recents thumbnail.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun OwnerRemoteScreen(viewModel: MainViewModel, onBack: () -> Unit) {
+fun OwnerRemoteScreen(
+    viewModel: MainViewModel,
+    selected: PvTab,
+    onSelectTab: (PvTab) -> Unit,
+) {
     val employees by viewModel.employees.collectAsStateWithLifecycle()
     val pairingCode by viewModel.pairingCode.collectAsStateWithLifecycle()
     val sendState by viewModel.remoteSendState.collectAsStateWithLifecycle()
@@ -68,76 +78,51 @@ fun OwnerRemoteScreen(viewModel: MainViewModel, onBack: () -> Unit) {
     var showAddSheet by remember { mutableStateOf(false) }
     var sheetEmployee by remember { mutableStateOf<EmployeeDevice?>(null) }
 
-    // This screen displays the pairing code in full. Without FLAG_SECURE it
-    // ends up in the Recents thumbnail and in any screenshot taken to ask
-    // someone for help, and the code is a live single-use credential.
     PvSecureWindow()
 
-    PvScaffold(
-        topBar = {},
+    PvTabScaffold(
+        role = DeviceRole.OWNER,
+        selected = selected,
+        onSelect = onSelectTab,
         floatingActionButton = {
-            ExtendedFloatingActionButton(
+            PvFab(
+                text = "Add employee",
+                icon = Icons.Filled.Add,
                 onClick = {
                     showAddSheet = true
                     viewModel.generatePairingCode()
                 },
-                icon = { Icon(Icons.Filled.Add, contentDescription = null) },
-                text = { Text("Add employee") },
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(percent = 50),
             )
         },
     ) { inner ->
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(
-                bottom = Spacing.huge + inner.calculateBottomPadding(),
-            ),
+            contentPadding = PaddingValues(bottom = Spacing.xxl + inner.calculateBottomPadding()),
         ) {
-            item(key = "header") {
-                ScreenHeader(title = "Employees", onBack = onBack)
-                HeroBanner(modifier = Modifier.padding(top = Spacing.md))
-            }
             if (employees.isEmpty()) {
                 item(key = "empty") {
-                    Column(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(top = Spacing.huge),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(Spacing.md),
-                    ) {
-                        Icon(
-                            Icons.Filled.Person,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(Spacing.huge - Spacing.lg),
-                        )
-                        Text(
-                            "No employees yet",
-                            style = MaterialTheme.typography.headlineSmall,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                        Text(
-                            "Add an employee so another phone can announce your payments.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Spacer(Modifier.height(Spacing.sm))
-                        PvPrimaryButton(
-                            text = "Add employee",
-                            onClick = {
-                                showAddSheet = true
-                                viewModel.generatePairingCode()
-                            },
-                            modifier = Modifier.padding(horizontal = Spacing.lg),
-                        )
-                    }
+                    PvEmptyState(
+                        title = "No employees yet",
+                        body = "Add an employee so another phone can announce your payments.",
+                        icon = Icons.Filled.Person,
+                    )
                 }
             } else {
-                item(key = "header") {
+                item(key = "count") {
                     val active = employees.count { it.isActive }
                     PvSectionHeader(
-                        text = if (active == 1) "1 device connected" else "$active devices connected",
+                        text = if (active == 1) {
+                            "1 device connected"
+                        } else {
+                            "$active devices connected"
+                        },
+                    )
+                }
+                item(key = "header") {
+                    Text(
+                        text = "Employees",
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = MaterialTheme.colorScheme.onBackground,
                     )
                 }
                 items(employees.size, key = { employees[it].uid }) { index ->
@@ -145,49 +130,46 @@ fun OwnerRemoteScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                         emp = employees[index],
                         onClick = { sheetEmployee = employees[index] },
                     )
-                    Spacer(Modifier.height(Spacing.md))
+                    Spacer(Modifier.height(Spacing.sm))
                 }
-                item(key = "test") {
-                    Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                        PvSectionHeader(text = "Try it out")
-                        Button(
-                            onClick = { viewModel.sendTestToEmployees() },
-                            enabled = testSendState !is MainViewModel.TestSendState.Sending,
-                            shape = androidx.compose.foundation.shape.RoundedCornerShape(percent = 50),
-                        ) {
-                            Text(
-                                if (testSendState is MainViewModel.TestSendState.Sending) "Sending…"
-                                else "Send test announcement",
-                            )
-                        }
-                        Text(
-                            when (val s = testSendState) {
-                                is MainViewModel.TestSendState.Sent ->
-                                    "Sent — connected devices will announce it shortly."
-                                is MainViewModel.TestSendState.Failed -> s.message
-                                MainViewModel.TestSendState.Sending -> "Sending…"
-                                MainViewModel.TestSendState.Idle ->
-                                    when (val r = sendState) {
-                                        is RemoteEventSender.SendState.SENT ->
-                                            "Last event sent ${timeAgo(r.atMs)}."
-                                        is RemoteEventSender.SendState.FAILED ->
-                                            "Last send failed — your local announcements are unaffected."
-                                        else ->
-                                            "Connected devices hear: \"PayVoice test announcement.\""
-                                    }
-                            },
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        when (val r = revokeState) {
-                            is MainViewModel.RevokeState.Failed -> Text(
-                                r.message,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.error,
-                            )
-                            else -> Unit
-                        }
+            }
+
+            item(key = "test") {
+                PvCard(modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.md)) {
+                    Text(
+                        text = "Try it out",
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    Text(
+                        text = when (val s = testSendState) {
+                            is MainViewModel.TestSendState.Sent ->
+                                "Sent — connected devices will announce it shortly."
+                            is MainViewModel.TestSendState.Failed -> s.message
+                            MainViewModel.TestSendState.Sending -> "Sending…"
+                            MainViewModel.TestSendState.Idle -> when (val r = sendState) {
+                                is RemoteEventSender.SendState.SENT ->
+                                    "Last event sent ${timeAgo(r.atMs)}."
+                                is RemoteEventSender.SendState.FAILED ->
+                                    "Last send failed — your local announcements are unaffected."
+                                else ->
+                                    "Connected devices hear: \"PayVoice test announcement.\""
+                            }
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    (revokeState as? MainViewModel.RevokeState.Failed)?.let { failed ->
+                        PvSupportingText(text = failed.message, error = true)
                     }
+                    PvSecondaryButton(
+                        text = if (testSendState is MainViewModel.TestSendState.Sending) {
+                            "Sending…"
+                        } else {
+                            "Send test announcement"
+                        },
+                        onClick = { viewModel.sendTestToEmployees() },
+                        enabled = testSendState !is MainViewModel.TestSendState.Sending,
+                    )
                 }
             }
         }
@@ -195,45 +177,31 @@ fun OwnerRemoteScreen(viewModel: MainViewModel, onBack: () -> Unit) {
 
     // ---- Add / pairing sheet -----------------------------------------------
     if (showAddSheet) {
-        ModalBottomSheet(onDismissRequest = { showAddSheet = false }) {
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = Spacing.xl)
-                    .padding(bottom = Spacing.xxl),
-                verticalArrangement = Arrangement.spacedBy(Spacing.md),
-            ) {
-                Text("Add employee", style = MaterialTheme.typography.headlineSmall)
-                val code = pairingCode?.code
-                if (code == null) {
-                    PvLoadingRow("Preparing your code…")
-                } else {
-                    Text(
-                        "Ask your employee to enter this code in their PayVoice app.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        PvBottomSheet(
+            onDismissRequest = { showAddSheet = false },
+            title = "Add employee",
+        ) {
+            val code = pairingCode?.code
+            if (code == null) {
+                PvLoadingRow("Preparing your code…")
+            } else {
+                PvSupportingText(
+                    text = "Ask your employee to enter this code in their PayVoice app.",
+                )
+                MoneyText(
+                    text = code,
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Medium,
+                )
+                PvSupportingText(text = "Expires in 10 minutes · works once")
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                    PvTextButton(text = "New code", onClick = { viewModel.generatePairingCode() })
+                    Spacer(Modifier.width(Spacing.sm))
+                    PvPrimaryButton(
+                        text = "Done",
+                        onClick = { showAddSheet = false },
+                        modifier = Modifier.weight(1f),
                     )
-                    MoneyText(
-                        text = code,
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Medium,
-                    )
-                    Text(
-                        "Expires in 10 minutes · works once",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
-                        Button(
-                            onClick = { viewModel.generatePairingCode() },
-                            shape = androidx.compose.foundation.shape.RoundedCornerShape(percent = 50),
-                        ) { Text("New code") }
-                        PvSecondaryButton(
-                            text = "Done",
-                            onClick = { showAddSheet = false },
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
                 }
             }
         }
@@ -241,92 +209,66 @@ fun OwnerRemoteScreen(viewModel: MainViewModel, onBack: () -> Unit) {
 
     // ---- Employee detail sheet ----------------------------------------------
     sheetEmployee?.let { emp ->
-        ModalBottomSheet(onDismissRequest = { sheetEmployee = null }) {
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = Spacing.xl)
-                    .padding(bottom = Spacing.xxl),
-                verticalArrangement = Arrangement.spacedBy(Spacing.md),
-            ) {
-                Text(emp.name, style = MaterialTheme.typography.headlineSmall)
-                StatusPill(
-                    text = if (emp.isActive) "Connected"
-                    else emp.status.lowercase().replaceFirstChar { it.uppercase() },
-                    tone = if (emp.isActive) StatusTone.Success else StatusTone.Neutral,
-                )
-                if (emp.lastSeenAtMs > 0) {
-                    Text(
-                        "Active ${timeAgo(emp.lastSeenAtMs)}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Button(
-                    onClick = {
-                        viewModel.sendTestToEmployees()
-                        sheetEmployee = null
-                    },
-                    shape = androidx.compose.foundation.shape.RoundedCornerShape(percent = 50),
-                ) { Text("Send test announcement") }
-                PvSecondaryButton(
-                    text = "Remove employee",
-                    icon = Icons.Filled.PersonRemove,
-                    onClick = {
-                        viewModel.revokeEmployee(emp.uid)
-                        sheetEmployee = null
-                    },
-                )
-                Text(
-                    "Removing stops announcements on that phone. The owner phone is unaffected.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+        PvBottomSheet(
+            onDismissRequest = { sheetEmployee = null },
+            title = emp.name,
+        ) {
+            StatusPill(
+                text = if (emp.isActive) "Connected"
+                else emp.status.lowercase().replaceFirstChar { it.uppercase() },
+                tone = if (emp.isActive) StatusTone.Success else StatusTone.Neutral,
+            )
+            if (emp.lastSeenAtMs > 0) {
+                PvSupportingText(text = "Active ${timeAgo(emp.lastSeenAtMs)}")
             }
+            PvPrimaryButton(
+                text = "Send test announcement",
+                onClick = {
+                    viewModel.sendTestToEmployees()
+                    sheetEmployee = null
+                },
+            )
+            PvSecondaryButton(
+                text = "Remove employee",
+                icon = Icons.Filled.PersonRemove,
+                onClick = {
+                    viewModel.revokeEmployee(emp.uid)
+                    sheetEmployee = null
+                },
+            )
+            PvSupportingText(
+                text = "Removing stops announcements on that phone. " +
+                    "The owner phone is unaffected.",
+            )
         }
     }
 }
 
 @Composable
 private fun EmployeeRow(emp: EmployeeDevice, onClick: () -> Unit) {
-    androidx.compose.material3.Surface(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
-        shape = MaterialTheme.shapes.large, // rounded.lg
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = Spacing.xxs,
+            .clickable(onClick = onClick)
+            .padding(horizontal = Spacing.lg, vertical = Spacing.md),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.lg),
     ) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(Spacing.lg),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Spacing.lg),
+        PvIconCircle(icon = Icons.Filled.Person)
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(Spacing.xxs),
         ) {
-            androidx.compose.material3.Surface(
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.primaryContainer,
-                modifier = Modifier.size(Spacing.xxl + Spacing.lg), // 40dp circle
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        Icons.Filled.Person,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(Spacing.xl + Spacing.xs),
-                    )
-                }
-            }
-            Column(Modifier.weight(1f)) {
-                Text(emp.name, style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(Spacing.xxs))
-                StatusPill(
-                    text = if (emp.isActive) "Connected"
-                    else emp.status.lowercase().replaceFirstChar { it.uppercase() },
-                    tone = if (emp.isActive) StatusTone.Success else StatusTone.Neutral,
-                )
-            }
+            Text(
+                text = emp.name,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            StatusPill(
+                text = if (emp.isActive) "Connected"
+                else emp.status.lowercase().replaceFirstChar { it.uppercase() },
+                tone = if (emp.isActive) StatusTone.Success else StatusTone.Neutral,
+            )
         }
     }
 }

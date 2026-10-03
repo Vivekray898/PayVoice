@@ -45,10 +45,12 @@ import com.vivekray898.payvoice.core.parser.AmountExtractor
 import com.vivekray898.payvoice.core.remote.DeviceRole
 import com.vivekray898.payvoice.service.status.DeviceStatusMonitor
 import com.vivekray898.payvoice.ui.MainViewModel
-import com.vivekray898.payvoice.ui.components.BellIllustration
 import com.vivekray898.payvoice.ui.components.IconTile
 import com.vivekray898.payvoice.ui.components.MoneyText
 import com.vivekray898.payvoice.ui.components.PvHealthBanner
+import com.vivekray898.payvoice.ui.components.PvIconButton
+import com.vivekray898.payvoice.ui.components.PvTab
+import com.vivekray898.payvoice.ui.components.PvTabScaffold
 
 import com.vivekray898.payvoice.ui.components.PvDivider
 import com.vivekray898.payvoice.ui.components.PvPaymentRow
@@ -70,11 +72,9 @@ import com.vivekray898.payvoice.ui.theme.Spacing
 @Composable
 fun ParentHomeScreen(
     viewModel: MainViewModel,
-    onOpenSettings: () -> Unit,
-    onOpenDiagnostics: () -> Unit,
-    onOpenReliability: () -> Unit,
-    onOpenOwnerRemote: () -> Unit = {},
-    onOpenEmployeeRemote: () -> Unit = {},
+    selected: PvTab,
+    onSelectTab: (PvTab) -> Unit,
+    onOpenHealth: () -> Unit,
 ) {
     val status by viewModel.status.collectAsStateWithLifecycle()
     val history by viewModel.history.collectAsStateWithLifecycle()
@@ -85,31 +85,36 @@ fun ParentHomeScreen(
     val context = LocalContext.current
 
     val role = settings.role
-    val listenerOk = status?.listenerEnabled == true
-    val notifOk = status?.notificationsEnabled == true
-    val paired = ownDevice?.isActive == true
     val todayMinor = history.filter { it.announcedAtMs >= startOfToday() }.sumOf { it.amountMinor }
     val statusBarPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
-    PvScaffold(topBar = {}) { _ ->
-        LazyColumn(Modifier.fillMaxSize()) {
+    // The hero deliberately draws under the status bar, so the top inset is
+    // applied to the app-bar row rather than to the list; the bottom inset and
+    // the tab bar height come from the scaffold's own padding.
+    PvTabScaffold(role = role, selected = selected, onSelect = onSelectTab) { inner ->
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                bottom = inner.calculateBottomPadding() + Spacing.xxl,
+            ),
+        ) {
             // 1. Custom app bar (transparent, over nothing) + 2. bleeding hero
             item(key = "hero") {
                 Box(Modifier.fillMaxWidth()) {
                     StorefrontHero(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(Spacing.huge * 3 + Spacing.sm), // ~200dp structural
+                            .height(Spacing.hero),
                     )
                     Row(
                         Modifier
                             .fillMaxWidth()
                             .padding(
                                 top = statusBarPadding + Spacing.sm,
-                                start = Spacing.xl - Spacing.xs, // 20dp structural side padding
-                                end = Spacing.xl - Spacing.xs,
+                                start = Spacing.gutter,
+                                end = Spacing.gutter,
                             )
-                            .height(Spacing.xxl + Spacing.lg), // 48dp structural bar
+                            .height(Spacing.rowBar),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
@@ -118,13 +123,12 @@ fun ParentHomeScreen(
                             color = MaterialTheme.colorScheme.onBackground,
                             modifier = Modifier.weight(1f),
                         )
-                        IconButton(onClick = onOpenSettings) {
-                            Icon(
-                                Icons.Filled.Settings,
-                                contentDescription = "Settings",
-                                tint = MaterialTheme.colorScheme.onBackground,
-                            )
-                        }
+                        PvIconButton(
+                            icon = Icons.Filled.Settings,
+                            contentDescription = "Settings",
+                            onClick = { onSelectTab(PvTab.SETTINGS) },
+                            tint = MaterialTheme.colorScheme.onBackground,
+                        )
                     }
                 }
             }
@@ -133,8 +137,8 @@ fun ParentHomeScreen(
             item(key = "greeting") {
                 Column(
                     Modifier.padding(
-                        start = Spacing.xl - Spacing.xs,
-                        end = Spacing.xl - Spacing.xs,
+                        start = Spacing.gutter,
+                        end = Spacing.gutter,
                         top = Spacing.xl,
                     ),
                 ) {
@@ -173,11 +177,11 @@ fun ParentHomeScreen(
                     ),
                     onFix = { item ->
                         when (item.inAppAction) {
-                            InAppAction.PAIR_DEVICE -> onOpenEmployeeRemote()
+                            InAppAction.PAIR_DEVICE -> onSelectTab(PvTab.TEAM)
                             else -> viewModel.applyHealthFix(context, item)
                         }
                     },
-                    onOpenDetail = onOpenReliability,
+                    onOpenDetail = onOpenHealth,
                 )
             }
 
@@ -185,8 +189,8 @@ fun ParentHomeScreen(
             item(key = "today") {
                 Column(
                     Modifier.padding(
-                        start = Spacing.xl - Spacing.xs,
-                        end = Spacing.xl - Spacing.xs,
+                        start = Spacing.gutter,
+                        end = Spacing.gutter,
                         top = Spacing.xxl,
                     ),
                 ) {
@@ -206,7 +210,7 @@ fun ParentHomeScreen(
             // Payments: empty state or recent list
             item(key = "payments") {
                 Column(
-                    Modifier.padding(horizontal = Spacing.xl - Spacing.xs),
+                    Modifier.padding(horizontal = Spacing.gutter),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     if (history.isEmpty()) {
@@ -232,7 +236,7 @@ fun ParentHomeScreen(
                     }
                     PvSecondaryButton(
                         text = "Show all payments",
-                        onClick = onOpenDiagnostics,
+                        onClick = { onSelectTab(PvTab.LIST) },
                         enabled = history.isNotEmpty(),
                     )
                 }
@@ -242,8 +246,8 @@ fun ParentHomeScreen(
             item(key = "quick-links") {
                 Column(
                     Modifier.padding(
-                        start = Spacing.xl - Spacing.xs,
-                        end = Spacing.xl - Spacing.xs,
+                        start = Spacing.gutter,
+                        end = Spacing.gutter,
                         top = Spacing.xxl,
                     ),
                 ) {
@@ -257,66 +261,22 @@ fun ParentHomeScreen(
                         Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceEvenly,
                     ) {
-                        QuickLink(icon = Icons.Filled.MonitorHeart, label = "Diagnostics", onClick = onOpenDiagnostics)
+                        QuickLink(icon = Icons.Filled.MonitorHeart, label = "Fix a problem", onClick = onOpenHealth)
                         QuickLink(
                             icon = Icons.Filled.People,
                             label = "Employees",
-                            onClick = if (role == DeviceRole.EMPLOYEE) onOpenEmployeeRemote else onOpenOwnerRemote,
+                            onClick = { onSelectTab(PvTab.TEAM) },
                         )
-                        QuickLink(icon = Icons.Filled.Settings, label = "Settings", onClick = onOpenSettings)
-                        QuickLink(icon = Icons.Filled.Build, label = "Reliability", onClick = onOpenReliability)
+                        QuickLink(icon = Icons.Filled.Settings, label = "Settings", onClick = { onSelectTab(PvTab.SETTINGS) })
+                        QuickLink(icon = Icons.Filled.Build, label = "Payments", onClick = { onSelectTab(PvTab.LIST) })
                     }
                 }
             }
 
-            // 7. Bottom padding = nav-bar inset + 24dp
+            // 7. Bottom clearance comes from the scaffold's inner padding
+            //    (tab bar height + navigation-bar inset).
             item(key = "footer") {
-                val navPad = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-                Spacer(Modifier.height(navPad + Spacing.xxl))
-            }
-        }
-    }
-}
-
-/** The GPay-Business action card: semantically correct icon art, bold
- *  headline, muted two-line description, inline text-link CTA below. */
-@Composable
-private fun ActionCard(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    badge: Boolean,
-    title: String,
-    description: String,
-    cta: String,
-    onAction: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable(onClick = onAction),
-        shape = RoundedCornerShape(Spacing.xl), // rounded.xl = 16dp
-        color = MaterialTheme.colorScheme.surfaceVariant,
-    ) {
-        Column(Modifier.padding(Spacing.xl - Spacing.xs)) { // 20dp structural padding
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                BellIllustration(icon = icon, badge = badge)
-                Spacer(Modifier.width(Spacing.lg))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        title,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    Spacer(Modifier.height(Spacing.xxs))
-                    Text(
-                        description,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-            TextButton(onClick = onAction) {
-                Text(cta, style = MaterialTheme.typography.labelLarge)
+                Spacer(Modifier.height(Spacing.sm))
             }
         }
     }

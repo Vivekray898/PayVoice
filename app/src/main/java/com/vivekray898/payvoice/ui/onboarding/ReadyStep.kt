@@ -4,10 +4,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import com.vivekray898.payvoice.ui.MainViewModel
 import com.vivekray898.payvoice.ui.components.PvPrimaryButton
+import com.vivekray898.payvoice.ui.components.PvTextButton
 
 /** Wizard step: ready. Preview the voice, then Done completes onboarding. */
 @Composable
@@ -23,9 +23,7 @@ fun ReadyStep(viewModel: MainViewModel, onDone: () -> Unit) {
             PvPrimaryButton(text = "Hear a preview", onClick = { viewModel.speakTest() })
         },
         secondaryAction = {
-            TextButton(onClick = onDone) {
-                Text("Done", color = MaterialTheme.colorScheme.primary)
-            }
+            PvTextButton(text = "Done", onClick = onDone)
         },
     )
 }

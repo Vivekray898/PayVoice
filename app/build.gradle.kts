@@ -451,5 +451,5 @@ pvRegisterDesignCheck(
 )
 
 tasks.matching { it.name == "check" }.configureEach {
-    dependsOn("verifyDesignTokens")
+    dependsOn("verifyDesignTokens", "verifyDesignComponents")
 }

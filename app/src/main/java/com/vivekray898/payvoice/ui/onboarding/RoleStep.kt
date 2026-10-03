@@ -2,6 +2,7 @@ package com.vivekray898.payvoice.ui.onboarding
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -17,13 +18,14 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.vivekray898.payvoice.core.remote.DeviceRole
+import com.vivekray898.payvoice.ui.components.PvCard
+import com.vivekray898.payvoice.ui.components.PvIconCircle
 import com.vivekray898.payvoice.ui.theme.Spacing
 
 /**
@@ -64,30 +66,14 @@ private fun RoleCard(
     subtitle: String,
     onClick: () -> Unit,
 ) {
-    Surface(
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = Spacing.xxs,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-    ) {
+    PvCard(onClick = onClick, contentPadding = PaddingValues(Spacing.lg)) {
         Row(
             Modifier
                 .fillMaxWidth()
-                .heightIn(min = Spacing.xxl + Spacing.lg + Spacing.sm) // 56dp+ structural
-                .padding(Spacing.lg),
+                .heightIn(min = Spacing.touch),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Surface(
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.primaryContainer,
-                modifier = Modifier.size(Spacing.xxl + Spacing.lg + Spacing.sm), // 56dp circle
-            ) {
-                androidx.compose.foundation.layout.Box(contentAlignment = Alignment.Center) {
-                    Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                }
-            }
+            PvIconCircle(icon = icon)
             Spacer(Modifier.width(Spacing.lg))
             Column {
                 Text(title, style = MaterialTheme.typography.titleMedium)
