@@ -1,6 +1,7 @@
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.util.Properties
+import org.gradle.api.GradleException
 
 plugins {
     alias(libs.plugins.android.application)
@@ -13,16 +14,34 @@ plugins {
 // Release signing config.
 //
 // keystore.properties lives at the repo root and is GITIGNORED — it holds the
-// plaintext password for the release keystore. If the file is missing (fresh
-// clone, CI without secrets), release falls back to the debug key so the build
-// still succeeds; only the signing identity changes.
+// plaintext password for the release keystore.
+//
+// A missing keystore must NOT silently produce a debug-signed release. The
+// debug key is public and identical on every machine, so such an APK is
+// installable by anyone and will refuse to update over a real release — and
+// nothing about it looks wrong until the day it ships. Instead the release
+// tasks fail, and the fallback survives only as an explicit opt-in for local
+// performance measurement:
+//
+//     ./gradlew assembleRelease -PallowDebugSignedRelease=true
 // ---------------------------------------------------------------------------
 val keystorePropsFile = rootProject.file("keystore.properties")
+// Read through providers.fileContents rather than File.exists() so the
+// configuration cache tracks the file: a plain exists() check is invisible to
+// the cache, which would then keep reusing "keystore present" after the file
+// is deleted and skip the guard below.
+val keystorePropsText = providers
+    .fileContents(rootProject.layout.projectDirectory.file("keystore.properties"))
+    .asText
+val hasReleaseKeystore = keystorePropsText.isPresent
 val keystoreProps = Properties().apply {
-    if (keystorePropsFile.exists()) {
-        keystorePropsFile.inputStream().use { load(it) }
+    if (keystorePropsText.isPresent) {
+        keystorePropsText.get().reader().use { load(it) }
     }
 }
+val allowDebugSignedRelease = providers.gradleProperty("allowDebugSignedRelease")
+    .map { it.toBoolean() }
+    .getOrElse(false)
 
 android {
     namespace = "com.vivekray898.payvoice"
@@ -69,10 +88,10 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            // Sign with the real release keystore when keystore.properties exists;
-            // otherwise fall back to the debug key so a fresh clone / CI without
-            // secrets can still `assembleRelease` for perf verification.
-            signingConfig = if (keystorePropsFile.exists()) {
+            // The real release keystore when keystore.properties exists;
+            // otherwise the debug key, which `verifyReleaseSigning` (below)
+            // refuses to let a release task use unless explicitly allowed.
+            signingConfig = if (hasReleaseKeystore) {
                 signingConfigs.getByName("release")
             } else {
                 signingConfigs.getByName("debug")
@@ -91,6 +110,52 @@ android {
 ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
     arg("room.incremental", "true")
+}
+
+// ---------------------------------------------------------------------------
+// Refuse to package a debug-signed release artifact.
+//
+// Runs only when a release task is actually in the graph, so `./gradlew tasks`
+// and every debug task keep working on a fresh clone with no keystore.
+// ---------------------------------------------------------------------------
+val verifyReleaseSigning = tasks.register("verifyReleaseSigning") {
+    group = "verification"
+    description =
+        "Fails if a release artifact would be signed with the public debug key."
+    // The booleans are passed in as task inputs rather than read from the
+    // script inside doLast: a doLast that touches a top-level script val
+    // captures the Gradle script object, which the configuration cache refuses
+    // to serialize.
+    val wouldUseDebugKey = objects.property(Boolean::class.javaObjectType)
+        .convention(!hasReleaseKeystore)
+    val explicitlyAllowed = objects.property(Boolean::class.javaObjectType)
+        .convention(allowDebugSignedRelease)
+    doLast {
+        if (!wouldUseDebugKey.get()) return@doLast
+        if (explicitlyAllowed.get()) {
+            println(
+                "PayVoice: assembling a DEBUG-SIGNED release build " +
+                    "(-PallowDebugSignedRelease=true). Local measurement only " +
+                    "- never ship this.",
+            )
+            return@doLast
+        }
+        throw GradleException(
+            "Refusing to build a release artifact signed with the debug key.\n" +
+                "keystore.properties is missing from the repo root, so no release " +
+                "identity is available. Create it from a secure store, or pass " +
+                "-PallowDebugSignedRelease=true to produce a throwaway build for " +
+                "local size/startup measurement only.",
+        )
+    }
+}
+
+tasks.matching {
+    val n = it.name
+    (n.startsWith("assemble") || n.startsWith("bundle") || n.startsWith("package")) &&
+        n.contains("Release")
+}.configureEach {
+    dependsOn(verifyReleaseSigning)
 }
 
 // ---------------------------------------------------------------------------
