@@ -6,6 +6,19 @@
       <ignored-keys>
          <ignored-key id="991EFB94DB91127D" reason="Key couldn't be downloaded from any key server"/>
       </ignored-keys>
+      <!-- Sources, javadoc and Gradle's own source distribution are IDE-only
+           artifacts: Android Studio downloads them so a developer can click
+           into library code. They are never compiled and never packaged.
+           Verification metadata is written from build-task resolution, which
+           never requests the sources variant, so without this every IDE sync
+           fails in :app:detachedConfiguration2 on a -sources.jar.
+           Only these file names are exempt — every real .jar/.aar is still
+           checksum- and signature-verified. -->
+      <trusted-artifacts>
+         <trust file=".*-sources[.]jar" regex="true"/>
+         <trust file=".*-javadoc[.]jar" regex="true"/>
+         <trust file=".*-src[.]zip" regex="true"/>
+      </trusted-artifacts>
       <trusted-keys>
          <trusted-key id="04543577D6A9CC626239C50C7ECBD740FF06AEB5">
             <trusting group="org.glassfish.jaxb"/>
