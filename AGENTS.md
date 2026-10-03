@@ -163,6 +163,13 @@ the point.## Layout rules
   (`./gradlew --write-verification-metadata pgp,sha256 <tasks>`) and
   committing the result. CI builds `--offline` so an unlisted artifact fails
   there rather than silently widening trust.
+  `verify-signatures` stays `true`. `-sources.jar`, `-javadoc.jar` and
+  `-src.zip` are the only exemptions, listed in `<trusted-artifacts>`: the
+  metadata is generated from build-task resolution, which never requests the
+  sources variant, so Android Studio's source-download step
+  (`detachedConfiguration2`) would otherwise fail on every sync. Do not
+  "fix" a sources failure by adding checksums for them, and do not set
+  `verify-signatures=false` — a tampered `.jar`/`.aar` must still fail.
 - **Security lint findings fail the build.** Severity lives in
   `app/lint.xml` (AGP's `warningsAsErrors` is a single boolean covering every
   warning, which would fail on version-currency noise). If a check is
