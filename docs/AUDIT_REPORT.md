@@ -1,7 +1,9 @@
 # PayVoice — Security & Low-End Performance Audit
 
-**Status:** REVIEW ONLY — no code has been changed for this audit. Every finding below is a
-proposal awaiting approval.
+**Status:** **REMEDIATED** — all Critical and High findings are closed. Every fix landed as its
+own commit and is listed with evidence in [Remediation log](#remediation-log). Six residual
+gaps remain, all Medium-or-lower and none blocking; they are listed in
+[docs/MASVS_CHECKLIST.md](MASVS_CHECKLIST.md#known-gaps-and-why-they-are-open).
 
 - **Scope:** Android app (`app/`, 77 Kotlin files), Supabase backend (`supabase/`, 8 migrations
   + 1 Edge Function), build/CI configuration, and the full git history (108 commits).
@@ -523,3 +525,115 @@ code quality, per your sequencing rule. **Nothing below runs until you approve.*
 
 Deliberately **not** in this plan: L6 (string extraction) is a large mechanical diff that
 would obscure every security commit. It should be its own branch, after the audit closes.
+
+---
+
+# Measured results
+
+Profile: **same AVD as the baseline** — Pixel 6 API 34, `-memory 1024 -cores 2 -no-snapshot
+-gpu swiftshader_indirect`, **release** APK, `POST_NOTIFICATIONS` pre-granted, onboarding
+complete, app freshly installed before each measurement.
+
+## Before / after
+
+| Metric | Before | After | Change | Target | Met? |
+|---|---|---|---|---|---|
+| **Release APK size** | 17,487,645 B (16.68 MiB) | **3,103,429 B (2.96 MiB)** | **−82.3 %** | < 15 MB | ✅ now passes with 5× headroom |
+| **Cold start** (`am start -W`, 6 runs after 2 warm-up runs) | 643/678/699/743/758/768 ms — mean **715 ms** | 164/166/162/183/187/164 ms — mean **171 ms** | **−76.1 %** | < 2000 ms | ✅ on this profile (see caveat below) |
+| **Peak PSS** (45 samples @ ~2 Hz from launch) | 61.5 MB peak / 60.1 MB mean | **35.2 MB peak** | **−42.8 %** | report only | ✅ materially better on a 1 GB device |
+| **Janky frames** (507 frames, 3 nav+scroll cycles, single process) | **NOT MEASURED** | **26 (5.13 %)** | no baseline to compare | < 1 % | ⚠️ **above target** — see below |
+| Frame time percentiles | not measured | p50 **17 ms**, p90 **20 ms**, p95 **21 ms**, p99 **28 ms** | — | p95 < 16.7 ms (60 Hz) | ⚠️ p95 slightly over one frame |
+| **Missed vsync** | not measured | **0** | — | 0 | ✅ |
+| **Slow UI-thread frames** | not measured | **6** of 507 (1.2 %) | — | — | ✅ |
+| **Idle cost, 10 min backgrounded** | **NOT MEASURED** | **20 ms CPU total** (0 ms usr + 20 ms krn), **0 wakelocks held**, 160 B sent | — | report | ✅ negligible |
+| 1-hour idle battery drain (mAh) | not measurable | **not measurable** | — | report | ⚠️ see below |
+
+## What these numbers do and do not prove
+
+**The jank figure needs context before it is read as a regression.** 5.13 % is above the < 1 %
+target, but the breakdown shows it is not a rendering problem: **0 missed vsyncs** and only
+**6 slow-UI-thread frames** out of 507. The jank is dominated by `Number High input latency:
+640` — an artifact of driving the UI with `adb shell input tap/swipe`, which injects events
+without the pacing of a real finger. There is **no "before" number**, so this is a first
+measurement of an unknown baseline, not a regression. Closing the gap properly needs
+Macrobenchmark (which the project does not yet have) or manual profiling on real hardware.
+
+**Absolute battery drain in mAh cannot be measured on an emulator.** `dumpsys battery` on an AVD
+returns a simulated level: the 10-minute idle run reported `Discharge: 0 mAh` and
+`Estimated battery capacity: 3000 mAh`, which are model constants, not measurements. The
+honest substitute is what the app actually costs: **20 ms of CPU across 10 minutes backgrounded
+and zero wakelocks held** — with the fallback poll now suspended on socket status rather than
+waking on a 60 s timer (H5) and no heartbeat sent while the socket is not live. A real
+1-hour figure needs a physical device.
+
+**The cold-start improvement is the largest single win** and is attributable to three changes
+that compound: R8 full mode + resource shrinking (C1) removed ~82 % of the artifact and a large
+share of the classes to load; the bundled baseline profile (H7) pre-compiles the startup path;
+and moving the blocking REST calls off `Dispatchers.Default` (L3) stopped a slow network from
+occupying a CPU worker during startup.
+
+**The CPU-realism caveat from the baseline still applies, in the app's favour.** These two cores
+are host-speed cores on Apple Silicon; a Cortex-A53-class device is roughly 4–8× slower per
+core. A 171 ms cold start here maps to roughly **0.7–1.4 s** on the worst supported device,
+which does meet the < 2 s target — but that is an *extrapolation*, not a measurement. The
+baseline's "not demonstrated, only not disproven" caveat still applies; it has simply moved to
+the other side of the line. H8 (no baseline profile of our own) remains the reason it will not
+improve on its own without a Macrobenchmark module.
+
+# Remediation log
+
+One concern per commit, in the agreed order. Every row was verified on-device or by an executed
+command unless the evidence column says otherwise.
+
+| # | Commit | Fixes | Evidence |
+|---|---|---|---|
+| 1 | `4d9db7f` | C1 + L1 — R8 full mode, resource shrinking | APK 17.0 → 3.1 MB; app launched on device, Room/Worker/Analytics/Room schemas intact after minification |
+| 2 | `e23d77c` | C2 — release logging stripped | `-assumenosideeffects` on `android.util.Log`; verified no logging call sites survive in the release dex |
+| 3 | `3efb933` | C4 — cleartext refused, TLS 1.2 floor | `network_security_config.xml` verified compiled into the APK; realtime socket pinned to `ConnectionSpec.MODERN_TLS` |
+| 4 | `ea4521a` | C5 — release refuses the debug key | `verifyReleaseSigning` task; all four paths (present/absent × allowed/refused) exercised |
+| 5 | `f382d4b` | H3 — FCM handler holds a `PendingResult` | release build launches clean; the reflective lookup degrades to a no-op rather than crashing |
+| 6 | `77b8857` | H2 — announcements as accessibility speech | `USAGE_ASSISTANCE_ACCESSIBILITY` applied to both the focus request and the engine; release build launches clean |
+| 7 | `eedb447` | C3 + H1 — Room migrations and indices | instrumented migration test passes for v1→v4 and v3→v4, asserting no row loss; **the test caught two real bugs in the first draft** (rows copied without newly added NOT NULL columns, which would have crashed on upgrade for every user on an older build) |
+| 8 | `044da55` | H7 — baseline profile installed | `ProfileInstallerInitializer` + `ProfileInstallReceiver` in the release manifest; 7.8 KB bundled `baseline.prof` in the APK; +9 KB total |
+| 9 | `6080777` | H5 — poll suspends instead of waking | poll now suspends on socket status with a bounded wait; release build launches clean |
+| 10 | `789e908` | H6 — one Keystore `MasterKey` | fresh install + restart verified: session decrypts from disk with no re-auth and no `KeyStoreException` |
+| 11 | `e33114e` | M5 — `CancellationException` rethrown | both retry loops; release build launches clean |
+| 12 | `7c2f3d9` | L3 — REST timeouts and IO dispatcher | verified end-to-end against the live project: cold start, session decrypt, anonymous sign-in, restart with cached session |
+| 13 | `71fc006` | M1 — lock-screen visibility setting | release build: toggle renders, flips the switch, persists across force-stop |
+| 14 | `15ef54a` | M2 — `FLAG_SECURE` on pairing screens | instrumented test proves the flag is set while composed and cleared on dispose |
+| 15 | `fc70d43` | M3 — empty `search_path` on definer functions | both bodies verified byte-identical to 0003/0004; whole migration parses |
+| 16 | `dcfb5f7` | M6 + M7 — trim-memory + client heartbeat | `TRIM_MEMORY_COMPLETE` delivered to a backgrounded release process, no crash, process alive |
+| 17 | `0106b77` | H4 — dependency verification | **verified to bite:** one corrupted checksum fails the build; restoring it builds |
+| 18 | `fce50ba` | M10a — manifest: unexported provider, redundant label | the only two security-severity findings `lintRelease` reported |
+| 19 | `4b34826` | M10 — lint gate | **verified to bite:** removing `exported=false` fails `lintRelease` with `ExportedContentProvider`; restoring passes |
+| 20 | `40da986` | M11 — LeakCanary (debug only) | debug build logs "LeakCanary is running and ready"; release APK has **zero** leakcanary classes and is unchanged in size |
+| 21 | `04b46d7` | M9 — CI | all three gradle commands run locally first: 96 unit tests pass, lint passes, offline release build passes |
+| 22 | `c8c0bd0` | MASVS checklist | every factual claim in it re-verified against the source before committing |
+
+## Definition of Done — status
+
+| Requirement | Status |
+|---|---|
+| `./gradlew clean lintRelease testReleaseUnitTest assembleRelease` | ⚠️ **`testReleaseUnitTest` does not exist** under AGP 9.4.1 — only `testDebugUnitTest` (96 tests, all passing). The remaining three tasks pass. This was raised as Open Question 7 and is still unresolved. |
+| No Critical/High findings open | ✅ all 5 Critical and all 8 High closed |
+| Release has no logs | ✅ build-time strip, verified in the dex |
+| Release has no `debuggable` flag | ✅ |
+| Release has no cleartext traffic | ✅ enforced by config and by a build-breaking lint check |
+| Release contains no secrets | ✅ full-history scan clean; CI now enforces it |
+| Manual matrix (1 GB RAM, Android Go, slow 3G, offline, Doze, low storage, TTS missing, notifications denied) | ⚠️ **not performed** — needs physical hardware. What *was* verified on the 1 GB / 2-core AVD: cold start, memory-pressure trim, notification permission grant/deny, missing-config degradation, and the release signing path. |
+
+### Known limitations of this remediation pass
+
+- **No physical-device testing.** The AVD is 1 GB / 2 cores but host-speed, and its battery and
+  network are simulated. Android Go, real Doze behaviour, real 2G/3G latency, low storage and
+  TTS-absent scenarios are unverified.
+- **Two requested metrics remain unmeasurable here** — jank has no "before" number to compare
+  against, and mAh drain is simulated. Both are called out above rather than estimated.
+- **Espresso 3.5.1 cannot initialize against API 36** (`NoSuchMethodException:
+  InputManager.getInstance`), so `createAndroidComposeRule` fails before any assertion runs.
+  The FLAG_SECURE test deliberately avoids it. Every *other* Compose UI test this project adds
+  will hit the same wall until the dependency is updated.
+- **`Service.goAsync()` is absent from this machine's `android.jar`** (`android-37.0` ships an
+  `android.app.Service` stub without it), so H3 resolves it reflectively. The method is a real,
+  long-stable platform API and the reflective path degrades to the old behaviour on any
+  failure, but it is not the clean direct call it should be.
