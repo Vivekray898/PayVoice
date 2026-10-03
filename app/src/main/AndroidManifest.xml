@@ -4,6 +4,11 @@
 
     <!-- FCM token fetch + future backend event upload. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Normal (install-time, no dialog) permission. Required by the health
+         checker to answer "am I online?" — without it ConnectivityManager
+         throws SecurityException and the connectivity row can never render.
+         Added by the Step 3 permission/health layer. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Held only for the short window around a local announcement (45s cap). -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Lets the reliability screen offer a direct battery-optimization exemption dialog. -->

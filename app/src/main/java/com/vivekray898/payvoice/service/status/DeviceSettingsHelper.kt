@@ -50,6 +50,9 @@ object DeviceSettingsHelper {
     }
 
     // ---- Battery optimization: tiered fallbacks (spec: C) ----
+    //
+    // Tier order in [launchBatteryFix] is Play-policy-driven: the list screen
+    // is the default, the direct exemption dialog is the last resort.
 
     /** Direct exemption dialog — needs the REQUEST_IGNORE_BATTERY_OPTIMIZATIONS permission. */
     fun directBatteryExemptionIntent(context: Context): Intent = Intent().apply {
@@ -76,12 +79,18 @@ object DeviceSettingsHelper {
     /**
      * Launches the best available battery screen, walking the fallback chain
      * until one resolves. Returns which tier actually launched (for the UI).
+     *
+     * Order is deliberate and Play-policy-driven: the **list** screen comes
+     * first because `ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` needs a
+     * declared permission form on Google Play before it may be the default
+     * path. The direct exemption dialog is the last resort, reached only on
+     * devices where none of the standard screens exist.
      */
     fun launchBatteryFix(context: Context): String {
         val attempts = listOf(
-            "exemption-dialog" to directBatteryExemptionIntent(context),
             "optimization-list" to batteryOptimizationListIntent(),
             "battery-settings" to batterySettingsIntent(),
+            "exemption-dialog" to directBatteryExemptionIntent(context),
             "app-details" to appDetailsIntent(context),
         )
         for ((tier, intent) in attempts) {

@@ -1,4 +1,66 @@
 <resources>
     <string name="app_name">PayVoice</string>
     <string name="notification_listener_label">PayVoice Payment Listener</string>
+
+    <!-- ===================================================================
+         Health / permission checklist (core.health.AppHealthChecker)
+         Plain words, one sentence of "why it matters". No concatenation:
+         every sentence is a complete translatable unit.
+         =================================================================== -->
+
+    <!-- Titles -->
+    <string name="health_notifications_title">Notifications are off</string>
+    <string name="health_channel_title">Payment alerts are silenced</string>
+    <string name="health_dnd_title">Do Not Disturb is blocking alerts</string>
+    <string name="health_battery_title">Android may stop PayVoice in the background</string>
+    <string name="health_autostart_title">This phone may close PayVoice when you leave it</string>
+    <string name="health_listener_title">PayVoice can\'t read your payment notifications</string>
+    <string name="health_tts_title">No voice installed</string>
+    <string name="health_voice_title">Your voice language isn\'t available</string>
+    <string name="health_volume_title">Notification volume is zero</string>
+    <string name="health_internet_title">No internet connection</string>
+    <string name="health_fcm_title">This device isn\'t registered for alerts</string>
+    <string name="health_session_title">Not signed in yet</string>
+    <string name="health_play_services_title">Google Play services is missing</string>
+    <string name="health_payment_app_title">Google Pay isn\'t installed</string>
+    <string name="health_pairing_title">This phone isn\'t connected to a business</string>
+
+    <!-- Why it matters, one plain sentence each -->
+    <string name="health_notifications_why">PayVoice needs notifications to keep announcements reliable while your screen is off.</string>
+    <string name="health_channel_why">Turn the Payment events channel back on so alerts aren\'t downgraded to silent.</string>
+    <string name="health_dnd_why">While Do Not Disturb is on, payment announcements are held back.</string>
+    <string name="health_battery_why">Allow unrestricted battery use so a payment is never announced late.</string>
+    <string name="health_autostart_why">Allow PayVoice to start on its own so announcements keep arriving.</string>
+    <string name="health_listener_why">Grant access so PayVoice can hear Google Pay telling you that a customer paid.</string>
+    <string name="health_tts_why">Install a text-to-speech voice so PayVoice can speak the amount out loud.</string>
+    <string name="health_voice_why">Download the voice for your chosen language, or switch to one you already have.</string>
+    <string name="health_volume_why">Turn the volume up so you can hear the announcement.</string>
+    <string name="health_internet_why">PayVoice needs a connection to reach your business and receive remote alerts.</string>
+    <string name="health_fcm_why">Alerts from your owner arrive through Google Play services; restart the app to re-register.</string>
+    <string name="health_session_why">Check your connection so PayVoice can sign you in securely.</string>
+    <string name="health_play_services_why">Without Google Play services, alerts from your owner can\'t reach this phone.</string>
+    <string name="health_payment_app_why">PayVoice listens to Google Pay, so install it to detect payments on this phone.</string>
+    <string name="health_pairing_why">Enter the code from your owner so this phone can announce their payments.</string>
+
+    <!-- Fix button labels -->
+    <string name="health_fix_turn_on">Turn on</string>
+    <string name="health_fix_open_settings">Open settings</string>
+    <string name="health_fix_install_voice">Install voice</string>
+    <string name="health_fix_open_volume">Turn up volume</string>
+    <string name="health_fix_connect">Enter code</string>
+    <string name="health_fix_fix">Fix</string>
+
+    <!-- Health banner -->
+    <string name="health_banner_all_good">All good, ready for payments</string>
+    <string name="health_banner_one_blocked">1 thing needs fixing</string>
+    <string name="health_banner_blocked">%1$d things need fixing</string>
+    <string name="health_banner_one_attention">1 thing wants attention</string>
+    <string name="health_banner_attention">%1$d things want attention</string>
+    <string name="health_banner_show">Show what\'s wrong</string>
+    <string name="health_banner_hide">Hide</string>
+    <string name="health_banner_open">Open full checklist</string>
+    <string name="health_loading">Checking this phone…</string>
+    <string name="health_check_error">Couldn\'t check everything</string>
+    <string name="health_check_error_why">Try again in a moment — your payments are unaffected.</string>
+    <string name="health_retry">Try again</string>
 </resources>

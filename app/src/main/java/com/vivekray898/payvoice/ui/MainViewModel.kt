@@ -8,6 +8,14 @@ import androidx.lifecycle.viewModelScope
 import com.vivekray898.payvoice.AppContainer
 import com.vivekray898.payvoice.core.announce.AnnouncementLanguage
 import com.vivekray898.payvoice.core.announce.AnnouncementStyle
+import com.vivekray898.payvoice.core.health.AppHealthChecker
+import com.vivekray898.payvoice.core.health.AndroidHealthSources
+import com.vivekray898.payvoice.core.health.DefaultAppHealthChecker
+import com.vivekray898.payvoice.core.health.HealthItem
+import com.vivekray898.payvoice.core.health.HealthRequest
+import com.vivekray898.payvoice.core.health.HealthSummary
+import com.vivekray898.payvoice.core.health.InAppAction
+import com.vivekray898.payvoice.core.health.SettingsLauncher
 import com.vivekray898.payvoice.core.database.AnnouncementEntity
 import com.vivekray898.payvoice.core.database.CapturedNotificationEntity
 import com.vivekray898.payvoice.core.database.DiagnosticEntity
@@ -29,6 +37,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private fun Application.container(): AppContainer =
     (this as com.vivekray898.payvoice.PayVoiceApp).container
@@ -342,6 +351,64 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _testSpeaking = MutableStateFlow(false)
     val testSpeaking: StateFlow<Boolean> = _testSpeaking
 
+    // ---- Health / permission checklist (Step 3) ---------------------------
+    //
+    // ONE list drives the Home banner and the Settings checklist — the two
+    // previously disagreed because ReliabilityScreen kept its own local
+    // `data class Check`. Re-evaluated on every ON_RESUME (via
+    // refreshStatus) so a fix made in system Settings appears immediately.
+
+    private val _health = MutableStateFlow<HealthSummary?>(null)
+    val health: StateFlow<HealthSummary?> = _health
+
+    private val _healthLoading = MutableStateFlow(true)
+    val healthLoading: StateFlow<Boolean> = _healthLoading
+
+    private val healthChecker: AppHealthChecker by lazy {
+        DefaultAppHealthChecker(
+            AndroidHealthSources(
+                context = getApplication(),
+                fcmTokenRegistered = { container.messaging.status.value.tokenAvailable },
+                sessionValid = { container.auth.state.value is PayVoiceAuth.State.READY },
+            ),
+        )
+    }
+
+    /** Current [HealthRequest], derived from the flows the checker needs. */
+    private fun healthRequest() = HealthRequest(
+        role = settings.value.role,
+        languageTag = settings.value.language.ttsLocaleTag,
+        paired = ownDevice.value?.isActive == true,
+    )
+
+    /**
+     * Re-run every check. Cheap reads, but IPC — so off the main thread.
+     * A failure keeps the previous list rather than blanking the banner:
+     * a stale verdict is better than an empty one that says "all good".
+     */
+    fun refreshHealth() {
+        viewModelScope.launch {
+            if (_health.value == null) _healthLoading.value = true
+            val result = withContext(kotlinx.coroutines.Dispatchers.Default) {
+                runCatching { healthChecker.check(healthRequest()) }
+            }
+            result.onSuccess { _health.value = HealthSummary(it) }
+            _healthLoading.value = false
+        }
+    }
+
+    /**
+     * Execute a health row's fix. In-app actions (pairing, checklist) are
+     * navigation and are handled by the caller before reaching here.
+     */
+    fun applyHealthFix(context: Context, item: HealthItem) {
+        if (item.inAppAction != InAppAction.NONE) return
+        // No new analytics event: docs/ANALYTICS.md is a closed catalogue of
+        // structural-only events, and "which fix button was pressed" is user
+        // content that does not belong in it.
+        SettingsLauncher(context).launch(item.settingsAction)
+    }
+
     init {
         refreshStatus()
         // FCM registration in the background — never on the UI path. The
@@ -366,6 +433,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // Re-query Android's actual Notification Access state on every resume
         // (returning from system settings must update instantly).
         container.listenerRuntime.refreshSystemGrant(getApplication())
+        // Same trigger for the health checklist — the banner must refresh the
+        // moment the user comes back from fixing something.
+        refreshHealth()
     }
 
     /**

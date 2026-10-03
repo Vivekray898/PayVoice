@@ -37,7 +37,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.vivekray898.payvoice.core.health.HealthSummary
+import com.vivekray898.payvoice.core.health.InAppAction
 import com.vivekray898.payvoice.core.parser.AmountExtractor
 import com.vivekray898.payvoice.core.remote.DeviceRole
 import com.vivekray898.payvoice.service.status.DeviceStatusMonitor
@@ -45,6 +48,7 @@ import com.vivekray898.payvoice.ui.MainViewModel
 import com.vivekray898.payvoice.ui.components.BellIllustration
 import com.vivekray898.payvoice.ui.components.IconTile
 import com.vivekray898.payvoice.ui.components.MoneyText
+import com.vivekray898.payvoice.ui.components.PvHealthBanner
 
 import com.vivekray898.payvoice.ui.components.PvDivider
 import com.vivekray898.payvoice.ui.components.PvPaymentRow
@@ -76,15 +80,14 @@ fun ParentHomeScreen(
     val history by viewModel.history.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val ownDevice by viewModel.ownDevice.collectAsStateWithLifecycle()
+    val health by viewModel.health.collectAsStateWithLifecycle()
+    val healthLoading by viewModel.healthLoading.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     val role = settings.role
     val listenerOk = status?.listenerEnabled == true
     val notifOk = status?.notificationsEnabled == true
     val paired = ownDevice?.isActive == true
-    val needsAction = when (role) {
-        DeviceRole.EMPLOYEE -> !paired
-        else -> !(listenerOk && notifOk)
-    }
     val todayMinor = history.filter { it.announcedAtMs >= startOfToday() }.sumOf { it.amountMinor }
     val statusBarPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
@@ -141,11 +144,14 @@ fun ParentHomeScreen(
                         color = MaterialTheme.colorScheme.onBackground,
                     )
                     Spacer(Modifier.height(Spacing.xs))
+                    val healthSummary = health
                     Text(
-                        text = if (needsAction) {
-                            "Complete pending actions now"
-                        } else {
+                        text = if (healthSummary == null || healthSummary.healthy) {
                             "You're all set. Payments will appear here."
+                        } else if (healthSummary.attentionCount == 1) {
+                            "One thing needs your attention below."
+                        } else {
+                            "A few things need your attention below."
                         },
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -153,40 +159,26 @@ fun ParentHomeScreen(
                 }
             }
 
-            // 4. Primary action card (only when action required)
-            if (needsAction) {
-                item(key = "action") {
-                    ActionCard(
-                        modifier = Modifier.padding(
-                            start = Spacing.lg,
-                            end = Spacing.lg,
-                            top = Spacing.xl,
-                        ),
-                        icon = when (role) {
-                            DeviceRole.EMPLOYEE -> Icons.Filled.Link
-                            else -> Icons.Filled.Notifications
-                        },
-                        badge = role != DeviceRole.EMPLOYEE,
-                        title = when (role) {
-                            DeviceRole.EMPLOYEE -> "Connect to your owner"
-                            else -> "Turn on all notifications"
-                        },
-                        description = when (role) {
-                            DeviceRole.EMPLOYEE ->
-                                "Pair this phone with your owner's code to hear payments live"
-                            else ->
-                                "Get audio alerts & timely notifications when customers pay you"
-                        },
-                        cta = when (role) {
-                            DeviceRole.EMPLOYEE -> "Enter code now"
-                            else -> "Turn on now"
-                        },
-                        onAction = when (role) {
-                            DeviceRole.EMPLOYEE -> onOpenEmployeeRemote
-                            else -> onOpenReliability
-                        },
-                    )
-                }
+            // 4. Health banner — one verdict first, expandable to the list.
+            //    Replaces the single-boolean ActionCard that could only ever
+            //    surface one problem at a time.
+            item(key = "health") {
+                PvHealthBanner(
+                    summary = health ?: HealthSummary(emptyList()),
+                    loading = healthLoading,
+                    modifier = Modifier.padding(
+                        start = Spacing.lg,
+                        end = Spacing.lg,
+                        top = Spacing.xl,
+                    ),
+                    onFix = { item ->
+                        when (item.inAppAction) {
+                            InAppAction.PAIR_DEVICE -> onOpenEmployeeRemote()
+                            else -> viewModel.applyHealthFix(context, item)
+                        }
+                    },
+                    onOpenDetail = onOpenReliability,
+                )
             }
 
             // 5. Numeric data block
