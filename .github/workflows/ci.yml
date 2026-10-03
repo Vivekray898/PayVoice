@@ -36,7 +36,15 @@ jobs:
           distribution: temurin
           java-version: '25'
 
-      - uses: android-actions/setup-android@v3
+      # android-actions/setup-android@v3 was removed. With no `packages:`
+      # input it installs the legacy `tools` package, which Google has deleted
+      # from the SDK repository, so `sdkmanager` exits 1 and the job dies in
+      # ~15s before any Gradle step runs. That failed every run in this repo's
+      # history, including the ones with no relation to this change. The
+      # GitHub-hosted ubuntu image already ships the Android SDK, the
+      # cmdline-tools and accepted licenses, and AGP downloads anything else
+      # the build needs (compileSdk 37) on demand. Re-add a setup action only
+      # with an explicit `packages:` list that still exists upstream.
 
       - name: Cache Gradle
         uses: actions/cache@v4
