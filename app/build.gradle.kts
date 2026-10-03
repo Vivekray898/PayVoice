@@ -279,6 +279,7 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.androidx.profileinstaller)
 
     // FCM RECEIVE ONLY (no google-services plugin): PayVoiceMessagingService
     // gets token + data messages for the Supabase edge-function gateway.
