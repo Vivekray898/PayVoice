@@ -257,6 +257,9 @@ class PaymentPipeline(
             com.vivekray898.payvoice.service.tts.PaymentAnnouncementNotifier.post(
                 it,
                 announcement,
+                // User's lock-screen privacy choice. Reading the in-memory
+                // StateFlow keeps this off the critical path's disk access.
+                showDetails = settings.settings.value.showPaymentOnLockScreen,
             )
         } ?: false
         if (isDebugBuild) {

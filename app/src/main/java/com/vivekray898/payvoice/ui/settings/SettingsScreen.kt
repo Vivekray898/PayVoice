@@ -244,6 +244,12 @@ fun SettingsScreen(
                         checked = settings.remoteAnnouncementsEnabled,
                         onChecked = viewModel::setRemoteAnnouncementsEnabled,
                     )
+                    ToggleRow(
+                        title = "Show payment on lock screen",
+                        subtitle = "Off hides the amount until you unlock",
+                        checked = settings.showPaymentOnLockScreen,
+                        onChecked = viewModel::setShowPaymentOnLockScreen,
+                    )
                 }
             }
 

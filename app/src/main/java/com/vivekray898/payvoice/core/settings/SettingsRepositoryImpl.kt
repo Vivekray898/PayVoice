@@ -38,6 +38,7 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
         val ROLE = stringPreferencesKey("device_role")
         val DEVICE_NAME = stringPreferencesKey("device_name")
         val REMOTE_ENABLED = booleanPreferencesKey("remote_announcements_enabled")
+        val SHOW_ON_LOCK_SCREEN = booleanPreferencesKey("show_payment_on_lock_screen")
     }
 
     private val scope = CoroutineScope(Dispatchers.IO)
@@ -69,6 +70,7 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
                         role = enumOrDefault(prefs[Keys.ROLE], DeviceRole.UNSET),
                         deviceName = prefs[Keys.DEVICE_NAME].orEmpty(),
                         remoteAnnouncementsEnabled = prefs[Keys.REMOTE_ENABLED] ?: true,
+                        showPaymentOnLockScreen = prefs[Keys.SHOW_ON_LOCK_SCREEN] ?: true,
                     )
                 } }
                 .onFailure {
@@ -96,6 +98,7 @@ class SettingsRepositoryImpl(private val context: Context) : SettingsRepository 
                 prefs[Keys.ROLE] = next.role.name
                 prefs[Keys.DEVICE_NAME] = next.deviceName
                 prefs[Keys.REMOTE_ENABLED] = next.remoteAnnouncementsEnabled
+                prefs[Keys.SHOW_ON_LOCK_SCREEN] = next.showPaymentOnLockScreen
             }
         }.onFailure {
             com.vivekray898.payvoice.core.util.DebugLog.w(TAG, "settings write failed: ${it.javaClass.simpleName}")

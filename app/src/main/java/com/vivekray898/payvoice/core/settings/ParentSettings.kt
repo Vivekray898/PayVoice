@@ -26,6 +26,18 @@ data class ParentSettings(
     val deviceName: String = "",
     /** Master switch for owner→employee remote delivery (spec §21). */
     val remoteAnnouncementsEnabled: Boolean = true,
+    /**
+     * Show the payment amount and sender on the lock screen.
+     *
+     * The wake-up notification is VISIBILITY_PUBLIC by default, which renders
+     * its full text on the lock screen and on the notification shade of any
+     * paired wearable. That is a real shoulder-surfing and shoulder-hearing
+     * exposure of someone's finances, so it is a choice rather than a fixed
+     * behaviour: off posts the notification as VISIBILITY_PRIVATE, which still
+     * wakes the device and still speaks the amount aloud, but shows only
+     * "Payment received" until the device is unlocked.
+     */
+    val showPaymentOnLockScreen: Boolean = true,
 )
 
 /** Reactive handle over the settings DataStore. */

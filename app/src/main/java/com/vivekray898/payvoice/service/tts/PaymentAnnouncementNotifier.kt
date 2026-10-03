@@ -60,8 +60,13 @@ object PaymentAnnouncementNotifier {
     /**
      * Post the wake-up notification. Returns true if posted successfully.
      * The caller cancels it after TTS finishes.
+     *
+     * @param showDetails false posts it as VISIBILITY_PRIVATE, so the lock
+     *   screen and the shade show only the title. The notification still wakes
+     *   the device — that is the whole point of it — and TTS still speaks the
+     *   amount, so turning this off costs nothing functionally.
      */
-    fun post(context: Context, announcementText: String): Boolean {
+    fun post(context: Context, announcementText: String, showDetails: Boolean = true): Boolean {
         ensureChannel(context)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
@@ -88,7 +93,13 @@ object PaymentAnnouncementNotifier {
             .setStyle(NotificationCompat.BigTextStyle().bigText(announcementText))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_EVENT)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setVisibility(
+                if (showDetails) {
+                    NotificationCompat.VISIBILITY_PUBLIC
+                } else {
+                    NotificationCompat.VISIBILITY_PRIVATE
+                },
+            )
             .setOnlyAlertOnce(true)
             .setAutoCancel(true)
             .setContentIntent(pending)

@@ -322,6 +322,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Lock-screen privacy: whether the amount/sender is shown when locked. */
+    fun setShowPaymentOnLockScreen(enabled: Boolean) {
+        viewModelScope.launch {
+            container.settings.update { it.copy(showPaymentOnLockScreen = enabled) }
+        }
+    }
+
     fun setDeviceName(name: String) {
         viewModelScope.launch {
             container.settings.update { it.copy(deviceName = name.trim().take(40)) }
