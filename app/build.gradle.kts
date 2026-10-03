@@ -102,6 +102,23 @@ android {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
+    // -----------------------------------------------------------------------
+    // Lint gate.
+    //
+    // Per-check severity lives in app/lint.xml (AGP's `warningsAsErrors` is a
+    // single boolean for ALL warnings, which would fail the build on version
+    // -currency and style noise and teach people to ignore it). The XML
+    // promotes the security-relevant checks to errors and silences the two
+    // deliberate exceptions, each with its reason recorded there.
+    // -----------------------------------------------------------------------
+    lint {
+        abortOnError = true
+        checkReleaseBuilds = true
+        // Lint the app's own sources only. Dependency sources produce a flood
+        // of issues the app cannot fix, and mixing them in makes real findings
+        // invisible.
+        checkDependencies = false
+    }
     buildFeatures {
         compose = true
     }

@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    PayVoice lint policy.
+
+    Severity here is the enforcement mechanism: `abortOnError` in
+    app/build.gradle.kts fails the build on any error-severity finding, so the
+    checks listed below cannot regress silently.
+
+    The split is deliberate. Security-relevant checks are errors because this
+    app handles payment data and pairing credentials. Version-currency and
+    style checks stay warnings on purpose: failing CI on "a newer version
+    exists" trains people to ignore CI, which would defeat the point of the
+    error list.
+
+    Every id in the error block is a control this app actually depends on —
+    cleartext traffic, exported components, app-data backup, hardcoded secrets,
+    insecure WebView/TLS handling, and threading violations on the payment
+    path.
+-->
+<lint>
+
+    <!-- ==== Errors: security and correctness regressions ==== -->
+    <issue id="AllowAllHostnameVerifier" severity="error" />
+    <issue id="AllowBackup" severity="error" />
+    <!-- UsingHttp is the check that fires on `android:usesCleartextTraffic`
+         and on a network security config that permits cleartext. (The
+         cleartextTrafficPermitted XML *attribute* is a manifest property lint
+         validates separately, not an issue id.) -->
+    <issue id="UsingHttp" severity="error" />
+    <issue id="ExportedContentProvider" severity="error" />
+    <issue id="ExportedReceiver" severity="error" />
+    <issue id="ExportedService" severity="error" />
+    <issue id="HardcodedText" severity="error" />
+    <issue id="InsecureBaseConfiguration" severity="error" />
+    <issue id="SetJavaScriptEnabled" severity="error" />
+    <issue id="TrustAllX509TrustManager" severity="error" />
+    <issue id="UnsafeNativeCodeLocation" severity="error" />
+    <issue id="WebViewClientOnReceivedSslError" severity="error" />
+    <!-- A Room/notification query on the main thread is an ANR on a slow
+         device, and this app's whole audience is slow devices. -->
+    <issue id="WrongThread" severity="error" />
+
+    <!-- ==== Deliberate suppressions, with reasons ==== -->
+
+    <!-- BatteryLife flags REQUEST_IGNORE_BATTERY_OPTIMIZATIONS against the Play
+         content policy. The app is a voice announcer that must keep working
+         with the screen off, so the permission stays; what was removed is the
+         runtime prompt — the onboarding battery step teaches the user where
+         the setting is instead. Whether the exemption itself is acceptable is
+         a Play policy / product decision, not something a linter settles. -->
+    <issue id="BatteryLife" severity="ignore" />
+
+    <!-- AGP 9.4.1 is current, and NewerVersionAvailable still reports when it
+         is not. -->
+    <issue id="AndroidGradlePluginVersion" severity="ignore" />
+
+    <!-- payvoice_firebase.xml is GENERATED at build time by the
+         copyGoogleServicesJson task, so lint cannot see its references and
+         reports them as unused. -->
+    <issue id="UnusedResources" severity="ignore" />
+
+</lint>
