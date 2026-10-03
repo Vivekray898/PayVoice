@@ -35,7 +35,6 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:label="@string/app_name"
             android:theme="@style/Theme.PayVoice"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
@@ -72,6 +71,7 @@
         <provider
             android:name="androidx.startup.InitializationProvider"
             android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
             tools:node="merge">
             <meta-data
                 android:name="androidx.work.WorkManagerInitializer"
