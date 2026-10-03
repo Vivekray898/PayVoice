@@ -36,6 +36,13 @@ enum class SettingsAction {
     VOLUME,
     WIRELESS,
     APP_DETAILS,
+    /**
+     * Play Store listing for a specific package. Distinct from
+     * [APP_DETAILS]: a missing *other* app cannot be repaired from PayVoice's
+     * own app-info screen, and sending the user there told them to do
+     * something that could not fix the problem.
+     */
+    PLAY_STORE_APP,
     /** Best-effort OEM autostart page, one file to maintain. */
     OEM_AUTOSTART,
     NONE,

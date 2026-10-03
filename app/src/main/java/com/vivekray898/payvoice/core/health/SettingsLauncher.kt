@@ -116,6 +116,17 @@ class SettingsLauncher(private val context: Context) {
 
         SettingsAction.APP_DETAILS -> listOf(appDetails())
 
+        // The user needs to INSTALL the package, not inspect PayVoice's own
+        // app-info screen. web fallback covers devices with no Play Store.
+        SettingsAction.PLAY_STORE_APP -> listOf(
+            Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$PLAY_STORE_PACKAGE"))
+                .setPackage("com.android.vending"),
+            Intent(
+                Intent.ACTION_VIEW,
+                Uri.parse("https://play.google.com/store/apps/details?id=$PLAY_STORE_PACKAGE"),
+            ),
+        )
+
         SettingsAction.OEM_AUTOSTART ->
             oemAutostartIntents() + appDetails()
 
@@ -186,6 +197,13 @@ class SettingsLauncher(private val context: Context) {
     }
 
     companion object {
+        /**
+         * The one package Health can tell the user to install: the payment
+         * app whose notifications we are here to listen for.
+         */
+        private const val PLAY_STORE_PACKAGE =
+            com.vivekray898.payvoice.core.model.KnownPackages.GOOGLE_PAY
+
         /** `android.settings.TEXT_TO_SPEECH_SETTINGS` — stable platform action. */
         private const val ACTION_TEXT_TO_SPEECH_SETTINGS =
             "android.settings.TEXT_TO_SPEECH_SETTINGS"

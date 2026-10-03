@@ -136,8 +136,11 @@ class DefaultAppHealthChecker(
                 title = R.string.health_payment_app_title,
                 why = R.string.health_payment_app_why,
                 level = if (paymentApp) HealthLevel.OK else HealthLevel.WARN,
-                fixLabel = if (paymentApp) null else R.string.health_fix_fix,
-                settingsAction = if (paymentApp) SettingsAction.NONE else SettingsAction.APP_DETAILS,
+                fixLabel = if (paymentApp) null else R.string.health_fix_install,
+                // Installing another app is not a system-Settings fix, and
+                // appDetails() would open PayVoice's OWN info page — a dead
+                // end for a missing Google Pay.
+                settingsAction = if (paymentApp) SettingsAction.NONE else SettingsAction.PLAY_STORE_APP,
             )
         }
 

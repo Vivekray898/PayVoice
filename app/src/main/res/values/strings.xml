@@ -36,7 +36,7 @@
     <string name="health_voice_why">Download the voice for your chosen language, or switch to one you already have.</string>
     <string name="health_volume_why">Turn the volume up so you can hear the announcement.</string>
     <string name="health_internet_why">PayVoice needs a connection to reach your business and receive remote alerts.</string>
-    <string name="health_fcm_why">Alerts from your owner arrive through Google Play services; restart the app to re-register.</string>
+    <string name="health_fcm_why">Alerts from your owner arrive through Google Play services. PayVoice re-registers by itself within a minute; if this stays, check Diagnostics.</string>
     <string name="health_session_why">Check your connection so PayVoice can sign you in securely.</string>
     <string name="health_play_services_why">Without Google Play services, alerts from your owner can\'t reach this phone.</string>
     <string name="health_payment_app_why">PayVoice listens to Google Pay, so install it to detect payments on this phone.</string>
@@ -49,6 +49,7 @@
     <string name="health_fix_open_volume">Turn up volume</string>
     <string name="health_fix_connect">Enter code</string>
     <string name="health_fix_fix">Fix</string>
+    <string name="health_fix_install">Get it</string>
 
     <!-- Health banner -->
     <string name="health_banner_all_good">All good, ready for payments</string>
@@ -56,7 +57,7 @@
     <string name="health_banner_blocked">%1$d things need fixing</string>
     <string name="health_banner_one_attention">1 thing wants attention</string>
     <string name="health_banner_attention">%1$d things want attention</string>
-    <string name="health_banner_show">Show what\'s wrong</string>
+    <string name="health_banner_show">Details</string>
     <string name="health_banner_hide">Hide</string>
     <string name="health_banner_open">Open full checklist</string>
     <string name="health_loading">Checking this phone…</string>

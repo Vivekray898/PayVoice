@@ -33,6 +33,9 @@ import com.vivekray898.payvoice.service.notification.ListenerRuntime
 import com.vivekray898.payvoice.service.setup.SetupNotifications
 import com.vivekray898.payvoice.service.status.DeviceStatusMonitor
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -368,7 +371,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         DefaultAppHealthChecker(
             AndroidHealthSources(
                 context = getApplication(),
-                fcmTokenRegistered = { container.messaging.status.value.tokenAvailable },
+                // `tokenAvailable` is true only for the lifetime of the process that
+                // fetched the token. Health runs on ON_RESUME, which on a cold
+                // start is *before* refreshToken() finishes — so asking only
+                // the in-memory flag reported "this device isn't registered
+                // for alerts" on every launch until the fetch completed, and
+                // forever if it failed. The encrypted copy on disk is the
+                // honest signal: it is what we would actually send.
+                fcmTokenRegisteredSource = {
+                    container.messaging.status.value.tokenAvailable ||
+                        !container.messaging.cachedToken().isNullOrBlank()
+                },
                 sessionValid = { container.auth.state.value is PayVoiceAuth.State.READY },
             ),
         )
@@ -424,6 +437,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         .ifBlank { android.os.Build.MODEL ?: "Device" },
                 )
             }
+        }
+        // The health checklist used to run once, from onResume, which on a cold
+        // start is BEFORE the token fetch above finishes — so it read "this
+        // device isn't registered for alerts" and never re-ran, leaving a
+        // permanent false alarm on a device that had registered fine. Re-check
+        // when the token verdict actually changes.
+        viewModelScope.launch {
+            container.messaging.status
+                .map { it.tokenAvailable }
+                .distinctUntilChanged()
+                .drop(1)
+                .collect { refreshHealth() }
         }
     }
 

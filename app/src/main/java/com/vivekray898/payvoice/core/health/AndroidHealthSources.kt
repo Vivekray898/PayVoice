@@ -28,7 +28,7 @@ import com.vivekray898.payvoice.service.setup.SetupNotifications
  */
 class AndroidHealthSources(
     private val context: Context,
-    private val fcmTokenRegistered: () -> Boolean,
+    private val fcmTokenRegisteredSource: () -> Boolean,
     private val sessionValid: () -> Boolean,
 ) : HealthSources {
 
@@ -95,7 +95,14 @@ class AndroidHealthSources(
         return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
     }
 
-    override fun fcmTokenRegistered(): Boolean = runCatching { fcmTokenRegistered() }.getOrDefault(false)
+    // The backing lambda is NOT called `fcmTokenRegistered`: a constructor
+    // property and a member method with the same name made the unqualified
+    // call resolve to the METHOD, so this was unbounded recursion. The
+    // StackOverflowError was swallowed by runCatching and reported as
+    // "not registered" forever, which is why Health said this device was
+    // never registered no matter how many times the token registered.
+    override fun fcmTokenRegistered(): Boolean =
+        runCatching { fcmTokenRegisteredSource() }.getOrDefault(false)
 
     override fun supabaseSessionValid(): Boolean = runCatching { sessionValid() }.getOrDefault(false)
 
