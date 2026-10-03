@@ -14,27 +14,46 @@ Treat it as the visual source of truth for:
 - Typography (use the scale in `DESIGN.md` mapped to `MaterialTheme.typography`;
   money/amounts render through `MoneyText` — tabular figures)
 - Spacing (use `com.vivekray898.payvoice.ui.theme.Spacing` — never `13.dp`
-  or `7.dp` inline)
+  or `7.dp` inline, and never `Spacing.xl - Spacing.xs` at a call site: the
+  structural tokens in `Spacing.kt` name every fixed size the base-8 scale
+  has no step for)
 - Component rules (buttons, cards, inputs follow `docs/DESIGN_SYSTEM.md`:
-  `PvPrimaryButton`, `PvActionCard`, `StatusPill`, …)
+  `PvPrimaryButton`, `PvCard`, `PvListItem`, `PvChoiceChip`, `StatusPill`, …)
 - Do's and Don'ts (respect the anti-patterns list in `DESIGN.md`)
 
 The token→Compose mapping lives in `docs/DESIGN_SYSTEM.md`.
 
-## Layout rules
+Two Gradle gates enforce it (`verifyDesignTokens`,
+`verifyDesignComponents`) and both run in CI and in `check`. Component
+render changes are caught by `validateDebugScreenshotTest`; regenerate the
+baselines with `updateDebugScreenshotTest` only when the visual change is
+the point.## Layout rules
 
 - Every top-level screen MUST use `PvScaffold`
-  (`contentWindowInsets = WindowInsets.safeDrawing` is built in). No screen
-  creates its own `Scaffold` or applies its own status/navigation-bar padding.
-- Every screen MUST consume the scaffold body padding (PvScaffold does this
-  centrally; screens pass scroll contentPadding only for aesthetics).
-- Content MUST NOT overlap the status bar or the gesture/navigation bar.
+  (`contentWindowInsets = WindowInsets.safeDrawing` is built in). The four
+  tab destinations use `PvTabScaffold`, which wraps `PvScaffold` and adds
+  the shared role-aware `PvBottomNav`. No screen creates its own `Scaffold`.
+- A screen MUST consume the insets it is handed: use `inner`'s
+  `calculateTopPadding()` (or put the header in the `topBar` slot) and its
+  `calculateBottomPadding()`. Ignoring the top one puts the title under the
+  status bar — Home's full-bleed hero is the only sanctioned exception, and
+  it pads its own app-bar row by `WindowInsets.statusBars`.
+- Navigation is **four** bottom destinations per role and no more:
+  `PvTab { HOME, LIST, TEAM, SETTINGS }`. Only the label, icon and the
+  screen behind slots 2 and 3 change with the role (owner: Payments/Team ·
+  employee: Recent/Pair). `Diagnostics` and `Health` are pushed from
+  Settings -> Support; nothing else is reachable from Home.
+- Screen files compose **only** `Pv*` components — see the component gate
+  below. Adding a raw `Button(`/`Surface(`/`Slider(` to a screen is a signal
+  that the library is missing a component.
 - Every screen MUST have one primary action, always visible without scrolling
-  (bottom-anchored via the `bottomBar` slot when the action is global).
+  (inline `PvPrimaryButton`, or `PvFab` in the scaffold's FAB slot for a tab
+  destination).
 - Tap targets MUST be >= 48dp (shared rows/cards are 56dp minimum).
-- Verify insets on a cold start with a UI dump when touching chrome:
-  header top edge must be below the status-bar inset, and the last content
-  node must end above the navigation-bar inset.
+- Verify insets on a cold start with a UI dump when touching chrome: header
+  top edge must be below the status-bar inset, and the last content node
+  must end above the navigation-bar inset. `uiautomator dump` on the
+  emulator catches this; the compiler and lint do not.
 
 ## Supabase API keys
 
