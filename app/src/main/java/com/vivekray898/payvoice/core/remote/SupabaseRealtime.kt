@@ -1,6 +1,9 @@
 package com.vivekray898.payvoice.core.remote
 
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -36,8 +39,11 @@ import java.util.concurrent.atomic.AtomicLong
  *  2. the signed-in user's JWT rides in the JOIN payload as `access_token`
  *     — Realtime authorizes rows with THE USER'S RLS policies (never a
  *     privileged key);
- *  3. `heartbeat` frames every [HEARTBEAT_INTERVAL_MS]; OkHttp-level pings
- *     keep the TCP path alive through NATs.
+ *  3. the CLIENT sends a `heartbeat` frame every [HEARTBEAT_INTERVAL_MS] on
+ *     topic `phoenix` — the Realtime protocol documents this as the client's
+ *     job ("should be sent at least every 25 seconds to avoid a connection
+ *     timeout"), not the server's. OkHttp-level pings additionally keep the
+ *     TCP path alive through NATs.
  *
  * Scope note (architecture rule): Realtime carries STATE synchronization
  * (employee/device/pairing state) ONLY. Payment announcement delivery stays
@@ -183,7 +189,9 @@ class SupabaseRealtime {
                             }
                         }
                     }
-                    "heartbeat" -> Unit // server ping; nothing to do
+                    // Server-side heartbeat acknowledgement; the client is the
+                    // one that must send them (see the ticker below).
+                    "heartbeat" -> Unit
                     "postgres_changes" -> {
                         val payload = frame["payload"].let { it as? JsonObject } ?: return
                         // ids lists which of OUR subscription configs matched;
@@ -217,7 +225,22 @@ class SupabaseRealtime {
             listener,
         )
 
+        // The documented protocol puts the heartbeat on the CLIENT: the server
+        // closes a connection that has not seen one within its own window, and
+        // a phone that sits on a locked screen for a few minutes is exactly
+        // that case. Without this the socket dies silently every time the app
+        // is backgrounded and the state-sync fallback has to carry the load
+        // until the user reopens the app.
+        val heartbeat = launch {
+            while (isActive) {
+                delay(HEARTBEAT_INTERVAL_MS)
+                // Topic `phoenix`, empty payload — not a channel message.
+                runCatching { send(ws, PHOENIX_TOPIC, "heartbeat", JsonObject(emptyMap())) }
+            }
+        }
+
         awaitClose {
+            heartbeat.cancel()
             runCatching { ws.close(1000, "client-shutdown") }
             _status.value = Status(Status.State.CLOSED)
         }
@@ -259,5 +282,11 @@ class SupabaseRealtime {
 
         /** Upper bound on a single LIVE wait; see [awaitNotLive]. */
         const val MAX_LIVE_WAIT_MS = 15 * 60_000L
+
+        /** Realtime documents "at least every 25 seconds"; stay under it. */
+        const val HEARTBEAT_INTERVAL_MS = 20_000L
+
+        /** Heartbeats are not channel-scoped; the protocol fixes this topic. */
+        const val PHOENIX_TOPIC = "phoenix"
     }
 }

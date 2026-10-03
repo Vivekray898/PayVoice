@@ -117,8 +117,54 @@ class PayVoiceApp : Application(), Configuration.Provider {
             .setMinimumLoggingLevel(android.util.Log.INFO)
             .build()
 
+    /**
+     * Release the largest in-memory resource when the system is short on
+     * memory.
+     *
+     * The TTS engine is the one thing this app holds that is both large and
+     * optional: a bound engine costs tens of megabytes of native heap and can
+     * always be rebuilt on demand (an announcement that arrives first simply
+     * takes the normal init path). Nothing else is dropped deliberately —
+     * Room's cache is already bounded, and closing the database or tearing
+     * down the notification listener to chase a memory signal would cost far
+     * more than it saves, since the listener is the payment path itself.
+     *
+     * The levels are matched by SET rather than `>=`: they are not
+     * monotonic — TRIM_MEMORY_UI_HIDDEN (20) is numerically above
+     * TRIM_MEMORY_RUNNING_LOW (10) while meaning something entirely milder —
+     * and UI_HIDDEN merely says the UI went away, which is not pressure.
+     */
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level in MEMORY_PRESSURE_LEVELS) {
+            runCatching { container.speaker.release() }
+        }
+    }
+
+    override fun onLowMemory() {
+        super.onLowMemory()
+        runCatching { container.speaker.release() }
+    }
+
     private fun isDebugBuild(): Boolean =
         (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+
+    private companion object {
+        /** Re-register when the stored token is older than 7 days. */
+        const val STALE_TOKEN_MS = 7 * 24 * 3_600_000L
+
+        /**
+         * Trim levels that mean genuine memory pressure. Excludes
+         * TRIM_MEMORY_UI_HIDDEN (the UI merely went away) and the
+         * *_RUNNING_* levels, which describe the foreground app's own budget
+         * rather than the system being out of memory.
+         */
+        val MEMORY_PRESSURE_LEVELS = setOf(
+            android.content.ComponentCallbacks2.TRIM_MEMORY_BACKGROUND,
+            android.content.ComponentCallbacks2.TRIM_MEMORY_MODERATE,
+            android.content.ComponentCallbacks2.TRIM_MEMORY_COMPLETE,
+        )
+    }
 
     /**
      * Manual Firebase init from assets/google-services.json (the
@@ -199,10 +245,5 @@ class PayVoiceApp : Application(), Configuration.Provider {
             deviceName = container.settings.settings.value.deviceName
                 .ifBlank { android.os.Build.MODEL ?: "Device" },
         )
-    }
-
-    private companion object {
-        /** Re-register when the stored token is older than 7 days. */
-        const val STALE_TOKEN_MS = 7 * 24 * 3_600_000L
     }
 }
