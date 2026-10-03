@@ -45,7 +45,7 @@ import com.vivekray898.payvoice.ui.MainViewModel
 import com.vivekray898.payvoice.ui.components.BellIllustration
 import com.vivekray898.payvoice.ui.components.IconTile
 import com.vivekray898.payvoice.ui.components.MoneyText
-import com.vivekray898.payvoice.ui.components.PaymentsEmptyIllustration
+
 import com.vivekray898.payvoice.ui.components.PvDivider
 import com.vivekray898.payvoice.ui.components.PvPaymentRow
 import com.vivekray898.payvoice.ui.components.PvSecondaryButton
@@ -86,12 +86,6 @@ fun ParentHomeScreen(
         else -> !(listenerOk && notifOk)
     }
     val todayMinor = history.filter { it.announcedAtMs >= startOfToday() }.sumOf { it.amountMinor }
-    val displayName = settings.deviceName.ifBlank {
-        when (role) {
-            DeviceRole.EMPLOYEE -> "This phone"
-            else -> "Your business"
-        }
-    }
     val statusBarPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
     PvScaffold(topBar = {}) { _ ->
@@ -142,7 +136,7 @@ fun ParentHomeScreen(
                     ),
                 ) {
                     Text(
-                        text = "Hello, $displayName",
+                        text = if (history.isEmpty()) "Hello" else "Welcome back",
                         style = MaterialTheme.typography.displaySmall,
                         color = MaterialTheme.colorScheme.onBackground,
                     )
@@ -225,13 +219,10 @@ fun ParentHomeScreen(
                 ) {
                     if (history.isEmpty()) {
                         Spacer(Modifier.height(Spacing.xl))
-                        PaymentsEmptyIllustration()
-                        Spacer(Modifier.height(Spacing.md))
                         Text(
-                            "Recent payments from customers will be shown here",
+                            "No payments yet",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = Spacing.xxl),
                         )
                         Spacer(Modifier.height(Spacing.xl))
                     } else {
