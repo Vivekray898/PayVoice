@@ -105,6 +105,16 @@ android {
     buildFeatures {
         compose = true
     }
+    sourceSets {
+        // MigrationTestHelper reads the exported schemas from the androidTest
+        // APK's assets. The Room Gradle plugin normally wires this up; with the
+        // schema location set through KSP args it has to be declared explicitly,
+        // otherwise the migration tests cannot find 1.json/3.json and silently
+        // skip validation.
+        getByName("androidTest") {
+            assets.srcDir("$projectDir/schemas")
+        }
+    }
 }
 
 ksp {
@@ -293,6 +303,7 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.room.testing)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }

@@ -10,7 +10,12 @@ import androidx.room.PrimaryKey
  */
 @Entity(
     tableName = "processed_events",
-    indices = [Index(value = ["fingerprint"], unique = true)],
+    indices = [
+        Index(value = ["fingerprint"], unique = true),
+        // Retention prunes on announcedAtMs; without this every daily cleanup
+        // full-scans the dedup store.
+        Index(value = ["announcedAtMs"]),
+    ],
 )
 data class ProcessedEventEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -25,7 +30,12 @@ data class ProcessedEventEntity(
  * Announcement history shown on the parent home screen (spec §22). Default
  * retention 7 days. Raw notification text is intentionally NOT stored.
  */
-@Entity(tableName = "announcement_history")
+@Entity(
+    tableName = "announcement_history",
+    // Every read is ORDER BY announcedAtMs DESC and retention prunes on the
+    // same column; without the index both sort the whole table per query.
+    indices = [Index(value = ["announcedAtMs"])],
+)
 data class AnnouncementEntity(
     @PrimaryKey val eventId: String,
     val fingerprint: String,
@@ -47,7 +57,10 @@ data class AnnouncementEntity(
  * Never uploaded; capped at 50 rows. Captures the standard extras needed to
  * refine parsers on-device (bigText/subText often carry the payment line).
  */
-@Entity(tableName = "captured_notifications")
+@Entity(
+    tableName = "captured_notifications",
+    indices = [Index(value = ["capturedAtMs"])],
+)
 data class CapturedNotificationEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val packageName: String,
@@ -69,7 +82,10 @@ data class CapturedNotificationEntity(
  * Capped structured diagnostics log (spec §32/§33) — stage timestamps, states,
  * errors. Never logs raw bank content in release builds.
  */
-@Entity(tableName = "diagnostic_log")
+@Entity(
+    tableName = "diagnostic_log",
+    indices = [Index(value = ["atMs"])],
+)
 data class DiagnosticEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val atMs: Long,

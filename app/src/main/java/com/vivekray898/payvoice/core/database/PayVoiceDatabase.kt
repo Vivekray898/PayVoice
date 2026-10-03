@@ -12,7 +12,7 @@ import androidx.room.RoomDatabase
         CapturedNotificationEntity::class,
         DiagnosticEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class PayVoiceDatabase : RoomDatabase() {
@@ -22,9 +22,15 @@ abstract class PayVoiceDatabase : RoomDatabase() {
     abstract fun diagnosticDao(): DiagnosticDao
 
     companion object {
+        /**
+         * No destructive fallback: an unmigrated version must fail loudly in
+         * development rather than silently wipe payment history in production.
+         * WAL is explicit so the announcement write never blocks a history read.
+         */
         fun build(context: Context): PayVoiceDatabase =
             Room.databaseBuilder(context, PayVoiceDatabase::class.java, "payvoice.db")
-                .fallbackToDestructiveMigration(dropAllTables = true)
+                .addMigrations(*Migrations.ALL)
+                .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
                 .build()
     }
 }
