@@ -13,6 +13,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
+import okhttp3.ConnectionSpec
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -83,6 +84,10 @@ class SupabaseRealtime {
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(0, TimeUnit.MILLISECONDS) // websocket: reads never time out
             .pingInterval(20, TimeUnit.SECONDS)
+            // TLS 1.2 floor for the realtime socket. The platform still offers
+            // TLS 1.0/1.1 on API 26-27, so without this a downgrade is possible
+            // on the one channel that carries owner/employee state.
+            .connectionSpecs(listOf(ConnectionSpec.MODERN_TLS))
             .build()
     }
 

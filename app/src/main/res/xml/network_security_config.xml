@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  PayVoice network security configuration.
+
+  The app talks to exactly one backend (the Supabase project in
+  RemoteConfig.kt, reached by HTTPS) and to Google's FCM endpoints. Nothing
+  needs plaintext HTTP, so cleartext is refused outright rather than left at
+  the platform default: on API 26 and 27 that default is still `true`, so any
+  redirect or misconfigured URL could put a payment event on an unencrypted
+  channel.
+
+  Certificate pinning is deliberately NOT configured yet. Pinning without a
+  second, long-lived backup pin plus a documented rotation owner can lock
+  every user out the moment Supabase rotates its certificate. That belongs in
+  a change of its own together with the rotation runbook - see
+  docs/AUDIT_REPORT.md finding C4.
+
+  Only `system` trust anchors are accepted in a release build. The user-CA
+  exemption below is confined to `debug-overrides`, which the platform applies
+  only when the app is debuggable, so a user-installed proxy certificate can
+  intercept development traffic but never a shipped release build.
+-->
+<network-security-config>
+
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </debug-overrides>
+
+</network-security-config>
