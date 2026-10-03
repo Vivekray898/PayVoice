@@ -97,7 +97,12 @@ fun OwnerRemoteScreen(
     ) { inner ->
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = Spacing.xxl + inner.calculateBottomPadding()),
+            contentPadding = PaddingValues(
+                // PvScaffold hands the safe-drawing insets to the caller; ignoring the
+                // top one puts the title under the status bar.
+                top = inner.calculateTopPadding(),
+                bottom = Spacing.xxl + inner.calculateBottomPadding(),
+            ),
         ) {
             if (employees.isEmpty()) {
                 item(key = "empty") {
