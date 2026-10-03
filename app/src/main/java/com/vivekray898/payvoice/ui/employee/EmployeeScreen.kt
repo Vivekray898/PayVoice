@@ -38,6 +38,7 @@ import com.vivekray898.payvoice.ui.components.PvLoadingRow
 import com.vivekray898.payvoice.ui.components.PvPaymentRow
 import com.vivekray898.payvoice.ui.components.HeroBanner
 import com.vivekray898.payvoice.ui.components.PvScaffold
+import com.vivekray898.payvoice.ui.components.PvSecureWindow
 import com.vivekray898.payvoice.ui.components.PvSecondaryButton
 import com.vivekray898.payvoice.ui.components.ScreenHeader
 import com.vivekray898.payvoice.ui.components.SectionHeader
@@ -67,6 +68,11 @@ fun EmployeeScreen(viewModel: MainViewModel, onBack: () -> Unit) {
     var confirmLeave by remember { mutableStateOf(false) }
 
     val paired = ownDevice?.isActive == true
+
+    // The join sheet takes a pairing code: single-use, 10-minute, and it
+    // grants this device standing in the owner's business. Keep it out of
+    // Recents thumbnails and screenshots while this screen is up.
+    PvSecureWindow()
 
     PvScaffold(
         topBar = {},

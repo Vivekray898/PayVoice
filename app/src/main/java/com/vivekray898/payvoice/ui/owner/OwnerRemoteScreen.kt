@@ -41,6 +41,7 @@ import com.vivekray898.payvoice.ui.components.PvEmptyHint
 import com.vivekray898.payvoice.ui.components.PvLoadingRow
 import com.vivekray898.payvoice.ui.components.PvPrimaryButton
 import com.vivekray898.payvoice.ui.components.PvScaffold
+import com.vivekray898.payvoice.ui.components.PvSecureWindow
 import com.vivekray898.payvoice.ui.components.HeroBanner
 import com.vivekray898.payvoice.ui.components.PvSecondaryButton
 import com.vivekray898.payvoice.ui.components.ScreenHeader
@@ -66,6 +67,11 @@ fun OwnerRemoteScreen(viewModel: MainViewModel, onBack: () -> Unit) {
     val revokeState by viewModel.revokeState.collectAsStateWithLifecycle()
     var showAddSheet by remember { mutableStateOf(false) }
     var sheetEmployee by remember { mutableStateOf<EmployeeDevice?>(null) }
+
+    // This screen displays the pairing code in full. Without FLAG_SECURE it
+    // ends up in the Recents thumbnail and in any screenshot taken to ask
+    // someone for help, and the code is a live single-use credential.
+    PvSecureWindow()
 
     PvScaffold(
         topBar = {},
