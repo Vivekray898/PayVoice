@@ -200,8 +200,10 @@ it costs CPU on every query — and the query path is exactly the announcement p
 
 My plan is to **measure, report numbers, and ask** rather than choose unilaterally:
 
-- Benchmark with and without SQLCipher on the 1 GB / 2-core profile: DB-open time, history
-  query, retention sweep, and cold-start impact.
+- Benchmark with and without SQLCipher: DB-open time, history query, retention sweep, and
+  cold-start impact. The AVD available here (Pixel 9 Pro XL, API 36, 4 cores / 4 GB, host
+  speed) is far too fast to answer the CPU question — this needs a throttled run or real
+  hardware, and the SQLite numbers from an emulator should not be quoted as if they were.
 - Present you the numbers plus the added APK size.
 - **Then decide together.** If encryption costs more than the threat justifies for a device
   that is usually locked and PIN-protected, I will recommend *not* shipping it and document

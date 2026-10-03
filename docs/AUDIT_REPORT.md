@@ -29,24 +29,27 @@ gaps remain, all Medium-or-lower and none blocking; they are listed in
 
 ## Measured baseline (2026-10-03)
 
-Profile: **Pixel 6 API 34 AVD, `-memory 1024 -cores 2 -no-snapshot -gpu swiftshader_indirect`**,
-Android 14 (API 34), `arm64-v8a`, **release** APK, `POST_NOTIFICATIONS` pre-granted,
-onboarding complete.
+Profile: **the same AVD used for every measurement in this report** — `Pixel_9_Pro_XL`,
+Android 16 (**API 36**), `arm64-v8a`, **4 cores / 4 GB**, launched from Android Studio with
+no `-memory`/`-cores` overrides. An earlier draft of this line claimed "Pixel 6 API 34,
+1 GB, 2 cores"; the device reports otherwise, so the rig was described here wrongly.
+**release** APK, `POST_NOTIFICATIONS` pre-granted, onboarding complete.
 
 | Metric | Baseline | Target | Status |
 |---|---|---|---|
 | Release APK size | **17.0 MiB** (17,487,645 B) | < 15 MB | ❌ **already fails** |
 | Debug APK size | 23.7 MiB | — | reference only |
 | Cold start (`am start -W`, 6 runs after warm-up) | 643 / 678 / 699 / 743 / 758 / 768 ms — **mean 715 ms** | < 2000 ms | ⚠️ passes here, **not demonstrated** on real hardware (see caveat) |
-| Peak PSS (1 Hz sampling, 25 s from launch) | **61.5 MB peak**, 60.1 MB mean | report only | ⚠️ high for a 1 GB device |
+| Peak PSS (1 Hz sampling, 25 s from launch) | **61.5 MB peak**, 60.1 MB mean | report only | ⚠️ high for the low-end class this app targets |
 | Janky frames (24 nav transitions) | **NOT MEASURED** | < 1 % | ⚠️ **unknown** |
 | 1-hour idle battery drain | **NOT MEASURED** | report | ⚠️ **unknown** |
 
 ### Caveat on CPU realism — read this before quoting the cold-start number
 
-The AVD's two cores are host-speed cores on an Apple Silicon Mac. Real hardware in the target
-class (Cortex-A53 @ ~1.0–1.3 GHz, 32-bit, slow eMMC) is roughly **4–8× slower per core**.
-A 715 ms cold start on this profile maps to roughly **3–6 s** on the worst supported device.
+The AVD's four cores are host-speed cores on an Apple Silicon Mac — several times faster than
+the target class (Cortex-A53 @ ~1.0–1.3 GHz, 32-bit, slow eMMC), which is roughly **4–8×
+slower per core**. A 715 ms cold start on this profile maps to roughly **3–6 s** on the worst
+supported device.
 The < 2 s target is therefore **not demonstrated** — only "not disproven" on this profile.
 Finding **H8** explains why it will not improve on its own.
 
@@ -530,17 +533,21 @@ would obscure every security commit. It should be its own branch, after the audi
 
 # Measured results
 
-Profile: **same AVD as the baseline** — Pixel 6 API 34, `-memory 1024 -cores 2 -no-snapshot
--gpu swiftshader_indirect`, **release** APK, `POST_NOTIFICATIONS` pre-granted, onboarding
-complete, app freshly installed before each measurement.
+Profile: **same AVD as the baseline** — corrected against what the device actually reports:
+`Pixel_9_Pro_XL`, Android 16 / **API 36**, arm64-v8a, **4 cores**, 4 GB RAM (the AVD was
+launched from Android Studio with no `-memory`/`-cores` overrides). An earlier draft of this
+report described it as "Pixel 6 API 34, 1 GB, 2 cores"; that description was wrong and made
+the hardware look weaker than it is. **Release** APK, `POST_NOTIFICATIONS` pre-granted,
+onboarding complete, app freshly installed before each measurement.
 
 ## Before / after
 
 | Metric | Before | After | Change | Target | Met? |
 |---|---|---|---|---|---|
 | **Release APK size** | 17,487,645 B (16.68 MiB) | **3,103,429 B (2.96 MiB)** | **−82.3 %** | < 15 MB | ✅ now passes with 5× headroom |
-| **Cold start** (`am start -W`, 6 runs after 2 warm-up runs) | 643/678/699/743/758/768 ms — mean **715 ms** | 164/166/162/183/187/164 ms — mean **171 ms** | **−76.1 %** | < 2000 ms | ✅ on this profile (see caveat below) |
-| **Peak PSS** (45 samples @ ~2 Hz from launch) | 61.5 MB peak / 60.1 MB mean | **35.2 MB peak** | **−42.8 %** | report only | ✅ materially better on a 1 GB device |
+| **Cold start** (`am start -W`) | 643/678/699/743/758/768 ms — mean **715 ms** | 164/166/162/183/187/164 ms — mean **171 ms** (6 runs, quiet host) | **−76.1 %** | < 2000 ms | ✅ on this profile — but see the re-measurement below |
+| Cold start, **re-measured** on the identical artifact (25 runs, busy host) | — | mean **235 ms**, range **198–308 ms** | **−67 %** | < 2000 ms | ✅ still comfortably inside the target |
+| **Peak PSS** (45 samples @ ~2 Hz from launch) | 61.5 MB peak / 60.1 MB mean | **35.2 MB peak** | **−42.8 %** | report only | ✅ materially better; 28.9–37.6 MB on re-sampling |
 | **Janky frames** (507 frames, 3 nav+scroll cycles, single process) | **NOT MEASURED** | **26 (5.13 %)** | no baseline to compare | < 1 % | ⚠️ **above target** — see below |
 | Frame time percentiles | not measured | p50 **17 ms**, p90 **20 ms**, p95 **21 ms**, p99 **28 ms** | — | p95 < 16.7 ms (60 Hz) | ⚠️ p95 slightly over one frame |
 | **Missed vsync** | not measured | **0** | — | 0 | ✅ |
@@ -566,15 +573,24 @@ and zero wakelocks held** — with the fallback poll now suspended on socket sta
 waking on a 60 s timer (H5) and no heartbeat sent while the socket is not live. A real
 1-hour figure needs a physical device.
 
+**The cold-start number moves with host load, so treat it as a range, not a figure.** The
+first measurement pass gave mean 171 ms; re-running the *same artifact* (verified
+byte-identical, sha256 `ff2f469f…`) on a busier host gave mean 235 ms over 25 launches
+(range 198–308 ms, including the very first post-install launch). Both are far inside the
+2 s target, and the honest summary is that the build cuts cold start by roughly **two-thirds
+to three-quarters**, not by a precise 76.1 %. Anything quoting a single mean from this
+emulator should quote the sample size and the range with it.
+
 **The cold-start improvement is the largest single win** and is attributable to three changes
 that compound: R8 full mode + resource shrinking (C1) removed ~82 % of the artifact and a large
 share of the classes to load; the bundled baseline profile (H7) pre-compiles the startup path;
 and moving the blocking REST calls off `Dispatchers.Default` (L3) stopped a slow network from
 occupying a CPU worker during startup.
 
-**The CPU-realism caveat from the baseline still applies, in the app's favour.** These two cores
-are host-speed cores on Apple Silicon; a Cortex-A53-class device is roughly 4–8× slower per
-core. A 171 ms cold start here maps to roughly **0.7–1.4 s** on the worst supported device,
+**The CPU-realism caveat from the baseline still applies, in the app's favour.** These four
+emulated cores are host-speed cores on Apple Silicon; a Cortex-A53-class device is roughly
+4–8× slower per core. A 200–240 ms cold start here maps to roughly **0.8–1.9 s** on the worst
+supported device,
 which does meet the < 2 s target — but that is an *extrapolation*, not a measurement. The
 baseline's "not demonstrated, only not disproven" caveat still applies; it has simply moved to
 the other side of the line. H8 (no baseline profile of our own) remains the reason it will not
@@ -614,19 +630,21 @@ command unless the evidence column says otherwise.
 
 | Requirement | Status |
 |---|---|
-| `./gradlew clean lintRelease testReleaseUnitTest assembleRelease` | ⚠️ **`testReleaseUnitTest` does not exist** under AGP 9.4.1 — only `testDebugUnitTest` (96 tests, all passing). The remaining three tasks pass. This was raised as Open Question 7 and is still unresolved. |
+| `./gradlew clean lintRelease testReleaseUnitTest assembleRelease` | ⚠️ **`testReleaseUnitTest` does not exist** under AGP 9.4.1 — only `testDebugUnitTest`. This was raised as Open Question 7 and is still unresolved. What was run instead, from clean: `clean lintRelease testDebugUnitTest assembleRelease -PallowDebugSignedRelease=true` → **exit 0, 96 tests / 0 failures / 0 skipped**, `lintRelease` exit 0, release APK 3,103,429 B |
 | No Critical/High findings open | ✅ all 5 Critical and all 8 High closed |
 | Release has no logs | ✅ **for the app's own code** — build-time strip, and all 118 surviving call sites in the dex are third-party (`mapping.txt`-verified). The unconditional claim would be false; see row 2 |
 | Release has no `debuggable` flag | ✅ |
 | Release has no cleartext traffic | ✅ enforced by config and by a build-breaking lint check |
 | Release contains no secrets | ✅ full-history scan clean; CI now enforces it |
-| Manual matrix (1 GB RAM, Android Go, slow 3G, offline, Doze, low storage, TTS missing, notifications denied) | ⚠️ **not performed** — needs physical hardware. What *was* verified on the 1 GB / 2-core AVD: cold start, memory-pressure trim, notification permission grant/deny, missing-config degradation, and the release signing path. |
+| Manual matrix (Android Go, slow 3G, offline, Doze, low storage, TTS missing, notifications denied) | ⚠️ **not performed** — needs physical hardware. What *was* verified on the AVD: cold start, memory-pressure trim, notification permission grant/deny, missing-config degradation, and the release signing path. |
 
 ### Known limitations of this remediation pass
 
-- **No physical-device testing.** The AVD is 1 GB / 2 cores but host-speed, and its battery and
-  network are simulated. Android Go, real Doze behaviour, real 2G/3G latency, low storage and
-  TTS-absent scenarios are unverified.
+- **No physical-device testing.** The AVD (Pixel 9 Pro XL, API 36, 4 cores / 4 GB) is
+  host-speed, and its battery and network are simulated. Android Go, real Doze behaviour, real
+  2G/3G latency, low storage and TTS-absent scenarios are unverified. Note the corollary: every
+  absolute figure above is optimistic for a low-end device, and the CPU-extrapolation paragraph
+  is the only honest bridge between the two.
 - **Two requested metrics remain unmeasurable here** — jank has no "before" number to compare
   against, and mAh drain is simulated. Both are called out above rather than estimated.
 - **Espresso 3.5.1 cannot initialize against API 36** (`NoSuchMethodException:
