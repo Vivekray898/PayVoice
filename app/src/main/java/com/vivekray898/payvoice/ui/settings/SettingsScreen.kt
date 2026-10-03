@@ -33,6 +33,7 @@ import com.vivekray898.payvoice.core.announce.AnnouncementStyle
 import com.vivekray898.payvoice.core.remote.DeviceRole
 import com.vivekray898.payvoice.ui.MainViewModel
 import com.vivekray898.payvoice.ui.components.PvCard
+import com.vivekray898.payvoice.ui.components.PvDivider
 import com.vivekray898.payvoice.ui.components.PvSegmentedGroup
 import com.vivekray898.payvoice.ui.components.PvListItem
 import com.vivekray898.payvoice.ui.components.PvSecondaryButton
@@ -74,6 +75,14 @@ fun SettingsScreen(
             contentPadding = PaddingValues(
                 // PvScaffold hands the safe-drawing insets to the caller; ignoring the
                 // top one puts the title under the status bar.
+                //
+                // The horizontal gutter belongs HERE, once, not per section. It used
+                // to be re-applied by each section (card padding, or `gutter =` on the
+                // header), and two sections forgot: the Announcements row and the whole
+                // Support group sat flush against the screen edge with their icons
+                // touching it. One gutter at the list level cannot drift per section.
+                start = Spacing.lg,
+                end = Spacing.lg,
                 top = inner.calculateTopPadding(),
                 bottom = Spacing.xxl + inner.calculateBottomPadding(),
             ),
@@ -83,26 +92,28 @@ fun SettingsScreen(
                     text = "Settings",
                     style = MaterialTheme.typography.displaySmall,
                     color = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.md),
+                    modifier = Modifier.padding(vertical = Spacing.md),
                 )
             }
 
             // ---- Announcements -------------------------------------------
             item(key = "announcements") {
-                PvSectionHeader(text = "Announcements", gutter = Spacing.lg)
-                PvListItem(
-                    title = "Payment announcements",
-                    subtitle = if (expandedAnnouncements) {
-                        "Hide voice options"
-                    } else {
-                        "Voice style, language, speed & volume"
-                    },
-                    leadingIcon = Icons.Filled.NotificationsActive,
-                    onClick = { expandedAnnouncements = !expandedAnnouncements },
-                    minHeight = Spacing.listRow,
-                )
+                PvSectionHeader(text = "Announcements")
+                PvCard {
+                    PvListItem(
+                        title = "Payment announcements",
+                        subtitle = if (expandedAnnouncements) {
+                            "Hide voice options"
+                        } else {
+                            "Voice style, language, speed & volume"
+                        },
+                        leadingIcon = Icons.Filled.NotificationsActive,
+                        onClick = { expandedAnnouncements = !expandedAnnouncements },
+                        minHeight = Spacing.listRow,
+                    )
+                }
                 if (expandedAnnouncements) {
-                    PvCard(modifier = Modifier.padding(horizontal = Spacing.lg)) {
+                    PvCard {
                         Text(
                             text = "Voice style",
                             style = MaterialTheme.typography.bodyMedium,
@@ -147,8 +158,8 @@ fun SettingsScreen(
 
             // ---- Payment detection ---------------------------------------
             item(key = "detection") {
-                PvSectionHeader(text = "Payment detection", gutter = Spacing.lg)
-                PvCard(modifier = Modifier.padding(horizontal = Spacing.lg)) {
+                PvSectionHeader(text = "Payment detection")
+                PvCard {
                     PvSwitchRow(
                         label = "Google Pay notifications",
                         supporting = "Announce as GPay notifies you",
@@ -166,8 +177,8 @@ fun SettingsScreen(
 
             // ---- Device & team -------------------------------------------
             item(key = "device") {
-                PvSectionHeader(text = "Your business", gutter = Spacing.lg)
-                PvCard(modifier = Modifier.padding(horizontal = Spacing.lg)) {
+                PvSectionHeader(text = "Your business")
+                PvCard {
                     PvListItem(
                         // "This device is the / Owner" read as a broken
                         // sentence across two lines.
@@ -210,8 +221,8 @@ fun SettingsScreen(
 
             // ---- App settings --------------------------------------------
             item(key = "storage") {
-                PvSectionHeader(text = "App settings", gutter = Spacing.lg)
-                PvCard(modifier = Modifier.padding(horizontal = Spacing.lg)) {
+                PvSectionHeader(text = "App settings")
+                PvCard {
                     PvSliderRow(
                         label = "Payment memory",
                         valueText = "%d h".format(settings.dedupRetentionHours),
@@ -233,29 +244,32 @@ fun SettingsScreen(
 
             // ---- Support -------------------------------------------------
             item(key = "support") {
-                PvSectionHeader(text = "Support", gutter = Spacing.lg)
-                PvListItem(
-                    title = "Fix a problem",
-                    subtitle = "Permissions, battery and connection repair",
-                    leadingIcon = Icons.Filled.VisibilityOff,
-                    onClick = onOpenHealth,
-                    minHeight = Spacing.listRow,
-                    trailing = { PvChevron() },
-                )
-                PvListItem(
-                    title = "Diagnostics",
-                    subtitle = "Technical logs and captured notifications",
-                    leadingIcon = Icons.Filled.Visibility,
-                    onClick = onOpenDiagnostics,
-                    minHeight = Spacing.listRow,
-                    trailing = { PvChevron() },
-                )
+                PvSectionHeader(text = "Support")
+                PvCard {
+                    PvListItem(
+                        title = "Fix a problem",
+                        subtitle = "Permissions, battery and connection repair",
+                        leadingIcon = Icons.Filled.VisibilityOff,
+                        onClick = onOpenHealth,
+                        minHeight = Spacing.listRow,
+                        trailing = { PvChevron() },
+                    )
+                    PvDivider()
+                    PvListItem(
+                        title = "Diagnostics",
+                        subtitle = "Technical logs and captured notifications",
+                        leadingIcon = Icons.Filled.Visibility,
+                        onClick = onOpenDiagnostics,
+                        minHeight = Spacing.listRow,
+                        trailing = { PvChevron() },
+                    )
+                }
             }
 
             // ---- About ---------------------------------------------------
             item(key = "about") {
-                PvSectionHeader(text = "About", gutter = Spacing.lg)
-                PvCard(modifier = Modifier.padding(horizontal = Spacing.lg)) {
+                PvSectionHeader(text = "About")
+                PvCard {
                     AboutRow("Version", "1.0")
                     AboutRow("Android", android.os.Build.VERSION.RELEASE ?: "?")
                     AboutRow("Device", Build.MODEL ?: "?")
