@@ -76,6 +76,23 @@
 # backends by class name at runtime.
 -dontwarn io.*
 
+# --- Logging ---------------------------------------------------------------
+# Every release build must emit no logcat at all. -assumenosideeffects lets R8
+# delete the call AND its argument evaluation, so the string concatenation at
+# each of the 61 android.util.Log call sites (33 of them via DebugLog) costs
+# nothing in a release build instead of merely being discarded at runtime.
+#
+# DebugLog is gated at runtime as well (see DebugLog.enabled), so this rule is
+# a second, build-time layer rather than the only one - the runtime gate alone
+# would still ship every log string.
+-assumenosideeffects class android.util.Log {
+    public static *** v(...);
+    public static *** d(...);
+    public static *** i(...);
+    public static *** w(...);
+    public static *** e(...);
+}
+
 # --- Line numbers -----------------------------------------------------------
 # Keep source file + line number in the (gated) crash/exception stack traces so
 # release triage stays possible, but HIDE the original source file name.

@@ -15,10 +15,14 @@ import android.util.Log
  * every method is a no-op (never throws).
  *
  * Rules encoded here:
- *  - [d]/[v]/[w]: operational info (package names, event-id prefixes, stage
- *    names, latency, HTTP status) → gated, release builds never emit them.
- *  - [e]: genuine errors are intentionally NOT gated so field failures
- *    surface — but call sites must still never include payment content.
+ *  - Every level is gated. Release builds emit nothing at all: a release APK
+ *    that writes to logcat leaks install id, device state and payment timing
+ *    to any app holding READ_LOGS on older platforms or to a connected adb
+ *    host, so errors are no longer exempt.
+ *  - Release additionally compiles the calls out entirely via
+ *    `-assumenosideeffects` in app/proguard-rules.pro, so the string
+ *    concatenation at each call site costs nothing in a release build.
+ *  - Call sites must never include payment content, even in debug.
  */
 object DebugLog {
 
@@ -48,8 +52,9 @@ object DebugLog {
         if (enabled) Log.w(tag, message)
     }
 
-    /** Real errors: intentionally ungated so release failures are visible. */
+    /** Real errors. Gated like every other level: release builds stay silent. */
     fun e(tag: String, message: String, t: Throwable? = null) {
+        if (!enabled) return
         if (t != null) Log.e(tag, message, t) else Log.e(tag, message)
     }
 }
