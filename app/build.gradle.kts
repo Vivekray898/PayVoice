@@ -324,4 +324,10 @@ dependencies {
     androidTestImplementation(libs.androidx.room.testing)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
+    // Debug builds ONLY — never in a release artifact. LeakCanary is how the
+    // retained-Activity and un-cancelled-coroutine class of bug gets caught
+    // during development instead of showing up as an OOM on a customer's
+    // 1 GB phone. It installs its own UI and heap watcher, which is exactly
+    // what must not ship.
+    debugImplementation(libs.leakcanary.android)
 }
