@@ -1,5 +1,6 @@
 package com.vivekray898.payvoice.core.health
 
+import android.app.NotificationManager
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -46,7 +47,7 @@ class SettingsLauncher(private val context: Context) {
             listOf(appNotificationSettings(), appDetails())
 
         SettingsAction.CHANNEL_NOTIFICATIONS ->
-            listOf(channelSettings(), appNotificationSettings(), appDetails())
+            listOfNotNull(channelSettings(), appNotificationSettings(), appDetails())
 
         SettingsAction.NOTIFICATION_LISTENER ->
             listOf(
@@ -164,14 +165,25 @@ class SettingsLauncher(private val context: Context) {
         Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
             .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
 
-    private fun channelSettings(): Intent =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
-                .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                .putExtra(Settings.EXTRA_CHANNEL_ID, SetupNotifications.CHANNEL_PAYMENT_EVENTS)
-        } else {
-            appNotificationSettings()
-        }
+    /**
+     * The per-channel panel, or `null` when there is no channel to show.
+     *
+     * `ACTION_CHANNEL_NOTIFICATION_SETTINGS` needs a channel id that exists:
+     * given an unknown one, `ChannelPanelActivity` starts, renders an empty
+     * panel and finishes immediately, so the user sees nothing happen at all —
+     * indistinguishable from a dead button. Returning `null` here drops that
+     * step and lets the chain fall through to the app's notification settings,
+     * which always has something to show.
+     */
+    private fun channelSettings(): Intent? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return appNotificationSettings()
+        val id = SetupNotifications.CHANNEL_PAYMENT_EVENTS
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+        if (manager?.getNotificationChannel(id) == null) return null
+        return Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+            .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+            .putExtra(Settings.EXTRA_CHANNEL_ID, id)
+    }
 
     private fun directBatteryExemption(): Intent =
         Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)

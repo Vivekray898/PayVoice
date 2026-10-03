@@ -43,11 +43,31 @@ class AndroidHealthSources(
             null
         }
 
+    /**
+     * Read-only: the app owns this channel and `PayVoiceApp` creates it at
+     * startup.
+     *
+     * Creation used to happen in exactly one place — the onboarding
+     * permissions step — so a device that skipped onboarding, finished it
+     * before that step, or reset settings had no `payment_events` channel at
+     * all. That produced two bugs in one:
+     *
+     * 1. a missing channel read as importance 0, so the checklist told the
+     *    owner they had *silenced* their payment alerts when the app had
+     *    simply never created the channel;
+     * 2. the fix button opened `ACTION_CHANNEL_NOTIFICATION_SETTINGS` for an
+     *    id the system had never heard of. `ChannelPanelActivity` started,
+     *    found nothing and finished immediately — the button looked dead.
+     *
+     * A channel that is somehow still absent cannot have been silenced, so
+     * the answer is DEFAULT: nothing for the owner to fix, and no basis for
+     * accusing them of silencing something.
+     */
     override fun paymentChannelImportance(): Int {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return ChannelImportance.DEFAULT
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val channel = manager.getNotificationChannel(SetupNotifications.CHANNEL_PAYMENT_EVENTS)
-            ?: return ChannelImportance.NONE
+            ?: return ChannelImportance.DEFAULT
         // Android's IMPORTANCE_* values map 1:1 onto ChannelImportance.
         return channel.importance
     }

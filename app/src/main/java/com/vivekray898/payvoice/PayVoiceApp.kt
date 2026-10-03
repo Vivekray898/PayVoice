@@ -74,6 +74,18 @@ class PayVoiceApp : Application(), Configuration.Provider {
             runCatching {
                 container.listenerRuntime.scheduleStartupRepair(this@PayVoiceApp)
             }
+            // The app's own notification channels. This used to run only in the
+            // onboarding permissions step, so any device that skipped or
+            // reset onboarding had NO payment_events channel — which made the
+            // health check report "alerts are silenced" (a channel the app had
+            // never created) and made its fix button open a settings panel for
+            // a channel id the system had never heard of, so the panel
+            // rendered empty and closed at once. Idempotent, and re-creating
+            // an existing channel never resets an importance the user chose.
+            runCatching {
+                com.vivekray898.payvoice.service.setup.SetupNotifications
+                    .ensureChannels(this@PayVoiceApp)
+            }
             // Anonymous auth warm-up (device identity for the remote layer).
             // Fire-and-forget: remote features degrade gracefully offline.
             runCatching { container.auth.warmUp() }
