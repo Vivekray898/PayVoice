@@ -42,6 +42,9 @@ object Spacing {
     /** 20dp — screen side gutter (content inset from the edge). */
     val gutter: Dp = 20.dp
 
+    /** 6dp — the status dot inside a pill and the event-log dot. */
+    val dot: Dp = 6.dp
+
     /** 40dp — circular icon tile behind a glyph. */
     val iconCircle: Dp = 40.dp
 
@@ -53,6 +56,9 @@ object Spacing {
 
     /** 72dp — settings list row height. */
     val listRow: Dp = 72.dp
+
+    /** 72dp — the onboarding step's icon plate. */
+    val iconPlate: Dp = 72.dp
 
     /** 200dp — the Home hero band height. */
     val hero: Dp = 200.dp

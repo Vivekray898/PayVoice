@@ -69,6 +69,22 @@ fun StatusPill(text: String, ok: Boolean?, modifier: Modifier = Modifier) {
     StatusPill(text = text, tone = statusToneOf(ok), modifier = modifier)
 }
 
+/**
+ * Tone-keyed status dot.
+ *
+ * [StatusDot] takes a tri-state boolean; this one takes a tone directly, for
+ * call sites that already resolved the tone themselves (the diagnostics event
+ * log, where a row can be neutral rather than a failed/succeeded verdict).
+ */
+@Composable
+fun StatusDot(tone: StatusTone, modifier: Modifier = Modifier) {
+    Box(
+        modifier
+            .size(Spacing.dot)
+            .background(statusToneContainer(tone), CircleShape),
+    )
+}
+
 /** @return the soft track color for a tone (shared by dots and chips). */
 @Composable
 fun statusToneContainer(tone: StatusTone): Color = when (tone) {
