@@ -41,7 +41,7 @@ import com.vivekray898.payvoice.ui.components.PvScaffold
 import com.vivekray898.payvoice.ui.components.PvSecureWindow
 import com.vivekray898.payvoice.ui.components.PvSecondaryButton
 import com.vivekray898.payvoice.ui.components.ScreenHeader
-import com.vivekray898.payvoice.ui.components.SectionHeader
+import com.vivekray898.payvoice.ui.components.PvSectionHeader
 import com.vivekray898.payvoice.ui.components.StatusLine
 import com.vivekray898.payvoice.ui.components.StatusPill
 import com.vivekray898.payvoice.ui.components.StatusTone
@@ -303,7 +303,7 @@ private fun StatusCard(
     content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
 ) {
     Column {
-        SectionHeader(text = title)
+        PvSectionHeader(text = title)
         Surface(
             shape = MaterialTheme.shapes.large,
             color = MaterialTheme.colorScheme.surface,

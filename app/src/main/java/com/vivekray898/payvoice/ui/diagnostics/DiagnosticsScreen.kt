@@ -35,10 +35,10 @@ import com.vivekray898.payvoice.ui.MainViewModel
 import com.vivekray898.payvoice.ui.components.PvEmptyHint
 import com.vivekray898.payvoice.ui.components.PvScaffold
 import com.vivekray898.payvoice.ui.components.PvTopBar
-import com.vivekray898.payvoice.ui.components.SectionHeader
+import com.vivekray898.payvoice.ui.components.PvSectionHeader
 import com.vivekray898.payvoice.ui.components.StatusLine
 import com.vivekray898.payvoice.ui.components.StatusTone
-import com.vivekray898.payvoice.ui.components.SwitchRow
+import com.vivekray898.payvoice.ui.components.PvSwitchRow
 import com.vivekray898.payvoice.ui.components.statusToneContainer
 import com.vivekray898.payvoice.ui.components.statusToneOf
 import com.vivekray898.payvoice.ui.components.timeAgo
@@ -69,7 +69,7 @@ fun DiagnosticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
             ),
         ) {
             item(key = "system") {
-                SectionHeader(text = "System")
+                PvSectionHeader(text = "System")
                 DiagCard {
                     InfoRow("Device", "${status?.manufacturer ?: "?"} ${status?.model ?: "?"}")
                     InfoRow("Android", "${status?.androidVersion ?: "?"} (SDK ${android.os.Build.VERSION.SDK_INT})")
@@ -83,7 +83,7 @@ fun DiagnosticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
             }
 
             item(key = "listener") {
-                SectionHeader(text = "Listener")
+                PvSectionHeader(text = "Listener")
                 DiagCard {
                     StatusLine(runtime.systemGrant, "Access granted in Android settings")
                     StatusLine(runtime.connected, if (runtime.connected) "Listener connected" else "Listener not connected")
@@ -99,7 +99,7 @@ fun DiagnosticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
             }
 
             item(key = "fcm") {
-                SectionHeader(text = "FCM")
+                PvSectionHeader(text = "FCM")
                 DiagCard {
                     StatusLine(
                         fcm.tokenAvailable,
@@ -124,7 +124,7 @@ fun DiagnosticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
             }
 
             item(key = "remote") {
-                SectionHeader(text = "Remote")
+                PvSectionHeader(text = "Remote")
                 DiagCard {
                     val settingsState by viewModel.settings.collectAsStateWithLifecycle()
                     val authState by viewModel.authState.collectAsStateWithLifecycle()
@@ -153,7 +153,7 @@ fun DiagnosticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
             }
 
             item(key = "capture-toggle") {
-                SectionHeader(text = "Unknown-package capture")
+                PvSectionHeader(text = "Unknown-package capture")
                 DiagCard {
                     Text(
                         "Capture non-GPay notifications locally to identify unexpected " +
@@ -161,7 +161,7 @@ fun DiagnosticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    SwitchRow(
+                    PvSwitchRow(
                         label = "Capture unknown packages (local only)",
                         checked = settings.captureUnknownPackages,
                         onCheckedChange = viewModel::setCaptureUnknownPackages,
@@ -175,7 +175,7 @@ fun DiagnosticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
 
             if (viewModel.isDebugBuild) {
                 item(key = "gpay-test") {
-                    SectionHeader(text = "GPay parser test (debug)")
+                    PvSectionHeader(text = "GPay parser test (debug)")
                     DiagCard {
                         Button(
                             onClick = { viewModel.simulate(PaymentSource.GOOGLE_PAY) },
@@ -186,7 +186,7 @@ fun DiagnosticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
             }
 
             item(key = "captures") {
-                SectionHeader(text = "Captured notifications")
+                PvSectionHeader(text = "Captured notifications")
                 DiagCard {
                     if (captured.isEmpty()) {
                         PvEmptyHint(
@@ -216,7 +216,7 @@ fun DiagnosticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
             }
 
             item(key = "events") {
-                SectionHeader(text = "Recent events")
+                PvSectionHeader(text = "Recent events")
                 DiagCard {
                     if (logs.isEmpty()) {
                         PvEmptyHint(text = "No events yet — system log entries will appear here.")

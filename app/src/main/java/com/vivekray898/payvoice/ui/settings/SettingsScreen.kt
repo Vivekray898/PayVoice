@@ -54,6 +54,7 @@ import com.vivekray898.payvoice.ui.MainViewModel
 import com.vivekray898.payvoice.ui.components.IconTile
 import com.vivekray898.payvoice.ui.components.PvPrimaryButton
 import com.vivekray898.payvoice.ui.components.PvScaffold
+import com.vivekray898.payvoice.ui.components.PvSectionHeader
 import com.vivekray898.payvoice.ui.theme.Spacing
 
 private val rowTarget = Spacing.xxl + Spacing.xxl + Spacing.sm // 72dp structural
@@ -106,7 +107,7 @@ fun SettingsScreen(
 
             // ---- Announcements (expandable: voice + language + sliders) ----
             item(key = "announcements") {
-                SectionHeader("Announcements")
+                PvSectionHeader("Announcements", gutter = Spacing.gutter)
                 SettingsRow(
                     icon = Icons.Filled.NotificationsActive,
                     title = "Payment announcements",
@@ -174,7 +175,7 @@ fun SettingsScreen(
 
             // ---- Payment detection ----
             item(key = "detection") {
-                SectionHeader("Payment detection")
+                PvSectionHeader("Payment detection", gutter = Spacing.gutter)
                 SettingsGroup {
                     ToggleRow(
                         title = "Google Pay notifications",
@@ -193,7 +194,7 @@ fun SettingsScreen(
 
             // ---- Device & team (role lives here; Home is read-only) ----
             item(key = "device") {
-                SectionHeader("Your business")
+                PvSectionHeader("Your business", gutter = Spacing.gutter)
                 SettingsGroup {
                     Row(
                         Modifier
@@ -255,7 +256,7 @@ fun SettingsScreen(
 
             // ---- Storage ----
             item(key = "storage") {
-                SectionHeader("App settings")
+                PvSectionHeader("App settings", gutter = Spacing.gutter)
                 SettingsGroup {
                     SliderSetting("Payment memory", "%d h".format(settings.dedupRetentionHours)) {
                         Slider(
@@ -284,7 +285,7 @@ fun SettingsScreen(
 
             // ---- Support: Diagnostics + Reliability as 72dp rows ----
             item(key = "support") {
-                SectionHeader("Support")
+                PvSectionHeader("Support", gutter = Spacing.gutter)
                 SettingsRow(
                     icon = Icons.Filled.Visibility,
                     title = "Diagnostics",
@@ -315,7 +316,7 @@ fun SettingsScreen(
 
             // ---- About ----
             item(key = "about") {
-                SectionHeader("About")
+                PvSectionHeader("About", gutter = Spacing.gutter)
                 SettingsGroup {
                     AboutRow("Version", "1.0")
                     AboutRow("Android", android.os.Build.VERSION.RELEASE ?: "?")
@@ -325,21 +326,6 @@ fun SettingsScreen(
             }
         }
     }
-}
-
-@Composable
-private fun SectionHeader(text: String) {
-    Text(
-        text = text.uppercase(),
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(
-            start = Spacing.xl - Spacing.xs,
-            end = Spacing.xl - Spacing.xs,
-            top = Spacing.xxl,
-            bottom = Spacing.sm,
-        ),
-    )
 }
 
 /** 72dp row: 40dp icon tile, title + subtitle, optional trailing. */

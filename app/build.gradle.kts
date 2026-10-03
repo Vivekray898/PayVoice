@@ -1,3 +1,4 @@
+import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.util.Properties
@@ -330,4 +331,115 @@ dependencies {
     // 1 GB phone. It installs its own UI and heap watcher, which is exactly
     // what must not ship.
     debugImplementation(libs.leakcanary.android)
+}
+
+// ---------------------------------------------------------------------------
+// Design-system enforcement (docs/DESIGN_SYSTEM.md §Enforcement gate).
+//
+// DESIGN.md used to be enforced by a bash one-liner pasted at the bottom of a
+// document, which nobody ran. These tasks make the rules executable so a
+// future change cannot silently opt out of the design system.
+//
+//   verifyDesignTokens     — the three hard rules from DESIGN_SYSTEM.md.
+//                            Wired into `check` and into CI.
+//   verifyDesignComponents — "screens compose Pv* components only, and never
+//                            do arithmetic on Spacing tokens". Created now,
+//                            wired into CI together with the screen migration.
+//
+// Both scan only ui/ and skip ui/theme (the one place .dp/.sp/Color(0x are
+// legal) and ui/components (the one place raw Material widgets are legal).
+//
+// Everything the task action needs is captured as String/List values at
+// configuration time: a Gradle script object reference inside doLast would
+// break the configuration cache, which this build uses.
+// ---------------------------------------------------------------------------
+val uiRootPath = file("src/main/java/com/vivekray898/payvoice/ui").absolutePath
+val uiSkipDirs = listOf("theme", "components")
+
+// (ruleName, regex, appliesToScreenFilesOnly)
+val pvHardRules = listOf(
+    Triple("hardcoded-color", Regex("""Color\(\s*0[xX]"""), false),
+    Triple("raw-dp-sp", Regex("""\b\d+(\.\d+)?\.(dp|sp)\b"""), false),
+    Triple("bare-scaffold", Regex("""(?<![A-Za-z])Scaffold\s*\("""), false),
+)
+
+val pvComponentRules = listOf(
+    Triple(
+        "raw-material-widget",
+        Regex(
+            """(?<![A-Za-z])(Button|OutlinedButton|TextButton|IconButton|""" +
+                """FloatingActionButton|ExtendedFloatingActionButton|""" +
+                """ModalBottomSheet|AlertDialog|OutlinedTextField|TextField|""" +
+                """Switch|Slider|FilterChip|Card|Surface|""" +
+                """CircularProgressIndicator|LinearProgressIndicator)\s*\(""",
+        ),
+        true,
+    ),
+    Triple("spacing-arithmetic", Regex("""Spacing\.\w+\s*[+\-]\s*Spacing\."""), true),
+)
+
+fun pvRegisterDesignCheck(
+    taskName: String,
+    taskDescription: String,
+    rules: List<Triple<String, Regex, Boolean>>,
+) {
+    val rootPath = uiRootPath
+    val skipDirs = uiSkipDirs
+    val patterns = rules.map { Triple(it.first, it.second.pattern, it.third) }
+    tasks.register(taskName) {
+        group = "verification"
+        description = taskDescription
+        doLast {
+            val root = File(rootPath)
+            val found = mutableListOf<String>()
+            if (root.isDirectory) {
+                root.walkTopDown()
+                    .filter { it.isFile && it.extension == "kt" }
+                    .sortedBy { it.path }
+                    .forEach { f ->
+                        val rel = f.relativeTo(root).path.replace('\\', '/')
+                        if (rel.substringBefore('/') in skipDirs) return@forEach
+                        // theme/ and components/ are already skipped above,
+                        // so every remaining file under ui/ is a screen (or a
+                        // screen-local step/flow file) and must use Pv* parts.
+                        val screenOnly = true
+                        f.readLines().forEachIndexed { i, raw ->
+                            val code = raw.substringBefore("//")
+                            patterns.forEach { (name, pattern, screensOnly) ->
+                                if (screensOnly && !screenOnly) return@forEach
+                                if (Regex(pattern).containsMatchIn(code)) {
+                                    found += "  $rel:${i + 1}  [$name]  ${raw.trim()}"
+                                }
+                            }
+                        }
+                    }
+            }
+            if (found.isNotEmpty()) {
+                throw GradleException(
+                    "$taskName failed with ${found.size} violation(s):\n" +
+                        found.joinToString("\n") +
+                        "\n\nOnly ui/theme/*.kt may declare .dp/.sp/Color(0x); only " +
+                        "ui/components/PvScaffold.kt may call Scaffold(); screens may " +
+                        "only compose Pv* components.",
+                )
+            }
+            logger.lifecycle("$taskName: OK")
+        }
+    }
+}
+
+pvRegisterDesignCheck(
+    "verifyDesignTokens",
+    "Fails on Color(0x…, raw .dp/.sp, or a bare Scaffold outside PvScaffold.",
+    pvHardRules,
+)
+
+pvRegisterDesignCheck(
+    "verifyDesignComponents",
+    "Fails on raw Material widgets and spacing arithmetic inside screen files.",
+    pvComponentRules,
+)
+
+tasks.matching { it.name == "check" }.configureEach {
+    dependsOn("verifyDesignTokens")
 }

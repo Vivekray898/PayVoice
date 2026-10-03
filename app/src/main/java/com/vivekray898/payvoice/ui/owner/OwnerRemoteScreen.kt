@@ -45,7 +45,7 @@ import com.vivekray898.payvoice.ui.components.PvSecureWindow
 import com.vivekray898.payvoice.ui.components.HeroBanner
 import com.vivekray898.payvoice.ui.components.PvSecondaryButton
 import com.vivekray898.payvoice.ui.components.ScreenHeader
-import com.vivekray898.payvoice.ui.components.SectionHeader
+import com.vivekray898.payvoice.ui.components.PvSectionHeader
 import com.vivekray898.payvoice.ui.components.StatusPill
 import com.vivekray898.payvoice.ui.components.StatusTone
 import com.vivekray898.payvoice.ui.components.MoneyText
@@ -136,7 +136,7 @@ fun OwnerRemoteScreen(viewModel: MainViewModel, onBack: () -> Unit) {
             } else {
                 item(key = "header") {
                     val active = employees.count { it.isActive }
-                    SectionHeader(
+                    PvSectionHeader(
                         text = if (active == 1) "1 device connected" else "$active devices connected",
                     )
                 }
@@ -149,7 +149,7 @@ fun OwnerRemoteScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                 }
                 item(key = "test") {
                     Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-                        SectionHeader(text = "Try it out")
+                        PvSectionHeader(text = "Try it out")
                         Button(
                             onClick = { viewModel.sendTestToEmployees() },
                             enabled = testSendState !is MainViewModel.TestSendState.Sending,

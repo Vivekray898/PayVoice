@@ -118,36 +118,6 @@ fun timeAgo(thenMs: Long, nowMs: Long = System.currentTimeMillis()): String {
 // Rows and toggles
 // ---------------------------------------------------------------------------
 
-@Composable
-fun SwitchRow(
-    label: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-    enabled: Boolean = true,
-    supporting: String? = null,
-) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .heightIn(min = Spacing.xxl + Spacing.lg + Spacing.sm)
-            .padding(horizontal = Spacing.lg, vertical = Spacing.md),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(label, style = MaterialTheme.typography.bodyLarge)
-            if (supporting != null) {
-                Text(
-                    supporting,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-        Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
-    }
-}
-
 /** Hairline divider. */
 @Composable
 fun PvDivider(modifier: Modifier = Modifier) {
