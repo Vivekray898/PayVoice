@@ -44,10 +44,13 @@
 
     <!-- BatteryLife flags REQUEST_IGNORE_BATTERY_OPTIMIZATIONS against the Play
          content policy. The app is a voice announcer that must keep working
-         with the screen off, so the permission stays; what was removed is the
-         runtime prompt — the onboarding battery step teaches the user where
-         the setting is instead. Whether the exemption itself is acceptable is
-         a Play policy / product decision, not something a linter settles. -->
+         with the screen off, so the permission and the exemption dialog stay.
+         The dialog is reachable ONLY from an explicit user tap (a "fix
+         battery" control, via a tiered fallback chain that always lands
+         somewhere), never automatically at startup — which is the distinction
+         the policy actually objects to. Whether the exemption itself is
+         acceptable is a Play policy / product decision, not something a
+         linter settles. -->
     <issue id="BatteryLife" severity="ignore" />
 
     <!-- AGP 9.4.1 is current, and NewerVersionAvailable still reports when it
