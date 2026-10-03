@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -190,7 +191,7 @@ fun DiagnosticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                     if (captured.isEmpty()) {
                         PvEmptyHint(
                             text = "None yet — captured notifications will appear here.",
-                            icon = Icons.Filled.Notifications,
+                            icon = Icons.Filled.Sms,
                         )
                     } else {
                         captured.take(15).forEachIndexed { index, c ->
