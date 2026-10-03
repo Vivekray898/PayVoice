@@ -1,0 +1,14 @@
+{
+  "//": [
+    "markdownlint config for this repository's Markdown.",
+    "MD013 (line length): disabled because GitHub renders wide comparison",
+    "  and tech-stack tables, and wrapping them destroys the columns. Tables",
+    "  are the format the README uses for structured facts on purpose, so",
+    "  that AI tools can parse them.",
+    "MD033 (inline HTML): disabled only because the screenshot row uses a",
+    "  <table> to place four phone screenshots side by side. Markdown tables",
+    "  cannot do that. All other Markdown stays HTML-free."
+  ],
+  "MD013": false,
+  "MD033": false
+}
