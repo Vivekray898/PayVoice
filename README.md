@@ -11,10 +11,10 @@ PayVoice is an open-source Android app (Kotlin, Jetpack Compose) that reads Goog
 > (`versionCode 1`), available as
 > [`payvoice-0.1.0-phase1.apk`](https://github.com/Vivekray898/PayVoice/releases/tag/v0.1.0-phase1)
 > on a pre-release built from `main`. A superseded `v2.9.0` pre-release from
-> 2026-09-30 has been withdrawn; only its git
-> [tag](https://github.com/Vivekray898/PayVoice/releases/tag/v2.9.0) remains. It
-> predated the security audit, backend rework and UI redesign, and contained an
-> SMS fallback that current code no longer has. There is no Google Play listing.
+> 2026-09-30 has been withdrawn and its tag removed; that build predated the
+> security audit, backend rework and UI redesign, and contained an SMS fallback
+> that current code no longer has. Its commit `1d8f27e` is still in the history
+> on `main`. There is no Google Play listing.
 
 ---
 
