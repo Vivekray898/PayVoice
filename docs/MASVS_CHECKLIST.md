@@ -85,7 +85,7 @@ missing and what closing them would cost.
 ## V1 — Platform
 
 | # | Requirement | Status | Evidence |
-|---|---|---|---|---|
+|---|---|---|---|
 | V1-PLATFORM-1 | Only required permissions requested | **PASS** | 4 permissions, each tied to a documented capability. `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` is declared and the system exemption dialog IS reachable — but **only from an explicit user tap** on a "fix battery" control (onboarding battery step, Reliability screen, Employee screen), via a tiered fallback chain that always lands somewhere. It is never requested automatically at startup, which is what the Play policy object to. |
 | V1-PLATFORM-2 | No exported components beyond the launcher | **PASS** | The startup provider is `exported="false"`; services/receivers are unexported. `ExportedContentProvider`/`ExportedService`/`ExportedReceiver` are build-breaking lint errors — verified by deliberately removing `exported=false` and watching the build fail. |
 | V1-PLATFORM-3 | No WebView vulnerabilities | **N/A** | No WebView. |
@@ -111,7 +111,7 @@ missing and what closing them would cost.
 | V1-RESILIENCE-3 | App passes function under tampered environment | **PARTIAL** | The app degrades rather than crashes under tampering: Keystore failure, DataStore corruption and network failure are all soft-failed (defaults stay active, remote features disable). It does not *detect* a tampered environment. |
 | V1-RESILIENCE-4 | Debugging is prevented | **N/A** | Same as V1-RESILIENCE-2. |
 | V1-RESILIENCE-5 | App fails safe | **PASS** | Remote delivery is **fail-closed**: an event is announced only when the device row is `ACTIVE` and the owner matches. A failed auth check denies the announcement. Pairing expiry is enforced by Postgres server time only. |
-| V1-RESILIENCE-6 | Crash/exception handling does not leak info | **PASS** | Release builds emit nothing from app code, including exceptions — the `-assumenosideeffects` rule strips the calls and their arguments entirely.
+| V1-RESILIENCE-6 | Crash/exception handling does not leak info | **PASS** | Release builds emit nothing from app code, including exceptions — the `-assumenosideeffects` rule strips the calls and their arguments entirely. |
 
 ## V1 — Privacy
 
