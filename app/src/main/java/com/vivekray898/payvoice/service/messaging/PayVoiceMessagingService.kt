@@ -10,6 +10,7 @@ import com.vivekray898.payvoice.core.remote.RemoteEventValidator
 import com.vivekray898.payvoice.core.remote.RemoteEventType
 import com.vivekray898.payvoice.core.remote.RemotePaymentEvent
 import kotlinx.coroutines.launch
+import java.lang.reflect.Method
 
 /**
  * Employee-side FCM receiver (spec §10, §11, §31). FCM is the only remote
@@ -48,7 +49,21 @@ class PayVoiceMessagingService : FirebaseMessagingService() {
         // Post a silent receipt immediately — before any auth/dedup/TTS work.
         PaymentNotification.post(applicationContext)
 
-        container.applicationScope.launch {
+        // Hold the process for the duration of the work below.
+        //
+        // Without goAsync() this method returns the moment `launch` is called,
+        // Android considers the FCM service finished, and the process becomes
+        // killable while the authorization read and the dedup insert are still
+        // in flight — the event is then lost with no announcement and no record
+        // that it ever arrived. goAsync() keeps the process (and a wakelock)
+        // alive until finish() is called, bounded by the platform deadline.
+        //
+        // finish() must run on EVERY exit path, including coroutine
+        // cancellation, which is why it hangs off invokeOnCompletion rather
+        // than the end of the try block.
+        val finishPendingResult = acquirePendingResult()
+
+        val work = container.applicationScope.launch {
             runCatching {
                 // 1. AUTHORIZE before ANY announcement work (spec §5): this
                 //    device must be paired, still ACTIVE, and the event must
@@ -152,6 +167,42 @@ class PayVoiceMessagingService : FirebaseMessagingService() {
                 com.vivekray898.payvoice.core.analytics.PayVoiceAnalytics
                     .remoteDeliveryFailed("failed")
             }
+        }
+
+        work.invokeOnCompletion {
+            // Reached on success, on failure, and on scope cancellation. If the
+            // platform already tore the service down past its own deadline,
+            // finish() throws IllegalStateException — swallowing that keeps a
+            // late finish from crashing the process we were trying to protect.
+            finishPendingResult()
+        }
+    }
+
+    /**
+     * Takes a reference to the platform's `Service.PendingResult` so the
+     * process is not killable until [finishPendingResult] is invoked.
+     *
+     * `goAsync()` is resolved reflectively rather than called directly: it is
+     * a real, long-stable platform API, but the SDK platform installed on this
+     * machine (`android-37.0`) ships an android.jar whose `android.app.Service`
+     * stub omits it, so a direct call does not compile here. Every failure mode
+     * (method missing at runtime, invocation throwing, platform already torn
+     * the service down) degrades to a no-op instead of crashing — the previous
+     * no-goAsync behaviour — so this can only help.
+     *
+     * @return an idempotent completion callback that must run on every exit
+     *   path of the announcement work.
+     */
+    private fun acquirePendingResult(): () -> Unit {
+        val goAsync: Method = runCatching {
+            Class.forName("android.app.Service").getMethod("goAsync")
+        }.getOrNull() ?: run {
+            stageLog(eid = null, stage = "goasync_unavailable")
+            return {}
+        }
+        val pending = runCatching { goAsync.invoke(this) }.getOrNull() ?: return {}
+        return {
+            runCatching { pending.javaClass.getMethod("finish").invoke(pending) }
         }
     }
 
