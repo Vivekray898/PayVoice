@@ -42,15 +42,9 @@ class MessagingRepository(private val context: Context) {
     val status: StateFlow<FcmStatus> = _status
 
     private val securePrefs by lazy {
-        val masterKey = MasterKey.Builder(context)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build()
-        EncryptedSharedPreferences.create(
+        com.vivekray898.payvoice.core.security.SecureStore.prefs(
             context,
             "payvoice_secure_prefs",
-            masterKey,
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
         )
     }
 

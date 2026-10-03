@@ -452,17 +452,9 @@ class EmployeeRepository(
 private class PersistedPairingStore(context: Context) {
 
     private val prefs by lazy {
-        val masterKey = androidx.security.crypto.MasterKey.Builder(context)
-            .setKeyScheme(androidx.security.crypto.MasterKey.KeyScheme.AES256_GCM)
-            .build()
-        androidx.security.crypto.EncryptedSharedPreferences.create(
+        com.vivekray898.payvoice.core.security.SecureStore.prefs(
             context,
             "payvoice_pairing_snapshot",
-            masterKey,
-            androidx.security.crypto.EncryptedSharedPreferences
-                .PrefKeyEncryptionScheme.AES256_SIV,
-            androidx.security.crypto.EncryptedSharedPreferences
-                .PrefValueEncryptionScheme.AES256_GCM,
         )
     }
 
