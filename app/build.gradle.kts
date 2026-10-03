@@ -365,7 +365,6 @@ dependencies {
 // ---------------------------------------------------------------------------
 val uiRootPath = file("src/main/java/com/vivekray898/payvoice/ui").absolutePath
 val uiSkipDirs = listOf("theme", "components")
-val componentsRootPath = file("src/main/java/com/vivekray898/payvoice/ui/components").absolutePath
 val PILL_SHAPE = Regex("""RoundedCornerShape\s*\(\s*percent\s*=\s*50""")
 
 // (ruleName, regex, appliesToScreenFilesOnly)
@@ -459,10 +458,13 @@ pvRegisterDesignCheck(
  * being drawn as a fully-rounded bubble again — six of them sat on the
  * payments screen before this gate existed.
  *
- * So the radius itself is gated: a `RoundedCornerShape(percent = 50)` is only
- * legal in the five component files below, each of which is a button or a tag
- * pill. One file per sanctioned use, so allowlisting the file cannot quietly
- * license a new pill next to a legal one.
+ * So the radius itself is gated, across the whole of `ui/` and not just the
+ * component library: `verifyDesignComponents` bars raw Material widgets in a
+ * screen but says nothing about shapes, so without this a screen could draw
+ * its own pill. A `RoundedCornerShape(percent = 50)` is legal only in the
+ * five component files below, each of which is a button or a tag pill. One
+ * file per sanctioned use, so allowlisting a file cannot quietly license a
+ * new pill next to a legal one.
  */
 val pvPillSanctionedFiles = setOf(
     "PvPrimaryButton.kt",
@@ -476,7 +478,8 @@ tasks.register("verifyDesignShapes") {
     group = "verification"
     description =
         "Fails on rounded.pill outside the buttons and tag pills DESIGN.md sanctions."
-    val rootPath = componentsRootPath
+    val rootPath = uiRootPath
+    val skipDirs = uiSkipDirs - "components"
     val sanctioned = pvPillSanctionedFiles
     // Captured as a String, not the Regex object: a doLast cannot close over
     // a Gradle script reference when the configuration cache is on.
@@ -490,8 +493,9 @@ tasks.register("verifyDesignShapes") {
                 .filter { it.isFile && it.extension == "kt" }
                 .sortedBy { it.path }
                 .forEach { f ->
-                    val name = f.name
                     val rel = f.relativeTo(root).path.replace('\\', '/')
+                    if (rel.substringBefore('/') in skipDirs) return@forEach
+                    val name = f.name
                     f.readLines().forEachIndexed { i, raw ->
                         val code = raw.substringBefore("//")
                         if (pill.containsMatchIn(code) && name !in sanctioned) {
