@@ -41,7 +41,7 @@ missing and what closing them would cost.
 | # | Requirement | Status | Evidence |
 |---|---|---|---|
 | V1-STORAGE-1 | App does not leak sensitive data via `SharedPreferences`/files | **PASS** | Session, FCM token and pairing snapshot live in `EncryptedSharedPreferences` created through `SecureStore` (single Keystore-backed `MasterKey`, explicit alias). Settings in DataStore hold no secrets. Verified on device: the session file is ciphertext on disk and decrypts across a force-stop with no re-auth. |
-| V1-STORAGE-2 | No sensitive data written to logs | **PASS** | `-assumenosideeffects class android.util.Log` in [app/proguard-rules.pro](../app/proguard-rules.pro) removes every `android.util.Log` call in release, including argument evaluation; `DebugLog` is additionally gated at runtime on `FLAG_DEBUGGABLE`. Release APK verified to contain no logging call sites. Payment content is never passed to a log call even in debug. |
+| V1-STORAGE-2 | No sensitive data written to logs | **PASS** | `-assumenosideeffects class android.util.Log` in [app/proguard-rules.pro](../app/proguard-rules.pro) removes every `android.util.Log` call from app code in release, including argument evaluation; `DebugLog` is additionally gated at runtime on `FLAG_DEBUGGABLE`. The release APK was audited: 118 `Log` call sites remain in the dex and **none belongs to this app** — each owning class was resolved against the release `mapping.txt` (89 Firebase/GMS, 22 AndroidX, 5 OkHttp, 2 coroutines; 103 `isLoggable`-gated, 15 `wtf`/`println` on library failure paths). Payment content is never passed to a log call even in debug. |
 | V1-STORAGE-3 | No sensitive data in WebView cache / autofill | **N/A** | The app has no WebView. |
 | V1-STORAGE-4 | Keyboard cache disabled on sensitive inputs | **N/A** | The only text input is the pairing code, typed into a plain Compose `TextField`; the OS keyboard learns nothing from it. |
 | V1-STORAGE-5 | No secrets in the APK | **PASS** | Secrets scan across all 129 commits of history: no `sb_secret_`, no `service_role`/`anon` JWT (`eyJ…`), no `AIza…`, no `BEGIN RSA`, no `FCM_SERVER_KEY`. Client holds only `SUPABASE_URL` + `sb_publishable_…` ([RemoteConfig.kt](../app/src/main/java/com/vivekray898/payvoice/core/remote/RemoteConfig.kt)), which is public by design. `keystore.properties`, `google-services.json`, `local.properties` and `*.jks` are untracked and gitignored. CI runs gitleaks over full history. |
@@ -111,7 +111,7 @@ missing and what closing them would cost.
 | V1-RESILIENCE-3 | App passes function under tampered environment | **PARTIAL** | The app degrades rather than crashes under tampering: Keystore failure, DataStore corruption and network failure are all soft-failed (defaults stay active, remote features disable). It does not *detect* a tampered environment. |
 | V1-RESILIENCE-4 | Debugging is prevented | **N/A** | Same as V1-RESILIENCE-2. |
 | V1-RESILIENCE-5 | App fails safe | **PASS** | Remote delivery is **fail-closed**: an event is announced only when the device row is `ACTIVE` and the owner matches. A failed auth check denies the announcement. Pairing expiry is enforced by Postgres server time only. |
-| V1-RESILIENCE-6 | Crash/exception handling does not leak info | **PASS** | Release builds emit no logs at all, including exceptions. |
+| V1-RESILIENCE-6 | Crash/exception handling does not leak info | **PASS** | Release builds emit nothing from app code, including exceptions — the `-assumenosideeffects` rule strips the calls and their arguments entirely.
 
 ## V1 — Privacy
 

@@ -588,7 +588,7 @@ command unless the evidence column says otherwise.
 | # | Commit | Fixes | Evidence |
 |---|---|---|---|
 | 1 | `4d9db7f` | C1 + L1 — R8 full mode, resource shrinking | APK 17.0 → 3.1 MB; app launched on device, Room/Worker/Analytics/Room schemas intact after minification |
-| 2 | `e23d77c` | C2 — release logging stripped | `-assumenosideeffects` on `android.util.Log`; verified no logging call sites survive in the release dex |
+| 2 | `e23d77c` | C2 — release logging stripped | `-assumenosideeffects` on `android.util.Log`. **118 call sites remain in the release dex; every owning class was resolved against the release `mapping.txt` and none belongs to `com.vivekray898.payvoice`.** Breakdown: 89 Firebase/GMS/measurement, 22 AndroidX/Compose, 5 OkHttp, 2 `kotlinx.coroutines._BOUNDARY`. 103 are behind `Log.isLoggable` (false in release); the other 15 are `Log.wtf`/`Log.println` on library invariant-failure paths |
 | 3 | `3efb933` | C4 — cleartext refused, TLS 1.2 floor | `network_security_config.xml` verified compiled into the APK; realtime socket pinned to `ConnectionSpec.MODERN_TLS` |
 | 4 | `ea4521a` | C5 — release refuses the debug key | `verifyReleaseSigning` task; all four paths (present/absent × allowed/refused) exercised |
 | 5 | `f382d4b` | H3 — FCM handler holds a `PendingResult` | release build launches clean; the reflective lookup degrades to a no-op rather than crashing |
@@ -616,7 +616,7 @@ command unless the evidence column says otherwise.
 |---|---|
 | `./gradlew clean lintRelease testReleaseUnitTest assembleRelease` | ⚠️ **`testReleaseUnitTest` does not exist** under AGP 9.4.1 — only `testDebugUnitTest` (96 tests, all passing). The remaining three tasks pass. This was raised as Open Question 7 and is still unresolved. |
 | No Critical/High findings open | ✅ all 5 Critical and all 8 High closed |
-| Release has no logs | ✅ build-time strip, verified in the dex |
+| Release has no logs | ✅ **for the app's own code** — build-time strip, and all 118 surviving call sites in the dex are third-party (`mapping.txt`-verified). The unconditional claim would be false; see row 2 |
 | Release has no `debuggable` flag | ✅ |
 | Release has no cleartext traffic | ✅ enforced by config and by a build-breaking lint check |
 | Release contains no secrets | ✅ full-history scan clean; CI now enforces it |
