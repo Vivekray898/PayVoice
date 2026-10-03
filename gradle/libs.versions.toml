@@ -20,6 +20,11 @@ firebaseBom = "34.19.0"
 okhttp = "5.5.0"
 profileinstaller = "1.4.1"
 leakcanary = "2.14"
+# Compose Preview Screenshot Testing. Paparazzi does not support AGP 9 yet
+# ("this release supports pre-AGP 9.0 consumers"), and Roborazzi would pull in
+# Robolectric; AGP's own tool renders the @Preview functions this app already
+# ships and is documented against AGP >= 9.0 / Kotlin >= 2.2.10.
+screenshot = "0.0.1-alpha16"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -65,9 +70,11 @@ androidx-profileinstaller = { group = "androidx.profileinstaller", name = "profi
 # Debug-only. Leak detection on a 1 GB device is the difference between
 # "seems fine" and a retained Activity you can point at.
 leakcanary-android = { group = "com.squareup.leakcanary", name = "leakcanary-android", version.ref = "leakcanary" }
+screenshot-validation-api = { group = "com.android.tools.screenshot", name = "screenshot-validation-api", version.ref = "screenshot" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+screenshot = { id = "com.android.compose.screenshot", version.ref = "screenshot" }

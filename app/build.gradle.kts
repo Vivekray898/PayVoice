@@ -9,6 +9,9 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
+    // Compose Preview Screenshot Testing — renders the app's @Preview
+    // functions host-side and diffs them against committed baselines.
+    alias(libs.plugins.screenshot)
 }
 
 // ---------------------------------------------------------------------------
@@ -49,6 +52,11 @@ android {
     compileSdk {
         version = release(37)
     }
+
+    // Enables the `screenshotTest` source set and the
+    // update*/validate*ScreenshotTest tasks (paired with the flag in
+    // gradle.properties so the IDE and the CLI agree).
+    experimentalProperties["android.experimental.enableScreenshotTest"] = true
 
     signingConfigs {
         if (keystorePropsFile.exists()) {
@@ -318,6 +326,8 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+    screenshotTestImplementation(libs.screenshot.validation.api)
+    screenshotTestImplementation(libs.androidx.compose.ui.tooling)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)

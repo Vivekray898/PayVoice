@@ -60,6 +60,13 @@ jobs:
       - name: Test (JVM)
         run: ./gradlew testDebugUnitTest --stacktrace
 
+      # Screenshot baselines for the shared component library
+      # (app/src/screenshotTestDebug/reference). Renders the same @Preview
+      # functions the IDE shows, host-side, and diffs against the committed
+      # images. Regenerate with `./gradlew updateDebugScreenshotTest`.
+      - name: Screenshot baselines
+        run: ./gradlew validateDebugScreenshotTest --stacktrace
+
       - name: Lint (release)
         run: ./gradlew lintRelease --stacktrace
 
