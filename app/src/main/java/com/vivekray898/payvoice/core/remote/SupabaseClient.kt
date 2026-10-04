@@ -287,8 +287,14 @@ class SupabaseClient(private val context: Context) {
         body: JsonObject,
         bearer: String?,
     ): UpdateResult {
+        // Same rule as [selectRows]/[insertRow]: a null bearer means "the signed
+        // -in session", NOT "no session". This one call used to return
+        // Failed("no-auth") on a null bearer, so every filtered write in the app
+        // (leave pairing, the last-seen heartbeat, device rows, the revoke
+        // fallback when revoke_employee is not deployed) was rejected before a
+        // byte went out — and every caller treats the result as the verdict.
         val session = bearer?.let { return@let Session(it, "", "", Long.MAX_VALUE) }
-            ?: return UpdateResult.Failed("no-auth")
+            ?: ensureSignedIn() ?: return UpdateResult.Failed("no-auth")
         val prefer = "return=representation"
         val response = runCatching {
             patch(

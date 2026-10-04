@@ -323,9 +323,25 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _testSendState = MutableStateFlow<TestSendState>(TestSendState.Idle)
     val testSendState: StateFlow<TestSendState> = _testSendState
 
-    /** Employee: leave the owner's business (spec §21). */
+    /**
+     * Employee: leave the owner's business (spec §21). The verdict is state,
+     * not a fire-and-forget call: leaving is how a phone stops receiving
+     * someone else's payments, so a write that did not land must say so
+     * instead of leaving the card reading "Live".
+     */
     fun leaveOwner() {
-        viewModelScope.launch { container.pairing.leaveOwner() }
+        viewModelScope.launch {
+            _leaveState.value = when (val ok = container.pairing.leaveOwner()) {
+                true -> LeaveState.Done
+                false -> LeaveState.Failed(
+                    "Couldn't leave — the server didn't accept it. Check connection and try again.",
+                )
+            }
+        }
+    }
+
+    fun clearLeaveState() {
+        _leaveState.value = LeaveState.Idle
     }
 
     fun setRemoteAnnouncementsEnabled(enabled: Boolean) {
@@ -350,6 +366,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** TTS engine status for the setup wizard's Text-to-Speech card. */
     val ttsStatus: StateFlow<com.vivekray898.payvoice.service.tts.AnnouncementSpeaker.Status> =
         container.speaker.status
+
+    /** Employee leave-a-business verdict — mirrors [RevokeState] on the owner side. */
+    sealed class LeaveState {
+        object Idle : LeaveState()
+        object Done : LeaveState()
+        data class Failed(val message: String) : LeaveState()
+    }
+
+    private val _leaveState = MutableStateFlow<LeaveState>(LeaveState.Idle)
+    val leaveState: StateFlow<LeaveState> = _leaveState
 
     private val _testSpeaking = MutableStateFlow(false)
     val testSpeaking: StateFlow<Boolean> = _testSpeaking
@@ -446,6 +472,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             container.messaging.status
                 .map { it.tokenAvailable }
+                .distinctUntilChanged()
+                .drop(1)
+                .collect { refreshHealth() }
+        }
+        // Same reasoning for the pairing verdict. HealthRequest.paired is a
+        // SNAPSHOT of ownDevice taken when the checklist ran, so before this
+        // a successful claim left the banner reading "This phone isn't
+        // connected to a business" next to a card that said Live — the
+        // checklist only re-ran on resume or on an FCM token change, neither
+        // of which happens when you pair. Re-check when the verdict actually
+        // flips, so pairing clears the item and leaving restores it.
+        viewModelScope.launch {
+            ownDevice
+                .map { it?.isActive == true }
                 .distinctUntilChanged()
                 .drop(1)
                 .collect { refreshHealth() }
