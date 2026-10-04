@@ -29,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.vivekray898.payvoice.core.model.PaymentSource
+import com.vivekray898.payvoice.core.remote.DeviceRole
 import com.vivekray898.payvoice.core.remote.PayVoiceAuth
 import com.vivekray898.payvoice.core.remote.RemoteEventSender
 import com.vivekray898.payvoice.ui.MainViewModel
@@ -40,6 +41,7 @@ import com.vivekray898.payvoice.ui.components.StatusDot
 import com.vivekray898.payvoice.ui.components.PvScaffold
 import com.vivekray898.payvoice.ui.components.PvTopBar
 import com.vivekray898.payvoice.ui.components.PvSectionHeader
+import com.vivekray898.payvoice.ui.components.PvSupportingText
 import com.vivekray898.payvoice.ui.components.StatusLine
 import com.vivekray898.payvoice.ui.components.StatusTone
 import com.vivekray898.payvoice.ui.components.PvSwitchRow
@@ -86,17 +88,34 @@ fun DiagnosticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                 }
             }
 
-            item(key = "listener") {
-                PvSectionHeader(text = "Listener")
-                DiagCard {
-                    StatusLine(runtime.systemGrant, "Access granted in Android settings")
-                    StatusLine(runtime.connected, if (runtime.connected) "Listener connected" else "Listener not connected")
-                    if (runtime.mismatch) {
-                        Text(
-                            "Android granted access but the service is not bound. " +
-                                "Use Reliability → Repair to rebind.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error,
+            // An employee phone never captures payments — the owner detects them
+            // and pushes over FCM — so listener state is not a fault here. Two
+            // permanent red rows for a capability the role does not use is the
+            // same misleading warning the health checklist already avoids via
+            // HealthRequest.detectsPayments.
+            if (settings.role == DeviceRole.OWNER) {
+                item(key = "listener") {
+                    PvSectionHeader(text = "Listener")
+                    DiagCard {
+                        StatusLine(runtime.systemGrant, "Access granted in Android settings")
+                        StatusLine(runtime.connected, if (runtime.connected) "Listener connected" else "Listener not connected")
+                        if (runtime.mismatch) {
+                            Text(
+                                "Android granted access but the service is not bound. " +
+                                    "Use Reliability → Repair to rebind.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                    }
+                }
+            } else {
+                item(key = "listener-na") {
+                    PvSectionHeader(text = "Listener")
+                    DiagCard {
+                        PvSupportingText(
+                            text = "Not used on an employee phone. Your owner reads the " +
+                                "payment notifications and sends each one to you.",
                         )
                     }
                 }
