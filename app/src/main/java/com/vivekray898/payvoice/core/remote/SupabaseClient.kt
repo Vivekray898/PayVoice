@@ -12,9 +12,14 @@ import kotlinx.serialization.json.put
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 import javax.net.ssl.HttpsURLConnection
 import kotlin.coroutines.resume
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 
 /**
  * Minimal Supabase REST client (GoTrue auth + PostgREST + edge functions).
@@ -32,6 +37,18 @@ import kotlin.coroutines.resume
  *  - silently refreshes an expired access token once (GoTrue /token?grant_type=refresh_token).
  */
 class SupabaseClient(private val context: Context) {
+
+    /**
+     * Used ONLY by [patch]. Timeouts mirror [open] so both stacks behave the
+     * same; the whole-request ceiling is still [onIo]'s.
+     */
+    private val patchClient: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .connectTimeout(CONNECT_TIMEOUT_MS.toLong(), TimeUnit.MILLISECONDS)
+            .readTimeout(READ_TIMEOUT_MS.toLong(), TimeUnit.MILLISECONDS)
+            .followRedirects(false)
+            .build()
+    }
 
     /** Session from GoTrue: stable device identity (auth.uid()). */
     data class Session(
@@ -414,18 +431,32 @@ class SupabaseClient(private val context: Context) {
         readResponse(conn)
     }
 
+    /**
+     * Real HTTP PATCH — the only request shape HttpURLConnection cannot make.
+     *
+     * This used to tunnel the method as `POST` + `X-HTTP-Method-Override:
+     * PATCH`, which PostgREST IGNORES: the server saw an INSERT, so every
+     * "update" was evaluated against the INSERT policy (`id = auth.uid() and
+     * owner_uid is not null`) and rejected with 42501 "new row violates
+     * row-level security policy". Leave pairing, the last-seen heartbeat and
+     * the device rows all failed that way while every caller believed it had
+     * written. OkHttp is already a declared dependency (FCM), and it speaks
+     * PATCH natively — so the override dance is gone rather than worked
+     * around. Timeouts match [open]: the overall deadline is [onIo]'s.
+     */
     private suspend fun patch(
         url: String,
         headers: Map<String, String>,
         body: String,
     ): HttpResponse = onIo {
-        val conn = open(url)
-        // HttpURLConnection has no PATCH; tunnel it the PostgREST way.
-        conn.requestMethod = "POST"
-        conn.setRequestProperty("X-HTTP-Method-Override", "PATCH")
-        headers.forEach { (k, v) -> conn.setRequestProperty(k, v) }
-        writeBody(conn, body)
-        readResponse(conn)
+        val request = Request.Builder()
+            .url(url)
+            .patch(body.toRequestBody(JSON_MEDIA_TYPE))
+            .apply { headers.forEach { (k, v) -> header(k, v) } }
+            .build()
+        patchClient.newCall(request).execute().use { response ->
+            HttpResponse(response.code, response.body?.string().orEmpty())
+        }
     }
 
     /**
@@ -485,6 +516,7 @@ class SupabaseClient(private val context: Context) {
         const val TAG = "SupabaseClient"
         const val CONNECT_TIMEOUT_MS = 10_000
         const val READ_TIMEOUT_MS = 15_000
+        val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
 
         /**
          * Ceiling for a whole request. Generous enough for the slowest link we
