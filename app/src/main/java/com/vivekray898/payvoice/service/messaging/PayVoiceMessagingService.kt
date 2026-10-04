@@ -13,6 +13,20 @@ import kotlinx.coroutines.launch
 import java.lang.reflect.Method
 
 /**
+ * Body of the employee's wake-up notification.
+ *
+ * The owner leg posts the real announcement (PaymentPipeline). The employee leg
+ * used to post a fixed "Payment announcement incoming" regardless of the user's
+ * lock-screen choice, so an employee who had opted in still saw no amount while
+ * the owner's phone showed one — and opting OUT only downgraded visibility
+ * while the amount stayed in the notification body. Mirror the owner's wording,
+ * and on opt-out drop the details from the text itself rather than relying on
+ * VISIBILITY_PRIVATE alone.
+ */
+internal fun wakeUpNotificationText(announcement: String, showDetails: Boolean): String =
+    if (showDetails) announcement else "Payment announcement incoming"
+
+/**
  * Employee-side FCM receiver (spec §10, §11, §31). FCM is the only remote
  * trigger — no polling. onMessageReceived does ONLY:
  *
@@ -63,6 +77,9 @@ class PayVoiceMessagingService : FirebaseMessagingService() {
         // than the end of the try block.
         val finishPendingResult = acquirePendingResult()
 
+        // Set only once the announcement actually happened; every other terminal
+        // path must clear the silent receipt posted above (see below).
+        var announced = false
         val work = container.applicationScope.launch {
             runCatching {
                 // 1. AUTHORIZE before ANY announcement work (spec §5): this
@@ -121,9 +138,16 @@ class PayVoiceMessagingService : FirebaseMessagingService() {
                 stageLog(eid, stage = "tts_requested", extra = "validate→ttsRequest=${ttsRequestedAt - receivedAt}ms")
                 // Wake-up notification (HIGH + sound): forces Android out of Doze /
                 // screen-lock so the TTS engine can run. Cancelled shortly after.
+                // The wording matches the owner's notification (PaymentPipeline):
+                // the real announcement when the user allows details on the lock
+                // screen, otherwise generic — so opting out keeps the amount and
+                // the sender out of the notification body entirely, not just off
+                // the lock screen.
+                val showDetails = container.settings.settings.value.showPaymentOnLockScreen
                 com.vivekray898.payvoice.service.tts.PaymentAnnouncementNotifier.post(
                     applicationContext,
-                    "Payment announcement incoming",
+                    wakeUpNotificationText(text, showDetails),
+                    showDetails = showDetails,
                 )
                 container.speaker.speakWhenReady(text)
 
@@ -154,6 +178,7 @@ class PayVoiceMessagingService : FirebaseMessagingService() {
                 // The speaker is async (speakWhenReady returns immediately). Cancel on a
                 // short delay — long enough for FCM to register the notification, short
                 // enough that the user never sees it linger.
+                announced = true
                 android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(
                     { PaymentNotification.cancel(applicationContext) },
                     4_000L,
@@ -170,6 +195,15 @@ class PayVoiceMessagingService : FirebaseMessagingService() {
         }
 
         work.invokeOnCompletion {
+            // The silent FCM receipt must never outlive the work that justified
+            // it. A DENIED or DUPLICATE event is deliberately NOT announced, and
+            // leaving "Payment announced" in the shade says otherwise; the same
+            // goes for a thrown or cancelled coroutine. Success keeps it briefly
+            // (its own 4 s delay). Doing it here means a new early return cannot
+            // forget.
+            if (!announced) {
+                runCatching { PaymentNotification.cancel(applicationContext) }
+            }
             // Reached on success, on failure, and on scope cancellation. If the
             // platform already tore the service down past its own deadline,
             // finish() throws IllegalStateException — swallowing that keeps a
