@@ -7,6 +7,7 @@ import com.vivekray898.payvoice.core.database.CapturedNotificationEntity
 import com.vivekray898.payvoice.core.database.DiagnosticEntity
 import com.vivekray898.payvoice.core.database.ProcessedEventEntity
 import com.vivekray898.payvoice.core.database.PayVoiceDatabase
+import com.vivekray898.payvoice.core.dedup.CrossChannelMerger
 import com.vivekray898.payvoice.core.model.CaptureEvent
 import com.vivekray898.payvoice.core.model.CaptureSource
 import com.vivekray898.payvoice.core.model.Confidence
@@ -21,6 +22,7 @@ import com.vivekray898.payvoice.core.remote.DeviceRole
 import com.vivekray898.payvoice.core.remote.RemoteEventSender
 import com.vivekray898.payvoice.core.remote.RemoteEventType
 import com.vivekray898.payvoice.core.settings.SettingsRepository
+import com.vivekray898.payvoice.core.trace.PaymentTrace
 import com.vivekray898.payvoice.service.tts.AnnouncementSpeaker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -60,12 +62,14 @@ class PaymentPipeline(
 
     /** NotificationListenerService entry (GPay is the only notification source). */
     fun handleNotification(
+        correlationId: String,
         packageName: String,
         title: String?,
         text: String?,
         bigText: String?,
         subText: String?,
         notificationId: Int,
+        notificationTag: String?,
         postedAtMs: Long,
         extrasSummary: String?,
     ) {
@@ -85,8 +89,10 @@ class PaymentPipeline(
                         bigText = bigText,
                         subText = subText,
                         notificationId = notificationId,
+                        notificationTag = notificationTag,
                         postedAtMs = postedAtMs,
                     ),
+                    correlationId = correlationId,
                     extrasSummary = extrasSummary,
                 )
             }.onFailure { diag("pipeline", "error: ${it.javaClass.simpleName}") }
@@ -94,9 +100,16 @@ class PaymentPipeline(
     }
 
     /** Capture entry (GPay notifications). Suspending: callers wrap in launch. */
-    suspend fun handleCapture(event: CaptureEvent, extrasSummary: String? = null) {
-        runCatching { processCapture(event, extrasSummary) }
-            .onFailure { diag("pipeline", "error: ${it.javaClass.simpleName}") }
+    suspend fun handleCapture(
+        event: CaptureEvent,
+        correlationId: String,
+        extrasSummary: String? = null,
+    ) {
+        runCatching { processCapture(event, correlationId, extrasSummary) }
+            .onFailure {
+                diag("pipeline", "error: ${it.javaClass.simpleName}")
+                PaymentTrace.dropped(correlationId, "pipeline-exception", detail = it.javaClass.simpleName)
+            }
     }
 
     /** Capture-only path for unknown packages (diagnostics capture mode). */
@@ -133,7 +146,11 @@ class PaymentPipeline(
 
     // ---- Core unified path ----
 
-    private suspend fun processCapture(event: CaptureEvent, extrasSummary: String?) {
+    private suspend fun processCapture(
+        event: CaptureEvent,
+        correlationId: String,
+        extrasSummary: String?,
+    ) {
         // 1. Parse. GPay sometimes carries the payment line in
         // EXTRA_BIG_TEXT or EXTRA_SUB_TEXT instead of EXTRA_TEXT (varies by
         // app version) — try each candidate body, best first, so the payment
@@ -166,17 +183,26 @@ class PaymentPipeline(
         }
 
         if (parsed == null) {
+            val currencyLike = MONEY_MARKER.containsMatchIn(event.body) ||
+                MONEY_MARKER.containsMatchIn(event.bigText.orEmpty()) ||
+                MONEY_MARKER.containsMatchIn(event.subText.orEmpty())
+            PaymentTrace.parsed(
+                correlationId,
+                detail = "parser=GooglePayParser currencyMarker=${if (currencyLike) 1 else 0}",
+            )
             // Reliability visibility: a whitelisted capture that CONTAINS a
             // currency marker but parsed to nothing is the signature of an
             // unknown GPay/bank wording — surface it in Diagnostics (tag only;
             // the raw content stays in the local capture store, never logs).
-            val currencyLike = MONEY_MARKER.containsMatchIn(event.body) ||
-                MONEY_MARKER.containsMatchIn(event.bigText.orEmpty()) ||
-                MONEY_MARKER.containsMatchIn(event.subText.orEmpty())
             diag(
                 "parser",
                 (if (currencyLike) "MISSED-PAYMENT? " else "no payment in capture from ") +
                     "${event.originId} (${event.captureSource})",
+            )
+            PaymentTrace.dropped(
+                correlationId,
+                reason = if (currencyLike) "parse-null-money-marker" else "parse-null",
+                detail = "extrasSeen=${extrasSeenFor(event)}",
             )
             return
         }
@@ -184,23 +210,32 @@ class PaymentPipeline(
         // 3. Confidence/direction gates (spec: only RECEIVED announces).
         val s = settings.settings.value
         val minRank = if (s.announceHighConfidenceOnly) rank(Confidence.HIGH) else rank(Confidence.MEDIUM)
+        PaymentTrace.parsed(
+            correlationId,
+            detail = "parser=GooglePayParser direction=${parsed.direction} " +
+                "confidence=${parsed.confidence} ref=${if (parsed.referenceId != null) 1 else 0}",
+        )
         if (parsed.direction != Direction.RECEIVED) {
             diag("gate", "direction=${parsed.direction} suppressed (${parsed.source.name})")
+            PaymentTrace.dropped(correlationId, "gate-direction", detail = parsed.direction.name)
             return
         }
         if (rank(parsed.confidence) < minRank) {
             diag("gate", "confidence=${parsed.confidence} below threshold (${parsed.source.name})")
+            PaymentTrace.dropped(correlationId, "gate-confidence", detail = parsed.confidence.name)
             return
         }
         val amount = parsed.amountMinor
         if (amount == null || amount <= 0) {
             diag("gate", "no usable amount (${parsed.source.name})")
+            PaymentTrace.dropped(correlationId, "gate-amount")
             return
         }
 
-        // 4. Cross-channel deduplication (Phase 12). UTR/reference first —
-        // the same UTR in a bank SMS and a bank notification is ONE payment.
-        // Without a reference: amount+direction+sender+5-minute bucket.
+        // 4. Deduplication. The key is built from stable source identifiers
+        // only (REF > SRC > TXT) — never amount + a time bucket, which used to
+        // collapse two genuine same-amount payments into one. Cross-channel
+        // reconciliation for reference-less captures is step 4b below.
         val fingerprint = Fingerprinter.captureFingerprint(
             packageId = event.originId,
             amountMinor = amount,
@@ -209,7 +244,17 @@ class PaymentPipeline(
             text = event.body,
             referenceId = parsed.referenceId,
             senderName = parsed.senderName,
+            captureSource = event.captureSource.name,
+            notificationId = event.notificationId,
+            notificationTag = event.notificationTag,
         )
+        // 4b. Cross-channel merge, BEFORE the dedupe row is claimed. A merged
+        // event must not occupy a fingerprint slot: it is a second *signal* for
+        // a payment that already has one, and a row here would suppress the
+        // next real payment of the same amount — the exact loss this change
+        // exists to remove.
+        if (crossChannelMergeIsNew(event, amount, parsed, fingerprint, correlationId)) return
+
         val dedupInsert = db.processedEventDao().insert(
             ProcessedEventEntity(
                 fingerprint = fingerprint,
@@ -217,11 +262,29 @@ class PaymentPipeline(
                 sourcePackage = event.originId,
                 amountMinor = amount,
                 announcedAtMs = System.currentTimeMillis(),
+                captureSource = event.captureSource.name,
+                postedAtMs = event.postedAtMs,
+                hasReference = !parsed.referenceId.isNullOrBlank(),
             )
         )
         if (dedupInsert == -1L) {
             _lastDedupWasDuplicate.value = true
             diag("dedup", "duplicate suppressed: ${fingerprint.take(16)}")
+            // The reason token distinguishes the two cases this store can now
+            // still see: `ref` (a true re-delivery — same UTR) from `src` (a
+            // true re-delivery of the SAME system event: same sbn id, tag and
+            // post time). The `amount-bucket` case is gone by construction —
+            // a real payment can no longer collide on amount and clock.
+            PaymentTrace.deduped(
+                correlationId,
+                reason = if (parsed.referenceId.isNullOrBlank()) {
+                    "dedup-source-replay"
+                } else {
+                    "dedup-reference-replay"
+                },
+                detail = "ref=${if (parsed.referenceId != null) 1 else 0} " +
+                    "srcId=${if (Fingerprinter.hasStableSourceIdentity(event.notificationId, event.notificationTag)) 1 else 0}",
+            )
             return
         }
         _lastDedupWasDuplicate.value = false
@@ -271,12 +334,17 @@ class PaymentPipeline(
                 5_000L,
             )
         }
-        speaker.speakWhenReady(announcement)
+        PaymentTrace.queued(
+            correlationId,
+            detail = "engineWarm=${speaker.isEngineReady()} wakeNotification=$posted",
+        )
+        speaker.speakWhenReady(announcement, correlationId)
 
         // 5b. Remote fan-out (spec §8): strictly AFTER the local TTS request,
         // fire-and-forget — remote failure can never affect the local path.
         if (roleProvider() == DeviceRole.OWNER && remoteEnabledProvider() && remoteSender != null) {
             remoteSender.sendAsync(
+                traceCorrelationId = correlationId,
                 eventId = fingerprint,
                 type = RemoteEventType.PAYMENT_RECEIVED,
                 amountMinor = amount,
@@ -305,6 +373,7 @@ class PaymentPipeline(
         // never in the capture→speak critical path.
         db.announcementDao().insert(entity)
         _lastAnnouncement.value = entity
+        PaymentTrace.stored(correlationId, detail = "captureSource=${event.captureSource.name}")
         diag(
             "pipeline",
             "source=${event.captureSource} sender=${event.originId.take(12)} " +
@@ -331,6 +400,95 @@ class PaymentPipeline(
     private fun parserNameFor(event: CaptureEvent): String = "GooglePayParser"
 
     /**
+     * Applies [CrossChannelMerger]'s four rules to this capture and, when they
+     * all hold, records the second signal without announcing it again.
+     *
+     * Returns true when the caller must stop: the payment was already spoken on
+     * another channel. Returns false — announce — in every other case,
+     * including every "not confident" case. A duplicate announcement is a
+     * nuisance; a missed payment is the bug.
+     *
+     * The store query already excludes the incoming channel, so rule 2 is
+     * enforced in SQL as well as in [CrossChannelMerger]; the rule stays
+     * expressed there because that is where it is unit-tested.
+     */
+    private suspend fun crossChannelMergeIsNew(
+        event: CaptureEvent,
+        amountMinor: Long,
+        parsed: ParsedNotification,
+        fingerprint: String,
+        correlationId: String,
+    ): Boolean {
+        val window = CrossChannelMerger.CROSS_CHANNEL_MERGE_WINDOW_MS
+        val candidate = db.processedEventDao().recentCrossChannelCandidate(
+            amountMinor = amountMinor,
+            excludeCaptureSource = event.captureSource.name,
+            fromMs = event.postedAtMs - window,
+            toMs = event.postedAtMs + window,
+        )
+        val decision = CrossChannelMerger.decide(
+            incoming = CrossChannelMerger.Incoming(
+                amountMinor = amountMinor,
+                postedAtMs = event.postedAtMs,
+                captureSource = event.captureSource.name,
+                hasReference = !parsed.referenceId.isNullOrBlank(),
+            ),
+            earlier = candidate?.let {
+                CrossChannelMerger.Earlier(
+                    eventId = it.eventId,
+                    amountMinor = it.amountMinor,
+                    postedAtMs = it.postedAtMs,
+                    captureSource = it.captureSource,
+                    hasReference = it.hasReference,
+                )
+            },
+        )
+        PaymentTrace.merged(
+            correlationId,
+            reason = CrossChannelMerger.reasonToken(decision),
+            detail = "channel=${event.captureSource.name} " +
+                "earlierChannel=${candidate?.captureSource ?: "none"}",
+        )
+        if (decision !is CrossChannelMerger.Decision.Merge) return false
+
+        // Keep the second signal in history, explicitly marked, so the record
+        // shows the payment was seen twice rather than silently disappearing.
+        db.announcementDao().insert(
+            AnnouncementEntity(
+                eventId = fingerprint,
+                fingerprint = fingerprint,
+                sourceName = parsed.sourceLabel ?: parsed.source.displayName,
+                amountMinor = amountMinor,
+                currency = parsed.currency,
+                senderName = parsed.senderName,
+                announcementText = parsed.source.displayName,
+                detectedAtMs = event.postedAtMs,
+                announcedAtMs = System.currentTimeMillis(),
+                captureSource = event.captureSource.name,
+                parserName = parserNameFor(event),
+                mergedWithEventId = decision.earlier.eventId,
+            )
+        )
+        diag(
+            "merge",
+            "cross-channel duplicate of ${decision.earlier.eventId.take(16)} " +
+                "(${decision.earlier.captureSource} -> ${event.captureSource.name}) not re-announced",
+        )
+        return true
+    }
+
+    /** Which of the four read extras actually carried content (shape only). */
+    private fun extrasSeenFor(event: CaptureEvent): String {
+        val seen = buildList {
+            if (!event.title.isNullOrBlank()) add("title")
+            if (event.body.isNotBlank()) add("text")
+            if (!event.bigText.isNullOrBlank()) add("bigText")
+            if (!event.subText.isNullOrBlank()) add("subText")
+        }
+        return seen.joinToString("+").ifEmpty { "none" }
+    }
+
+    /**
      * Owner-triggered test announcement (spec §27). Never touches dedup,
      * history, or payment data.
      */
@@ -351,7 +509,8 @@ class PaymentPipeline(
         scope.launch {
             runCatching {
                 handleCapture(
-                    CaptureEvent(
+                    correlationId = PaymentTrace.newCorrelationId(),
+                    event = CaptureEvent(
                         captureSource = CaptureSource.GPAY_NOTIFICATION,
                         originId = source.packageId,
                         title = title,

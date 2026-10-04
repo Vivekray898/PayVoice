@@ -9,6 +9,7 @@ import com.vivekray898.payvoice.core.remote.RemoteAuthorization
 import com.vivekray898.payvoice.core.remote.RemoteEventValidator
 import com.vivekray898.payvoice.core.remote.RemoteEventType
 import com.vivekray898.payvoice.core.remote.RemotePaymentEvent
+import com.vivekray898.payvoice.core.trace.PaymentTrace
 import kotlinx.coroutines.launch
 import java.lang.reflect.Method
 
@@ -52,11 +53,26 @@ class PayVoiceMessagingService : FirebaseMessagingService() {
         val event: RemotePaymentEvent =
             RemoteEventValidator.validate(message.data.mapValues { it.value.toString() })
                 ?: run {
+                    // No valid event ⇒ no eventId to correlate ⇒ mint one, so the
+                    // drop is still visible in the table instead of vanishing.
+                    val cid = PaymentTrace.newCorrelationId()
+                    PaymentTrace.fcmReceived(cid, detail = "validate=failed")
+                    PaymentTrace.dropped(cid, "fcm-invalid-payload")
                     stageLog(eid = null, stage = "dropped", reason = "invalid payload")
                     return
                 }
         val eid = "event=${event.eventId.take(12)}…"
         stageLog(eid, stage = "fcm_received", extra = "latency=${System.currentTimeMillis() - receivedAt}ms")
+        // The remote leg is traced under the eventId, not the owner's `c…` id:
+        // the eventId IS the pipeline fingerprint, it is stable across FCM
+        // retries and app restarts, and the owner's UPLOADED hop records the
+        // same prefix, so the two halves of one payment join without changing
+        // the FCM payload or the backend schema.
+        val cid = event.eventId
+        PaymentTrace.fcmReceived(
+            cid,
+            detail = "type=${event.type.name} appCold=${receivedAt - appStartMs}",
+        )
 
         // FCM requires high-priority messages to produce a user-visible notification,
         // or the channel is downgraded to normal priority (delayed delivery in Doze).
@@ -87,10 +103,10 @@ class PayVoiceMessagingService : FirebaseMessagingService() {
                 //    belong to the paired owner. Fail-closed.
                 val verdict = container.employees.authorizeRemoteEvent(event.ownerUid)
                 if (verdict !is RemoteAuthorization.Verdict.Allow) {
-                    stageLog(
-                        eid, stage = "denied",
-                        reason = (verdict as? RemoteAuthorization.Verdict.Deny)?.reason ?: "unknown",
-                    )
+                    val denyReason =
+                        (verdict as? RemoteAuthorization.Verdict.Deny)?.reason ?: "unknown"
+                    stageLog(eid, stage = "denied", reason = denyReason)
+                    PaymentTrace.dropped(cid, "fcm-authorize-denied", detail = denyReason)
                     com.vivekray898.payvoice.core.analytics.PayVoiceAnalytics
                         .remoteDeliveryFailed("denied")
                     return@launch
@@ -122,6 +138,7 @@ class PayVoiceMessagingService : FirebaseMessagingService() {
                 )
                 if (claimed == -1L) {
                     stageLog(eid, stage = "dedup", reason = "duplicate — not announced")
+                    PaymentTrace.deduped(cid, "dedup-reference-replay", detail = "remote=1")
                     com.vivekray898.payvoice.core.analytics.PayVoiceAnalytics
                         .remoteDeliveryFailed("dedup")
                     return@launch
@@ -149,7 +166,12 @@ class PayVoiceMessagingService : FirebaseMessagingService() {
                     wakeUpNotificationText(text, showDetails),
                     showDetails = showDetails,
                 )
-                container.speaker.speakWhenReady(text)
+                PaymentTrace.queued(
+                    cid,
+                    detail = "engineWarm=${container.speaker.isEngineReady()} " +
+                        "fcmToTtsRequestMs=${ttsRequestedAt - receivedAt}",
+                )
+                container.speaker.speakWhenReady(text, cid)
 
                 // 5. History AFTER the TTS request (persistence off the
                 //    announcement path, mirroring the local pipeline).
@@ -171,6 +193,7 @@ class PayVoiceMessagingService : FirebaseMessagingService() {
                     eid, stage = "tts_started",
                     extra = "fcm→ttsRequest=${ttsRequestedAt - receivedAt}ms",
                 )
+                PaymentTrace.stored(cid, detail = "captureSource=REMOTE")
                 // Analytics (docs/ANALYTICS.md): remote delivery success,
                 // latency = FCM receipt → TTS request. Structural only.
                 com.vivekray898.payvoice.core.analytics.PayVoiceAnalytics
@@ -189,6 +212,7 @@ class PayVoiceMessagingService : FirebaseMessagingService() {
                 )
             }.onFailure {
                 stageLog(eid, stage = "failed", reason = it.javaClass.simpleName)
+                PaymentTrace.dropped(cid, "fcm-exception", detail = it.javaClass.simpleName)
                 com.vivekray898.payvoice.core.analytics.PayVoiceAnalytics
                     .remoteDeliveryFailed("failed")
             }
@@ -234,7 +258,16 @@ class PayVoiceMessagingService : FirebaseMessagingService() {
             stageLog(eid = null, stage = "goasync_unavailable")
             return {}
         }
-        val pending = runCatching { goAsync.invoke(this) }.getOrNull() ?: return {}
+        val pending = runCatching { goAsync.invoke(this) }.getOrNull() ?: run {
+            // No PendingResult ⇒ Android may kill the process as soon as this
+            // method returns, losing the announcement mid-flight. Worth a trace
+            // row even though the cid is not known at this point, so the caller
+            // pairs it with the FCM_RECEIVED row by timestamp.
+            com.vivekray898.payvoice.core.util.DebugLog.w(
+                TAG, "goAsync() unavailable — process may be killed mid-announcement"
+            )
+            return {}
+        }
         return {
             runCatching { pending.javaClass.getMethod("finish").invoke(pending) }
         }
@@ -267,7 +300,7 @@ class PayVoiceMessagingService : FirebaseMessagingService() {
             extra?.let { add(it) }
         }.joinToString(" ")
         val eventPart = eid?.let { " $it" }.orEmpty()
-        android.util.Log.d(
+        com.vivekray898.payvoice.core.util.DebugLog.d(
             TAG,
             "RemoteDelivery$eventPart stage=$stage${if (detail.isEmpty()) "" else " $detail"}",
         )
@@ -275,5 +308,12 @@ class PayVoiceMessagingService : FirebaseMessagingService() {
 
     companion object {
         private const val TAG = "PayVoiceFCM"
+
+        /**
+         * Process start time, captured once. Used only to tag the `FCM_RECEIVED`
+         * hop with whether the FCM message woke a cold process, which is the
+         * difference between "TTS engine was cold" and "TTS engine was dropped".
+         */
+        private val appStartMs: Long = System.currentTimeMillis()
     }
 }

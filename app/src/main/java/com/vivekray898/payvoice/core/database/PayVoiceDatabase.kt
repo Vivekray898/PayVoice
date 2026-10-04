@@ -11,8 +11,9 @@ import androidx.room.RoomDatabase
         AnnouncementEntity::class,
         CapturedNotificationEntity::class,
         DiagnosticEntity::class,
+        TraceEventEntity::class,
     ],
-    version = 4,
+    version = 6,
     exportSchema = true,
 )
 abstract class PayVoiceDatabase : RoomDatabase() {
@@ -20,6 +21,7 @@ abstract class PayVoiceDatabase : RoomDatabase() {
     abstract fun announcementDao(): AnnouncementDao
     abstract fun capturedNotificationDao(): CapturedNotificationDao
     abstract fun diagnosticDao(): DiagnosticDao
+    abstract fun traceEventDao(): TraceEventDao
 
     companion object {
         /**
@@ -45,5 +47,6 @@ class RetentionCleaner(private val db: PayVoiceDatabase) {
         db.announcementDao().deleteOlderThan(nowMs - historyDays * 86_400_000L)
         db.capturedNotificationDao().trim()
         db.diagnosticDao().trim()
+        db.traceEventDao().trim()
     }
 }

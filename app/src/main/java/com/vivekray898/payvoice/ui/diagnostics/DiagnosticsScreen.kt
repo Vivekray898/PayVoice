@@ -24,6 +24,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
@@ -33,6 +34,7 @@ import com.vivekray898.payvoice.core.remote.DeviceRole
 import com.vivekray898.payvoice.core.remote.PayVoiceAuth
 import com.vivekray898.payvoice.core.remote.RemoteEventSender
 import com.vivekray898.payvoice.ui.MainViewModel
+import com.vivekray898.payvoice.ui.TraceExportState
 import com.vivekray898.payvoice.ui.components.PvCard
 import com.vivekray898.payvoice.ui.components.PvEmptyHint
 import com.vivekray898.payvoice.ui.components.PvPrimaryButton
@@ -203,6 +205,10 @@ fun DiagnosticsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
                         )
                     }
                 }
+
+                item(key = "trace") {
+                    TraceCard(viewModel)
+                }
             }
 
             item(key = "captures") {
@@ -269,6 +275,133 @@ private fun DiagCard(
 ) {
     PvCard(modifier = modifier, contentPadding = PaddingValues(Spacing.lg)) {
         content()
+    }
+}
+
+/**
+ * Debug-only pipeline trace (Step 2 of the reliability work).
+ *
+ * One line per hop, newest first: the hop name, the stable reason token when
+ * there is one, and the offset from the previous row of the same correlation
+ * id so a stall is visible without a stopwatch. Nothing here is payment
+ * content — reasons are tokens and capture rows carry only a text *shape*.
+ */
+@Composable
+private fun TraceCard(viewModel: MainViewModel) {
+    val hops by viewModel.traceEvents.collectAsStateWithLifecycle()
+    val export by viewModel.traceExport.collectAsStateWithLifecycle()
+    val lastByCid = remember(hops) {
+        hops.associate { it.correlationId to it.atMs }
+    }
+
+    PvSectionHeader(text = "Pipeline trace (debug)")
+    DiagCard {
+        PvSupportingText(
+            text = "Every stage a payment reaches, newest first. " +
+                "A DROPPED line names the hop that lost it.",
+        )
+        if (!viewModel.traceEnabled) {
+            Text(
+                "Tracing is off for this build.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+        if (hops.isEmpty()) {
+            PvEmptyHint(
+                text = "No hops recorded yet — they appear as payments arrive.",
+                icon = Icons.Filled.Notifications,
+            )
+        } else {
+            hops.take(40).forEach { hop ->
+                TraceRow(
+                    time = timeAgo(hop.atMs),
+                    outcome = hop.outcome,
+                    reason = hop.reason,
+                    detail = hop.detail ?: hop.maskedText,
+                    sincePrevious = lastByCid[hop.correlationId]
+                        ?.takeIf { it != hop.atMs }
+                        ?.let { hop.atMs - it },
+                )
+                Spacer(Modifier.height(Spacing.sm))
+            }
+        }
+        PvSecondaryButton(text = "Export JSONL", onClick = viewModel::exportTrace)
+        PvSecondaryButton(text = "Clear trace", onClick = viewModel::clearTrace)
+        when (val state = export) {
+            is TraceExportState.Written -> Text(
+                "Wrote ${state.hops} hops to ${state.path}",
+                style = MaterialTheme.typography.bodySmall,
+                fontFamily = FontFamily.Monospace,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            TraceExportState.Failed -> Text(
+                "Export failed — nothing was written.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+
+            TraceExportState.Running -> Text(
+                "Exporting…",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            TraceExportState.Idle -> Unit
+        }
+    }
+}
+
+/** Tone for a hop: green when it advanced, red when it ended the payment. */
+private fun traceTone(outcome: String): StatusTone = when (outcome) {
+    "DROPPED" -> StatusTone.Error
+    "DEDUPED" -> StatusTone.Warning
+    "SPOKEN", "STORED" -> StatusTone.Success
+    else -> StatusTone.Neutral
+}
+
+@Composable
+private fun TraceRow(
+    time: String,
+    outcome: String,
+    reason: String?,
+    detail: String?,
+    sincePrevious: Long?,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+    ) {
+        StatusDot(traceTone(outcome))
+        Column {
+            Text(
+                buildString {
+                    append(time)
+                    append(" · ")
+                    append(outcome)
+                    if (reason != null) {
+                        append('(')
+                        append(reason)
+                        append(')')
+                    }
+                    if (sincePrevious != null) {
+                        append(" · +")
+                        append(sincePrevious)
+                        append("ms")
+                    }
+                },
+                style = MaterialTheme.typography.labelMedium,
+            )
+            if (!detail.isNullOrBlank()) {
+                Text(
+                    detail,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 }
 

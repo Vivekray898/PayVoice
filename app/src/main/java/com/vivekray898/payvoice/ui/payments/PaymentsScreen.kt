@@ -56,6 +56,8 @@ data class PaymentRowUi(
     val source: String?,
     val sender: String?,
     val timeText: String,
+    /** Non-null when this row merged into an earlier announcement. */
+    val mergedNote: String? = null,
 )
 
 /**
@@ -207,6 +209,7 @@ fun PaymentsScreen(
                             source = row.source,
                             sender = row.sender,
                             timeText = row.timeText,
+                            mergedNote = row.mergedNote,
                         )
                     }
                     if (state.hasMore && !readOnly) {
@@ -280,10 +283,14 @@ internal fun buildState(
                 source = e.sourceName,
                 sender = e.senderName,
                 timeText = timeAgo(e.announcedAtMs),
+                mergedNote = e.mergedWithEventId?.let { MERGED_NOTE },
             )
         },
-        totalCount = filtered.size,
-        totalMinor = filtered.sumOf { it.amountMinor },
+        // A merged row is a second *signal* for a payment already counted, not
+        // a second payment: it stays visible in the list (so the capture is on
+        // record) but must not inflate the count or the total.
+        totalCount = filtered.count { it.mergedWithEventId == null },
+        totalMinor = filtered.filter { it.mergedWithEventId == null }.sumOf { it.amountMinor },
         hasMore = filtered.size > windowed.size,
     )
 }
@@ -296,3 +303,6 @@ private fun startOfDayMs(): Long {
     cal.set(java.util.Calendar.MILLISECOND, 0)
     return cal.timeInMillis
 }
+
+/** Shown in place of the sender for a row that merged into an earlier alert. */
+internal const val MERGED_NOTE = "merged with earlier alert"

@@ -19,8 +19,10 @@ import com.vivekray898.payvoice.core.health.SettingsLauncher
 import com.vivekray898.payvoice.core.database.AnnouncementEntity
 import com.vivekray898.payvoice.core.database.CapturedNotificationEntity
 import com.vivekray898.payvoice.core.database.DiagnosticEntity
+import com.vivekray898.payvoice.core.database.TraceEventEntity
 import com.vivekray898.payvoice.core.model.PaymentSource
 import com.vivekray898.payvoice.core.settings.ParentSettings
+import com.vivekray898.payvoice.core.trace.TraceExporter
 import com.vivekray898.payvoice.core.remote.DeviceRole
 import com.vivekray898.payvoice.core.remote.EmployeeDevice
 import com.vivekray898.payvoice.core.remote.EmployeeRepository
@@ -70,6 +72,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val diagnostics: StateFlow<List<DiagnosticEntity>> =
         container.database.diagnosticDao().recent(200)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    // ---- Pipeline trace (debug builds only; the table is empty in release) ----
+
+    /**
+     * Recent hop rows, newest first. Each row is one stage one payment reached,
+     * so "the last 40 rows" reads as a live end-to-end narration of the last
+     * few real payments.
+     */
+    val traceEvents: StateFlow<List<TraceEventEntity>> =
+        container.database.traceEventDao().recent(120)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** False in release builds: [PaymentTrace] is a no-op sink there. */
+    val traceEnabled: Boolean get() = container.traceEnabled
+
+    private val _traceExport = MutableStateFlow<TraceExportState>(TraceExportState.Idle)
+    val traceExport: StateFlow<TraceExportState> = _traceExport
 
     val fcm: StateFlow<MessagingRepository.FcmStatus> = container.messaging.status
 
@@ -611,6 +630,31 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { container.database.capturedNotificationDao().clear() }
     }
 
+    // ---- Trace actions (debug builds only) ----
+
+    /**
+     * Writes the JSONL export and reports where it landed. Null result means
+     * the write failed — the UI says so rather than implying success.
+     */
+    fun exportTrace() {
+        if (!isDebugBuild) return
+        viewModelScope.launch {
+            _traceExport.value = TraceExportState.Running
+            val result = TraceExporter.export(container.database, getApplication())
+            _traceExport.value = result
+                ?.let { TraceExportState.Written(it.path, it.hops) }
+                ?: TraceExportState.Failed
+        }
+    }
+
+    fun clearTrace() {
+        if (!isDebugBuild) return
+        viewModelScope.launch {
+            container.database.traceEventDao().clear()
+            _traceExport.value = TraceExportState.Idle
+        }
+    }
+
     // ---- Test actions ----
 
     /** Speak "PayVoice test announcement." — works without Firebase. */
@@ -644,6 +688,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             )
         }
     }
+}
+
+/** Outcome of the debug-only JSONL trace export. */
+sealed interface TraceExportState {
+    data object Idle : TraceExportState
+    data object Running : TraceExportState
+    /** [path] is absolute; [hops] is how many rows the file holds. */
+    data class Written(val path: String, val hops: Int) : TraceExportState
+    data object Failed : TraceExportState
 }
 
 /** Null-safe access for diagnostics logging from the VM. */

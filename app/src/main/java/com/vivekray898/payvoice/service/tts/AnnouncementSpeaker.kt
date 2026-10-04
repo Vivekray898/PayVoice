@@ -12,6 +12,7 @@ import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import com.vivekray898.payvoice.core.announce.AnnouncementLanguage
 import com.vivekray898.payvoice.core.settings.SettingsRepository
+import com.vivekray898.payvoice.core.trace.PaymentTrace
 import com.vivekray898.payvoice.core.util.DebugLog
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -59,12 +60,26 @@ class AnnouncementSpeaker(
     /** True while a payment is parked waiting for the engine to become ready. */
     val hasPending: Boolean get() = pendingSlot.get() != null
 
+    /**
+     * Whether the engine is warm. Read by the pipeline when it records the
+     * `QUEUED` hop so a trace row says *why* an utterance was not immediate.
+     */
+    fun isEngineReady(): Boolean = engineReady
+
     private val speakMutex = Mutex()
     private val initMutex = Mutex()
     private val mainHandler = Handler(Looper.getMainLooper())
 
     /** Latest payment announcement waiting for engine readiness (spec: latest wins). */
-    private val pendingSlot = AtomicReference<String?>(null)
+    private val pendingSlot = AtomicReference<Pending?>(null)
+
+    /**
+     * A parked announcement plus the correlation id of the payment it belongs
+     * to. The id rides along so an utterance lost *while parked* (overwritten by
+     * the next payment, or posted to the fallback notifier when init gives up)
+     * is still attributable to one payment.
+     */
+    private data class Pending(val text: String, val correlationId: String?)
 
     private var engine: TextToSpeech? = null
     @Volatile
@@ -75,6 +90,26 @@ class AnnouncementSpeaker(
     private val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
 
     private var focusRequest: AudioFocusRequest? = null
+
+    /**
+     * Speaks [text] and, when [correlationId] is supplied, records the terminal
+     * `SPOKEN` hop or the terminal `DROPPED(tts-*)` reason. The correlation id
+     * is optional so the owner-triggered test announcement (which has no
+     * payment behind it) traces nothing.
+     */
+    suspend fun speakTraced(text: String, correlationId: String?): Boolean {
+        val ok = speak(text)
+        if (correlationId != null) {
+            if (ok) {
+                PaymentTrace.spoken(correlationId, detail = "engine=warm")
+            } else {
+                // The fallback notifier already fired inside speak(); the text is
+                // on screen but was NOT spoken.
+                PaymentTrace.dropped(correlationId, "tts-spoke-false-after-retry")
+            }
+        }
+        return ok
+    }
 
     /** Suspends until the utterance completes (or fails/times out). True on success. */
     suspend fun speak(text: String): Boolean = speakMutex.withLock {
@@ -128,7 +163,7 @@ class AnnouncementSpeaker(
                     true
                 } ?: false
                 if (!startFired) {
-                    android.util.Log.e(TAG, "TTS onStart never fired; engine silent — treating as failure")
+                    DebugLog.w(TAG, "TTS onStart never fired; engine silent — treating as failure")
                     // Fall through to the ok computation, which will time out; the retry
                     // path in Layer 2 will then fire.
                 }
@@ -136,14 +171,14 @@ class AnnouncementSpeaker(
             val ok = if (!started) false
             else withTimeoutOrNull(WAKE_LOCK_CAP_MS - 2_000) { done.await() } ?: false
             if (!ok) {
-                android.util.Log.w(TAG, "speak() failed; attempting one engine restart + retry")
+                DebugLog.w(TAG, "speak() failed; attempting one engine restart + retry")
                 runCatching { engine?.shutdown() }
                 engine = null
                 engineReady = false
                 initAttempts = 0
                 val restarted = ensureEngine()
                 if (restarted == null) {
-                    android.util.Log.e(TAG, "TTS engine could not restart after failure; posting fallback")
+                    DebugLog.e(TAG, "TTS engine could not restart after failure; posting fallback")
                     TtsFallbackNotifier.notify(context, text)
                     return false
                 }
@@ -165,7 +200,7 @@ class AnnouncementSpeaker(
                 val retryOk = if (!retryStarted) false
                     else withTimeoutOrNull(WAKE_LOCK_CAP_MS - 2_000) { retryDone.await() } ?: false
                 if (!retryOk) {
-                    android.util.Log.e(TAG, "TTS retry also failed; posting fallback")
+                    DebugLog.e(TAG, "TTS retry also failed; posting fallback")
                     TtsFallbackNotifier.notify(context, text)
                 } else {
                     DebugLog.d(TAG, "TTS retry succeeded")
@@ -188,13 +223,23 @@ class AnnouncementSpeaker(
      * is spoken when readiness lands. Returns immediately; never blocks the
      * capture thread.
      */
-    fun speakWhenReady(text: String) {
+    fun speakWhenReady(text: String, correlationId: String? = null) {
         if (engineReady) {
-            containerLaunch { speak(text) }
+            containerLaunch { speakTraced(text, correlationId) }
             return
         }
         // Latest-wins parking (unchanged behavior).
-        pendingSlot.set(text)
+        val displaced = pendingSlot.getAndSet(Pending(text, correlationId))
+        if (displaced != null && displaced.correlationId != null) {
+            // The single pending slot just overwrote an earlier payment. This is
+            // a real loss mode (two payments inside one engine-warm window), so
+            // the displaced payment gets its terminal row rather than vanishing.
+            PaymentTrace.dropped(
+                displaced.correlationId,
+                "queued-overwritten-by-later-payment",
+                detail = "singlePendingSlot",
+            )
+        }
         if (engineReady) {
             if (flushPending()) return
         }
@@ -204,11 +249,18 @@ class AnnouncementSpeaker(
                 // Init failed entirely — never lose the announcement.
                 val parked = pendingSlot.getAndSet(null)
                 if (parked != null) {
-                    android.util.Log.e(
+                    DebugLog.e(
                         TAG,
                         "TTS engine unavailable after $initAttempts attempts; posting fallback notification"
                     )
-                    TtsFallbackNotifier.notify(context, parked)
+                    parked.correlationId?.let {
+                        PaymentTrace.dropped(
+                            it,
+                            "tts-engine-unavailable-after-retries",
+                            detail = "fallbackNotificationPosted=1 attempts=$initAttempts",
+                        )
+                    }
+                    TtsFallbackNotifier.notify(context, parked.text)
                 }
             } else {
                 flushPending()
@@ -227,8 +279,8 @@ class AnnouncementSpeaker(
     }
 
     private fun flushPending(): Boolean {
-        val text = pendingSlot.getAndSet(null) ?: return false
-        containerLaunch { speak(text) }
+        val pending = pendingSlot.getAndSet(null) ?: return false
+        containerLaunch { speakTraced(pending.text, pending.correlationId) }
         return true
     }
 
@@ -318,7 +370,7 @@ class AnnouncementSpeaker(
         focusRequest = request
         val result = audioManager.requestAudioFocus(request)
         if (result != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
-            android.util.Log.w(TAG, "audio focus denied: $result")
+            DebugLog.w(TAG, "audio focus denied: $result")
         }
         return result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
     }

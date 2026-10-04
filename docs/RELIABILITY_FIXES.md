@@ -1,5 +1,26 @@
 # PayVoice — Notification Detection & SMS Fallback Reliability Fixes
 
+> **SUPERSEDED — historical record, do not read this as current behaviour.**
+> This document describes a branch of work whose SMS fallback was subsequently
+> **removed** in commit `535412c` (*"refactor: remove SMS feature — UPI apps
+> only, drops RECEIVE_SMS permission"*), which also deleted
+> `PayVoiceBootReceiver` in `4e7658f`. Consequently, in the current tree:
+>
+> - **there is no SMS capture at all** — no receiver, no `RECEIVE_SMS`
+>   permission, no `SmsPaymentParserRegistry` / `SmsSenderHints`;
+> - `CaptureSource.SMS_KOTAK` / `SMS_BANK` are enum values that are never
+>   constructed;
+> - `CrossChannelDedupTest` still exercises a cross-channel fingerprint case
+>   that can no longer occur, and the "30 s cross-channel window" it
+>   describes does not exist;
+> - Google Pay is the **only** capture source, which is the single largest
+>   known cause of missed payments (see `docs/PAYMENT_PIPELINE.md` hop C2).
+>
+> The nine commits listed below are real and are still in history; the fixes
+> are not all still in the tree. For what the pipeline does *today*, and for
+> the measured evidence, read `docs/PAYMENT_PIPELINE.md` and
+> `docs/PAYMENT_PIPELINE_FINDINGS.md`.
+
 Date: 2026-09-29 · Scope: app-side reliability only. No changes to the
 payment-announcement architecture, Supabase schema/RLS, `fcm-gateway`, TTS
 engine, or listener threading model. Every change is a separate commit on

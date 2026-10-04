@@ -83,6 +83,12 @@ data class CaptureEvent(
     val bigText: String? = null,
     val subText: String? = null,
     val notificationId: Int = -1,
+    /**
+     * `StatusBarNotification.tag` for a notification capture; null for SMS.
+     * Together with [notificationId] this is the stable source-event identity
+     * the dedupe key is built from — see `Fingerprinter.captureFingerprint`.
+     */
+    val notificationTag: String? = null,
     val postedAtMs: Long,
 )
 

@@ -104,10 +104,17 @@ class PayVoiceNotificationListener : NotificationListenerService() {
     private fun dispatchIfWhitelisted(sbn: StatusBarNotification) {
         val pkg = sbn.packageName ?: return
         runtime.onNotificationPosted(pkg, sbn.postTime)
+        // Correlation id is minted HERE — before the parser, so a payment lost
+        // anywhere downstream still has an id to search the trace table for.
+        val cid = com.vivekray898.payvoice.core.trace.PaymentTrace.newCorrelationId()
         // Generic package diagnostic only — never a bank-app payment source.
         // A com.kotak811 (or any bank app) notification fails this lookup and
         // is ignored (or locally captured in diagnostics mode).
         if (isPlatformDuplicate(sbn)) {
+            com.vivekray898.payvoice.core.trace.PaymentTrace.dropped(
+                cid, "capture-platform-duplicate",
+                detail = "id=${sbn.id}",
+            )
             // system_server double-delivers the same sbn milliseconds apart
             // (BoundServiceSession "Bad key" binder bug, seen with rapidly
             // updating packages). The platform call cannot be prevented; the
@@ -130,6 +137,12 @@ class PayVoiceNotificationListener : NotificationListenerService() {
             // Missed-payment visibility: every ignored package is logged in
             // debug builds so a whitelisted gap is diagnosable from logcat.
             log("ignored package=$pkg id=${sbn.id}")
+            // Trace: this is the C2 loss in docs/PAYMENT_PIPELINE.md — a
+            // non-Google-Pay payment app has no code path to a capture.
+            com.vivekray898.payvoice.core.trace.PaymentTrace.dropped(
+                cid, "capture-package-not-supported",
+                detail = "pkg=$pkg",
+            )
             // Opt-in local capture used to verify unknown packages. Off by default.
             if (settings.captureUnknownPackages) {
                 container.pipeline.captureOnly(
@@ -147,15 +160,50 @@ class PayVoiceNotificationListener : NotificationListenerService() {
         }
 
         // GPay is the only notification source; there is no bank-app toggle.
-        if (!settings.gpayEnabled) return
+        if (!settings.gpayEnabled) {
+            com.vivekray898.payvoice.core.trace.PaymentTrace.dropped(
+                cid, "capture-toggle-off",
+            )
+            return
+        }
+
+        // Raw capture metadata, structural only, text reduced to a shape by
+        // PaymentTrace.maskText. `isUpdate` is the same-id re-post case the
+        // pipeline does not currently distinguish, so it stays visible here.
+        val updateKey = "${pkg}/${sbn.id}/${sbn.tag ?: "-"}"
+        val isUpdate = synchronized(recentKeys) {
+            val seen = recentKeys.contains(updateKey)
+            recentKeys.add(updateKey)
+            if (recentKeys.size > MAX_RECENT) recentKeys.remove(recentKeys.first())
+            seen
+        }
+        com.vivekray898.payvoice.core.trace.PaymentTrace.captured(
+            cid,
+            com.vivekray898.payvoice.core.trace.PaymentTrace.CaptureMeta(
+                packageName = pkg,
+                notificationId = sbn.id,
+                tag = sbn.tag,
+                category = sbn.notification.category,
+                flags = sbn.notification.flags,
+                postedAtMs = sbn.postTime,
+                isUpdate = isUpdate,
+                textShape = com.vivekray898.payvoice.core.trace.PaymentTrace.maskText(
+                    listOfNotNull(title, text, bigText, subText)
+                        .filter { it.isNotBlank() }
+                        .joinToString(" "),
+                ),
+            )
+        )
 
         container.pipeline.handleNotification(
+            correlationId = cid,
             packageName = pkg,
             title = title,
             text = text,
             bigText = bigText,
             subText = subText,
             notificationId = sbn.id,
+            notificationTag = sbn.tag,
             postedAtMs = sbn.postTime,
             extrasSummary = summary,
         )
@@ -195,6 +243,9 @@ class PayVoiceNotificationListener : NotificationListenerService() {
     }
 
     private val recentDeliveries = HashMap<String, Long>()
+
+    /** Bounded set of recent notification keys, for the `isUpdate` trace flag. */
+    private val recentKeys = ArrayDeque<String>()
 
     private companion object {
         private const val TAG = "PayVoiceNLS"

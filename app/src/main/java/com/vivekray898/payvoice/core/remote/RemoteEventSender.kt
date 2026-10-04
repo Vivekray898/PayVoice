@@ -1,5 +1,6 @@
 package com.vivekray898.payvoice.core.remote
 
+import com.vivekray898.payvoice.core.trace.PaymentTrace
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -50,10 +51,17 @@ class RemoteEventSender(
         source: String,
         timestampMs: Long,
         localTtsRequestedAtMs: Long,
+        traceCorrelationId: String? = null,
     ) {
         scope.launch {
             val uid = auth.ensureSignedIn() ?: run {
                 _lastSendState.value = SendState.FAILED("no-auth")
+                // Silent by design: there is no outbox and no retry, so an
+                // unsigned device loses this event outright. Recorded so the
+                // findings table can attribute it instead of inferring it.
+                traceCorrelationId?.let {
+                    PaymentTrace.dropped(it, "upload-no-auth", detail = "noOutbox=true")
+                }
                 return@launch
             }
             val event = RemotePaymentEvent(
@@ -76,6 +84,12 @@ class RemoteEventSender(
             }
             if (ok) {
                 _lastSendState.value = SendState.SENT(event.eventId, System.currentTimeMillis())
+                traceCorrelationId?.let {
+                    PaymentTrace.uploaded(
+                        it,
+                        detail = "captureToAcceptedMs=${System.currentTimeMillis() - timestampMs}",
+                    )
+                }
                 com.vivekray898.payvoice.core.util.DebugLog.d(
                     TAG,
                     "remote event accepted id=${event.eventId.take(12)}… " +
@@ -83,6 +97,9 @@ class RemoteEventSender(
                 )
             } else {
                 _lastSendState.value = SendState.FAILED("send-failed")
+                traceCorrelationId?.let {
+                    PaymentTrace.dropped(it, "upload-send-failed", detail = "noOutbox=true")
+                }
                 com.vivekray898.payvoice.core.util.DebugLog.w(TAG, "remote send failed (local announcement unaffected)")
             }
         }

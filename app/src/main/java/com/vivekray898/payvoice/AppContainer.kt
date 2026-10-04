@@ -16,6 +16,8 @@ import com.vivekray898.payvoice.core.remote.SupabaseClient
 import com.vivekray898.payvoice.core.remote.SupabaseRealtime
 import com.vivekray898.payvoice.core.settings.SettingsRepository
 import com.vivekray898.payvoice.core.settings.SettingsRepositoryImpl
+import com.vivekray898.payvoice.core.trace.PaymentTrace
+import com.vivekray898.payvoice.core.trace.TraceStore
 import com.vivekray898.payvoice.service.messaging.MessagingRepository
 import com.vivekray898.payvoice.service.notification.ListenerRuntimeState
 import com.vivekray898.payvoice.service.tts.AnnouncementSpeaker
@@ -35,6 +37,20 @@ class AppContainer(private val appContext: Context) {
     val settings: SettingsRepository by lazy { SettingsRepositoryImpl(appContext) }
 
     val database: PayVoiceDatabase by lazy { PayVoiceDatabase.build(appContext) }
+
+    /**
+     * Whether end-to-end payment tracing is live. True only for a debuggable
+     * build; false in release, where [PaymentTrace] stays a no-op sink and
+     * writes no rows at all. Installed at container construction so the very
+     * first capture of a cold process is traced.
+     */
+    val traceEnabled: Boolean by lazy {
+        TraceStore.installIfDebuggable(
+            context = appContext,
+            db = database,
+            scope = applicationScope,
+        )
+    }
 
     val retentionCleaner: RetentionCleaner by lazy { RetentionCleaner(database) }
 

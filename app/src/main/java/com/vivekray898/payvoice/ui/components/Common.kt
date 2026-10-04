@@ -219,7 +219,18 @@ fun PvLoadingRow(label: String) {
 
 /** One payment: prominent amount (tabular), source/sender, time. */
 @Composable
-fun PvPaymentRow(amountText: String, source: String?, sender: String?, timeText: String) {
+fun PvPaymentRow(
+    amountText: String,
+    source: String?,
+    sender: String?,
+    timeText: String,
+    /**
+     * Set when this row is a second signal for a payment already announced on
+     * another channel (see CrossChannelMerger). Rendered as a quiet note, never
+     * as another payment in the totals.
+     */
+    mergedNote: String? = null,
+) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -244,7 +255,8 @@ fun PvPaymentRow(amountText: String, source: String?, sender: String?, timeText:
                 fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
             )
             val secondary = buildString {
-                if (!sender.isNullOrBlank()) append("from $sender")
+                if (!mergedNote.isNullOrBlank()) append(mergedNote)
+                else if (!sender.isNullOrBlank()) append("from $sender")
                 else if (!source.isNullOrBlank()) append(source)
             }
             if (secondary.isNotBlank()) {
