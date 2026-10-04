@@ -380,7 +380,8 @@ Honest, and ordered by what actually blocks use. Nothing here is built.
 
 - [x] Cut a release that matches `main` — `v0.1.0-phase1`, asset built from
       `446d1d3` and verified on an emulator. The **git tag still points at
-      `9e028fa`**, which is one commit behind the asset; see the caveat below.
+      `9e028fa`**, so it no longer names the commit the attached APK was built
+      from — recorded in `docs/README_FACTS.md` §11 rather than papered over.
 - [ ] Publish the owner/employee pairing flow to end-to-end test against a real
       Supabase project — the reliability run in
       [docs/RELIABILITY_TEST_RESULTS.md](docs/RELIABILITY_TEST_RESULTS.md) is
