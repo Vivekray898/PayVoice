@@ -214,7 +214,7 @@ tasks.register("copyGoogleServicesJson") {
     val src = File(projectDir, "google-services.json")
     val dest = File(projectDir, "src/main/assets/google-services.json")
     val faRes = File(projectDir, "src/main/res/values/payvoice_firebase.xml")
-    inputs.file(src)
+    inputs.file(src).optional()
     outputs.file(dest)
     outputs.file(faRes)
     doLast {
