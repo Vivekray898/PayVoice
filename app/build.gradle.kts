@@ -520,3 +520,64 @@ tasks.register("verifyDesignShapes") {
 tasks.matching { it.name == "check" }.configureEach {
     dependsOn("verifyDesignTokens", "verifyDesignComponents", "verifyDesignShapes")
 }
+
+// ---------------------------------------------------------------------------
+// verifyInstrumentationResults
+//
+// `connectedAndroidTest` reports BUILD SUCCESSFUL even when the runner's
+// `-Pandroid.testInstrumentationRunnerArguments.class=` filter matches nothing:
+// the Gradle task succeeds, and the only evidence is a JUnit XML carrying
+// tests="0". That silently turns a whole device run into a green no-op, which
+// is how "the replay harness passed" can be claimed while no payment was ever
+// replayed.
+//
+// This gate reads the XML that task produces and fails the build when the run
+// contained zero tests, or when any test failed or errored. It is wired as a
+// finalizer of connectedAndroidTest rather than into `check`, because the XML
+// only exists once a device has actually been used.
+// ---------------------------------------------------------------------------
+val androidTestResultsDir = layout.buildDirectory.dir("outputs/androidTest-results")
+
+tasks.register("verifyInstrumentationResults") {
+    group = "verification"
+    description = "Fails if an instrumentation run executed zero tests or reported a failure."
+    val resultsDir = androidTestResultsDir
+    doLast {
+        val dir = resultsDir.get().asFile
+        val xml = dir.walkTopDown().filter { it.isFile && it.extension == "xml" }.toList()
+        if (xml.isEmpty()) {
+            throw GradleException(
+                "verifyInstrumentationResults: no instrumentation results under $dir.\n" +
+                    "connectedAndroidTest either did not run or did not write results.",
+            )
+        }
+        val suites = xml.flatMap { f ->
+            Regex("""<testsuite\b[^>]*>""").findAll(f.readText()).map { m ->
+                fun attr(n: String) =
+                    Regex("""\b$n="(\d+)"""").find(m.value)?.groupValues?.get(1)?.toInt() ?: 0
+                Triple(attr("tests"), attr("failures"), attr("errors"))
+            }.toList()
+        }
+        val tests = suites.sumOf { it.first }
+        val failures = suites.sumOf { it.second }
+        val errors = suites.sumOf { it.third }
+        if (tests == 0) {
+            throw GradleException(
+                "verifyInstrumentationResults: instrumentation ran ZERO tests " +
+                    "(${xml.size} result file(s) in $dir) but the build reported success.\n" +
+                    "This is the -Pandroid.testInstrumentationRunnerArguments.class filter " +
+                    "matching no class or method. Fix the filter before trusting a green build.",
+            )
+        }
+        if (failures + errors > 0) {
+            throw GradleException(
+                "verifyInstrumentationResults: $failures failure(s), $errors error(s) " +
+                    "across $tests test(s). See $dir.",
+            )
+        }
+        logger.lifecycle("verifyInstrumentationResults: OK ($tests test(s), 0 failures)")
+    }
+}
+
+tasks.matching { it.name == "connectedDebugAndroidTest" || it.name == "connectedReleaseAndroidTest" }
+    .configureEach { finalizedBy("verifyInstrumentationResults") }
