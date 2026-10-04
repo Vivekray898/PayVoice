@@ -12,10 +12,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Link
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -70,6 +73,7 @@ fun EmployeeScreen(
     val context = LocalContext.current
     val ownDevice by viewModel.ownDevice.collectAsStateWithLifecycle()
     val joinState by viewModel.joinState.collectAsStateWithLifecycle()
+    val leaveState by viewModel.leaveState.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val health by viewModel.health.collectAsStateWithLifecycle()
     val healthLoading by viewModel.healthLoading.collectAsStateWithLifecycle()
@@ -78,6 +82,19 @@ fun EmployeeScreen(
     var confirmLeave by remember { mutableStateOf(false) }
 
     val paired = ownDevice?.isActive == true
+
+    // A successful claim is terminal. The sheet has nothing left to ask for,
+    // and leaving it up would cover the very state it just produced — the
+    // status card behind it flips to "This phone announces payments for your
+    // owner." The code is also a spent single-use credential, so it leaves the
+    // screen with the sheet rather than lingering for a tap.
+    LaunchedEffect(joinState) {
+        if (joinState is MainViewModel.JoinState.Success) {
+            showJoinSheet = false
+            code = ""
+            viewModel.clearJoinResult()
+        }
+    }
 
     PvSecureWindow()
 
@@ -193,13 +210,28 @@ fun EmployeeScreen(
             }
 
             item(key = "settings") {
-                PvListItem(
-                    title = "Notifications",
-                    subtitle = "Without these, payments arrive late",
-                    leadingIcon = Icons.Filled.Link,
-                    onClick = { onSelectTab(PvTab.SETTINGS) },
-                    minHeight = Spacing.listRow,
-                )
+                // In a card, like every other section here: a bare PvListItem
+                // fills the width it is given, so on its own this row bled to
+                // both screen edges and read as a different component. A
+                // gutter Modifier alone would still leave the row's text at a
+                // different inset than the cards' — the card puts the same
+                // padding inside as they do.
+                PvCard(modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.sm)) {
+                    PvListItem(
+                        title = "Notifications",
+                        subtitle = "Without these, payments arrive late",
+                        leadingIcon = Icons.Filled.Link,
+                        onClick = { onSelectTab(PvTab.SETTINGS) },
+                        minHeight = Spacing.listRow,
+                        trailing = {
+                            Icon(
+                                imageVector = Icons.Filled.KeyboardArrowRight,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        },
+                    )
+                }
             }
 
             if (paired) {
@@ -238,6 +270,11 @@ fun EmployeeScreen(
                 is MainViewModel.JoinState.Joining -> PvLoadingRow("Connecting…")
                 else -> Unit
             }
+            // BOTH buttons carry weight. PvPrimaryButton/PvSecondaryButton end
+            // their chain with fillMaxWidth(), and a Row measures unweighted
+            // children first against the full remaining width — so a single
+            // unweighted pill here swallowed the row and left "Connect" zero
+            // wide, i.e. invisible. An unweighted partner must not fillMaxWidth.
             Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 PvPrimaryButton(
                     text = "Connect",
@@ -251,6 +288,7 @@ fun EmployeeScreen(
                         showJoinSheet = false
                         viewModel.clearJoinResult()
                     },
+                    modifier = Modifier.weight(1f),
                 )
             }
             Spacer(Modifier.height(Spacing.xs))
@@ -259,15 +297,27 @@ fun EmployeeScreen(
 
     // ---- Leave confirmation ------------------------------------------------
     if (confirmLeave) {
+        val leaveFailed = leaveState as? MainViewModel.LeaveState.Failed
         PvDialog(
-            onDismissRequest = { confirmLeave = false },
-            title = "Leave this business?",
-            body = "You'll stop hearing payment announcements from your owner.",
-            confirmText = "Leave",
-            onConfirm = {
-                viewModel.leaveOwner()
+            onDismissRequest = {
                 confirmLeave = false
+                viewModel.clearLeaveState()
             },
+            title = "Leave this business?",
+            // A rejected write stays in the dialog: closing it would leave the
+            // card reading "Live" with no word about the failed attempt.
+            body = leaveFailed?.message
+                ?: "You'll stop hearing payment announcements from your owner.",
+            confirmText = "Leave",
+            // The dialog closes from the effect below, and only on Done — a
+            // failed write keeps it open so the message stays readable.
+            onConfirm = { viewModel.leaveOwner() },
         )
+        LaunchedEffect(leaveState) {
+            if (leaveState is MainViewModel.LeaveState.Done) {
+                confirmLeave = false
+                viewModel.clearLeaveState()
+            }
+        }
     }
 }
