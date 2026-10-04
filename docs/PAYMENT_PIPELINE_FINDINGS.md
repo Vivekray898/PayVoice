@@ -12,8 +12,8 @@ scenarios.
 |---|---|
 | Harness run | `tests="11" failures="0" errors="0"` in 623 s (`app/build/outputs/androidTest-results/connected/debug/TEST-Pixel_8_Pro(AVD) - 14.xml`) |
 | Device | **Emulator only** — Pixel 8 Pro AVD, API 34, Google TTS present |
-| Real device | **No data.** The owner's phone (Redmi Note 10 Pro, `sweetin`) was not connected for this run. |
-| Capture hop | **Not exercised.** The harness injects a `CaptureEvent`; `PayVoiceNotificationListener` never sees a real notification. Nothing here says anything about whether a real bank/GPay notification reaches the pipeline. |
+| Real device | **No data for this run.** The owner's phone (Redmi Note 10 Pro, `sweetin`) was not connected for the Step 3 sweep. It *was* connected later, for the Step 4 install and migration check — see §12. |
+| Capture hop | **Not exercised.** The harness injects a `CaptureEvent`; `PayVoiceNotificationListener` never sees a real notification. Nothing here says anything about whether a real bank/GPay notification reaches the pipeline. (§12 later confirms the listener is granted *and* bound on the real phone, but still no real payment was captured.) |
 | Network hops | **Not exercised.** `UPLOADED` / `FCM_SENT` / `FCM_RECEIVED` are absent from every chain below; the run is capture-side only. |
 
 **What is proven:** the local dedupe key merges two *distinct* payments that share
@@ -393,11 +393,14 @@ asserting that **every** pair which is not an all-rules-pass announces.
 ## 11. What Step 4 does NOT claim
 
 1. **It does not claim the owner's phone is fixed.** Everything in §10 is
-   emulator output with synthetic fixtures. There is still no real-device capture
-   trace of the two missing payments.
-2. **It does not claim a better capture rate.** The capture hop (does a real
-   bank/GPay notification reach the pipeline at all) was not exercised, and
-   §0 of this document still stands.
+   emulator output with synthetic fixtures. §12 verified the install and the
+   `v5 → v6` migration on the real phone, but **no real payment was captured**,
+   so there is still no real-device capture trace of the two missing payments.
+2. **It does not claim a better capture rate.** Whether a real bank/GPay
+   notification reaches the pipeline on your phone is still untested. §12 shows
+   every enabling condition is satisfied (listener granted *and* bound, GPay
+   installed, Health ALL CLEAR) — satisfied conditions are not the same as a
+   payment having been captured.
 3. **It does not touch the delivery half.** `UPLOADED` / `FCM_SENT` /
    `FCM_RECEIVED` remain untested; the employee-side fan-out is unchanged.
 4. **The SMS channel is not live.** SMS capture was removed in `535412c`, so
