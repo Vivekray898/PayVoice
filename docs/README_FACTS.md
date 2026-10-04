@@ -236,7 +236,7 @@ happened after that check, not before it. Re-verify before relying on it.
 
 | Fact | Value | How checked |
 |---|---|---|
-| Current release | `v0.1.0-phase1`, tag at `962b544`, asset `payvoice-0.1.0-phase1.apk` (3,168,913 B) | `gh release view v0.1.0-phase1` |
+| Current release | `v0.1.0-phase1`, tag at `9e028fa`, asset `payvoice-0.1.0-phase1.apk` (3,168,913 B) | `gh release view v0.1.0-phase1` |
 | `v2.9.0` release | **Withdrawn.** No release page, no `payvoice-v2.9.0.apk` asset | `gh api repos/.../releases` |
 | `v2.9.0` tag | **Deleted from the remote.** Local clones still hold the tag object | `git ls-remote --tags origin` (3 reads) |
 | Tag's commit still on `main` | yes — `1d8f27e` "new added version realse ready" is an ancestor of `origin/main`, so no history is lost | `git merge-base --is-ancestor` |
@@ -246,7 +246,9 @@ happened after that check, not before it. Re-verify before relying on it.
 adopted by maintainer decision on 2026-10-04. The `v2.9.0` number is retired.
 A signed pre-release **was** published on 2026-10-04:
 `releases/tag/v0.1.0-phase1`, asset `payvoice-0.1.0-phase1.apk` (3,168,913 B),
-tagged at `962b544`. It is signed with the release certificate
+tagged at `9e028fa` (the tag was moved forward from `962b544` when the four
+UI defects were fixed; version, `versionCode` and signing key are unchanged, so
+it replaces the earlier asset in place). It is signed with the release certificate
 (`CN=PayVoice`, SHA-1 `8ddbcbed1ffd5cc76d6f19cf5fce22da060a1d8f`), R8-minified
 to a single dex, with no LeakCanary and no `READ_SMS`. Verified on an API 36
 emulator: installs, completes onboarding, renders the four-tab Home screen.

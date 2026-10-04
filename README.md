@@ -378,7 +378,7 @@ events it may emit, all structural.
 
 Honest, and ordered by what actually blocks use. Nothing here is built.
 
-- [x] Cut a release that matches `main` — `v0.1.0-phase1`, built from `962b544`
+- [x] Cut a release that matches `main` — `v0.1.0-phase1`, built from `9e028fa`
       and verified on an emulator.
 - [ ] Publish the owner/employee pairing flow to end-to-end test against a real
       Supabase project — the reliability run in
