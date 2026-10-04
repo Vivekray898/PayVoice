@@ -88,9 +88,16 @@ fun NotificationAccessStep(
                 )
             },
             secondaryAction = {
+                // onNext, NOT onBack: this used to decrement the wizard step, which
+                // sent the employee back to the ROLE picker — and picking the role
+                // again just returned here. An employee without a code in hand was
+                // trapped in that loop and could never reach the app at all; they
+                // pair later from Home ("Enter code"), which is reachable whether
+                // or not this step was skipped. The owner branch above already
+                // skipped forward for the same reason.
                 PvTextButton(
                     text = "Skip for now",
-                    onClick = onBack,
+                    onClick = onNext,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             },
