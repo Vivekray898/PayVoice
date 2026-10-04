@@ -279,7 +279,7 @@ Only measured numbers, with the method stated. Nothing here is estimated.
 
 | Metric | Value | How it was measured |
 |---|---|---|
-| Release APK | **3.02 MiB** (3,168,913 bytes) | `assembleRelease` output. Minified and resource-shrunk. Built with `-PallowDebugSignedRelease=true`, i.e. debug-signed **for measurement only**. |
+| Release APK | **3.04 MiB** (3,185,297 bytes) | `assembleRelease` output, minified and resource-shrunk, from `main` at `446d1d3`. SHA-256 `43917755fc43383f0c5f66b660842aa8886dbd0065441f78a3a20bf4a33b4edb`. Signed with the **release** key (`CN=PayVoice`, SHA-256 `1540ecc3…`) — verified with `apksigner`, not debug-signed. |
 | Cold start | **195 ms median** (182–218 ms, 9 runs) | Back-to-back A/B against baseline commit `100e61b` on `emulator-5554` (API 36), **debug builds**, after `force-stop`; first two runs discarded as warm-up. Baseline was 201 ms, so the change is within noise (−3%). |
 | Unit tests | **129 passing, 0 failures** | `./gradlew testDebugUnitTest`, counted from the JUnit XML reports. |
 
@@ -378,8 +378,9 @@ events it may emit, all structural.
 
 Honest, and ordered by what actually blocks use. Nothing here is built.
 
-- [x] Cut a release that matches `main` — `v0.1.0-phase1`, built from `9e028fa`
-      and verified on an emulator.
+- [x] Cut a release that matches `main` — `v0.1.0-phase1`, asset built from
+      `446d1d3` and verified on an emulator. The **git tag still points at
+      `9e028fa`**, which is one commit behind the asset; see the caveat below.
 - [ ] Publish the owner/employee pairing flow to end-to-end test against a real
       Supabase project — the reliability run in
       [docs/RELIABILITY_TEST_RESULTS.md](docs/RELIABILITY_TEST_RESULTS.md) is

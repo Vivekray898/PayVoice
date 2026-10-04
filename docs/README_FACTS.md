@@ -158,7 +158,7 @@ Only these numbers exist, and this is exactly how they were obtained
 
 | Metric | Value | How measured |
 |---|---|---|
-| Release APK | **3,168,913 B (3.02 MiB)** | `assembleRelease` output. Minified and resource-shrunk. Built with `-PallowDebugSignedRelease=true`, i.e. **debug-signed for measurement only** — not a shippable artifact. |
+| Release APK | **3,185,297 B (3.04 MiB)** | `assembleRelease` output from `main` at `446d1d3`. Minified and resource-shrunk. SHA-256 `43917755fc43383f0c5f66b660842aa8886dbd0065441f78a3a20bf4a33b4edb`. Signed with the **release** certificate (`CN=PayVoice`, SHA-256 `1540ecc3…`), confirmed with `apksigner` — **not** debug-signed. |
 | Cold start | **195 ms median** (182–218 ms over 9 runs, first 2 discarded as warm-up) | Back-to-back A/B against baseline commit `100e61b` on `emulator-5554`, API 36, **debug builds**, after force-stop. Within noise of the 201 ms baseline (−3%). |
 | Unit tests | **129 passing, 0 failures** | `./gradlew testDebugUnitTest`, JUnit XML in `app/build/test-results/`. |
 
@@ -236,7 +236,7 @@ happened after that check, not before it. Re-verify before relying on it.
 
 | Fact | Value | How checked |
 |---|---|---|
-| Current release | `v0.1.0-phase1`, tag at `9e028fa`, asset `payvoice-0.1.0-phase1.apk` (3,168,913 B) | `gh release view v0.1.0-phase1` |
+| Current release | `v0.1.0-phase1`, **tag still at `9e028fa`**, asset `payvoice-0.1.0-phase1.apk` (3,185,297 B) built from `446d1d3` | `gh release view v0.1.0-phase1` |
 | `v2.9.0` release | **Withdrawn.** No release page, no `payvoice-v2.9.0.apk` asset | `gh api repos/.../releases` |
 | `v2.9.0` tag | **Deleted from the remote.** Local clones still hold the tag object | `git ls-remote --tags origin` (3 reads) |
 | Tag's commit still on `main` | yes — `1d8f27e` "new added version realse ready" is an ancestor of `origin/main`, so no history is lost | `git merge-base --is-ancestor` |
@@ -244,11 +244,17 @@ happened after that check, not before it. Re-verify before relying on it.
 
 **Canonical version:** `0.1.0-phase1` / `versionCode 1` in `app/build.gradle.kts`,
 adopted by maintainer decision on 2026-10-04. The `v2.9.0` number is retired.
-A signed pre-release **was** published on 2026-10-04:
-`releases/tag/v0.1.0-phase1`, asset `payvoice-0.1.0-phase1.apk` (3,168,913 B),
-tagged at `9e028fa` (the tag was moved forward from `962b544` when the four
-UI defects were fixed; version, `versionCode` and signing key are unchanged, so
-it replaces the earlier asset in place). It is signed with the release certificate
+A signed pre-release **is** published: `releases/tag/v0.1.0-phase1`, asset
+`payvoice-0.1.0-phase1.apk` (3,185,297 B) built from `main` at `446d1d3` —
+the dedupe fix. Version, `versionCode` and signing key are unchanged, so it
+replaces the earlier assets in place and upgrades over them.
+
+**Known drift, stated rather than hidden:** the `v0.1.0-phase1` **git tag
+still points at `9e028fa`**, which no longer names the commit the attached APK
+was built from. The tag was last moved forward to align it with the asset; this
+upload re-introduces the same gap. Either the tag is moved to `446d1d3` or the
+gap is accepted deliberately — but the docs must never claim the tag *does*
+name the built commit, which is the error `ad08495` was written to correct. It is signed with the release certificate
 (`CN=PayVoice`, SHA-1 `8ddbcbed1ffd5cc76d6f19cf5fce22da060a1d8f`), R8-minified
 to a single dex, with no LeakCanary and no `READ_SMS`. Verified on an API 36
 emulator: installs, completes onboarding, renders the four-tab Home screen.
