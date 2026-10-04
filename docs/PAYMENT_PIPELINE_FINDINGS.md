@@ -407,3 +407,46 @@ asserting that **every** pair which is not an all-rules-pass announces.
    SMS-shaped event dies at `parserForPackage` before reaching the merge.
 5. **The corpus is still synthetic.** These are fixtures, not the owner's
    traffic.
+
+## 12. Real-device verification (2026-10-05)
+
+The release APK built from `446d1d3` was installed on the owner's phone over
+wireless ADB — Redmi Note 10 Pro (`M2101K6I`), Android 16, SDK 36.
+
+**Install was an in-place upgrade, not a reinstall.** The previously installed
+APK and the new one carry the same certificate (`CN=PayVoice`, SHA-256
+`1540ecc3…`), so `adb install -r` was accepted; `firstInstallTime` is unchanged
+(`2026-10-04 02:18:39`), which proves no uninstall happened and therefore that
+**no application data was wiped**. The installed binary was pulled back and is
+byte-identical to the published asset (`sha256:43917755…`).
+
+**The `v5 → v6` migration is verified on real hardware.** After the upgrade the
+app rendered the existing history unchanged — ₹6, ₹140, ₹25, ₹15, ₹12, same
+five rows with the same timestamps. Room validates the schema identity hash on
+open and throws on any mismatch, so a rendered history is positive evidence
+that the migration produced exactly the v6 schema rather than merely not
+crashing. No `FATAL EXCEPTION`, no Room or migration error in logcat.
+
+**The capture hop — previously unexercised — is now confirmed present:**
+
+| Check | Result |
+|---|---|
+| Notification listener granted | `PayVoiceNotificationListener` in `enabled_notification_listeners` (user 0, primary) |
+| Listener actually bound | logcat: `0 notification listener service connected: …PayVoiceNotificationListener` |
+| `POST_NOTIFICATIONS` | `granted=true` |
+| Google Pay installed | `com.google.android.apps.nbu.paisa.user` present |
+| Battery optimisation | app is on the deviceidle whitelist |
+| In-app Health screen | `ALL CLEAR` — all six checks green |
+
+**What this still does not prove.** No real payment was captured during the run:
+nothing was posted by Google Pay, so capture → parse → announce on real
+hardware is untested. The dedupe fix's effect on the two missing payments is
+therefore still unconfirmed — §10 remains emulator evidence. Two gaps are worth
+noting for the next pass:
+
+- The Health screen has **no text-to-speech check**, and on this device both
+  `tts_default_synth` and `enabled_tts_engine` are `null` while
+  `com.google.android.tts` is installed. Whether the engine initialises at
+  announcement time is untested; a payment can be stored and still never be
+  spoken.
+- The `UPLOADED` / `FCM_SENT` / `FCM_RECEIVED` half is still unexercised.
