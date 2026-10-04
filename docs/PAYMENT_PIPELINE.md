@@ -17,7 +17,7 @@ OWNER phone (detects)                    EMPLOYEE phone (hears)
 ─────────────────────                    ────────────────────────
 NLS onNotificationPosted                 FCM onMessageReceived
   → PaymentPipeline.handleNotification     → PayVoiceMessagingService
-  → parse → gates → dedup → speak          → authorize → dedup → speak
+  → parse → gates → merge → dedup → speak   → authorize → dedup → speak
   → UPLOAD (fire-and-forget)                (no upload leg)
     → Supabase payment_events insert
     → Database Webhook → fcm-gateway
@@ -122,34 +122,70 @@ announcement, no event id.
 
 | | |
 |---|---|
-| **File** | `core/parser/Fingerprinter.kt:60-93`, claimed at `PaymentPipeline.kt:204-226` |
+| **File** | `core/parser/Fingerprinter.kt` (`captureFingerprint`), claimed in `PaymentPipeline.processCapture` step 4; merge in `core/dedup/CrossChannelMerger.kt` |
 
 ### D1 — Fingerprint derivation
-Two branches:
-- **With a reference** (UTR / UPI ref / txn id, `Fingerprinter.kt:71-80`):
-  `SHA-256("REF|<ref>|<amountMinor>")`. Correct — the same reference always
-  collapses.
-- **Without a reference** (`:81-91`):
-  `SHA-256("AMT|<amountMinor>|<senderName.lowercase>|<postTime / 5min>")`.
-  Google Pay credit notifications routinely carry **no** UTR, so this is the
-  common branch for real payments.
+Three tiers, most authoritative first (`Fingerprinter.captureFingerprint`).
+Keyed **only on stable source identifiers** — never on an amount plus a time
+bucket:
 
-*Can fail:* two genuinely distinct payments of the **same amount from the same
-sender inside the same 5-minute bucket** produce byte-identical fingerprints.
-*On failure today:* `INSERT OR IGNORE` returns `-1` (`:222`) → **`return` at
-`:226`. The second payment is never announced, never stored, never uploaded,
-and there is no retry.** One `dedup` diagnostic row says only "duplicate
-suppressed" — it does not distinguish a true duplicate from a collision.
+- **With a reference** (UTR / UPI ref / txn id):
+  `"REF|<ref>|<amountMinor>"`. The same reference always collapses, on any
+  channel.
+- **With a notification identity** (`notificationId >= 0` or a non-blank
+  `notificationTag`):
+  `"SRC|<package>|<sbnId>|<tag>|<exact postedAtMs>|<amountMinor>"`. This is
+  the platform's own event identity, so it collapses a true re-delivery — OS
+  double-post, or the `onListenerConnected` snapshot — and nothing else.
+- **Neither** (SMS, which has no sbn identity):
+  `"TXT|<package>|<normalize(title)>|<normalize(text)>|<exact postedAtMs>|<amountMinor>"`.
+
+`senderName` and `captureSource` are deliberately **not** inputs; reconciling
+two channels for one payment is [D1b](#d1b--cross-channel-merge), not a side
+effect of hashing a wall clock.
+
+*Was a defect, now fixed:* the reference-less branch used to be
+`"AMT|<amountMinor>|<senderName.lowercase>|<postTime / 5min>"`, so two
+genuinely distinct payments of the same amount from the same sender inside one
+five-minute bucket produced byte-identical fingerprints and all but the first
+was silently dropped. Measured as 14 `dedup-amount-bucket-collision` events
+(`docs/PAYMENT_PIPELINE_FINDINGS.md` §1) and corrected in the Step 4 commit.
+That reason token no longer exists — it cannot occur.
+
+*What still fails, honestly:* `INSERT OR IGNORE` returning `-1` means the same
+**source event** was already seen. The payment is not announced, stored or
+uploaded again, and there is no retry — correct for a re-delivery. The trace
+distinguishes `dedup-reference-replay` from `dedup-source-replay`, but a
+re-delivery is not distinguishable from a second *notification* of one payment
+that the sender app genuinely re-posts at a new post time; that second one now
+announces, because an unproven duplicate is a nuisance and a missed payment is
+the bug.
+
+### D1b — Cross-channel merge
+`core/dedup/CrossChannelMerger.kt`, evaluated **before** the dedupe row is
+claimed so a merged signal cannot occupy a fingerprint slot.
+
+Merge only if **all** hold: same amount; different `CaptureSource`; inside
+`CROSS_CHANNEL_MERGE_WINDOW_MS = 90_000L`; and neither side carries a UPI/Txn
+reference. **Two events from the same channel never merge** without a shared
+reference. On a merge, the payment announces once — on whichever arrived first
+— and the second signal is kept in `announcement_history` with
+`mergedWithEventId` set, excluded from the Payments totals.
+
+Every decision, merged or not, writes a `MERGED` trace row with a countable
+token (`merge-cross-channel`, `merge-keep-same-channel`,
+`merge-keep-outside-window`, `merge-keep-reference-present`, …). Every rule
+that cannot be evaluated confidently returns *announce*.
 
 ### D2 — Fingerprint doubles as the event id
-`eventId = fingerprint` (`:216`) and the same value is used for the backend row
-(`:280`).
+`eventId = fingerprint`, and the same value is used for the backend row.
 
-*Consequence:* the same payment re-captured in a **later 5-minute bucket**
-becomes a **second backend row and a second FCM message**. The employee dedupes
-it (`PayVoiceMessagingService.kt:114`) so it is not double-spoken, but the
-backend now holds two rows for one payment and `payment_events.id` no longer
-means "one payment".
+*Consequence:* the same source event re-presented is one id, so the backend
+holds one row. The residual risk is a sender app that genuinely re-posts one
+payment as a **second notification with a new post time** — that is now a
+second event, hence a second backend row and a second FCM message. The
+employee dedupes it (`PayVoiceMessagingService`) so it is not double-spoken,
+but `payment_events.id` can hold two rows for one payment in that case.
 
 ### D3 — Claim happens *before* the utterance
 The dedup row is inserted at `:213`, the TTS is requested at `:274`, and the
@@ -329,7 +365,7 @@ records `announcedAtMs = ttsRequestedAt` — a timestamp taken *before* any audi
 | 3 | P1 | `EXTRA_TEXT_LINES` / `EXTRA_MESSAGES` never read | yes | no |
 | 4 | P2 | `NON_PAYMENT` substring reject ("failed", "request") | db row only | no |
 | 5 | P3 | Direction / confidence / amount gate | db row only | no |
-| 6 | D1 | Amount+sender+5-min-bucket fingerprint collides | db row only | no |
+| 6 | D1 | ~~Amount+sender+5-min-bucket fingerprint collides~~ — **fixed in the Step 4 commit**; replaced by the SRC/TXT tiers and the D1b merge | db row only | no |
 | 7 | S2/S3 | Single-slot parking, latest wins, engine cold 5 min | yes | no |
 | 8 | S4 | `QUEUE_FLUSH` truncates + retry re-speaks | yes | re-speaks |
 | 9 | S6 | Zero volume = "successful" silent utterance | yes | no |
