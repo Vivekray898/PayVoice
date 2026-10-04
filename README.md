@@ -1,4 +1,4 @@
-# PayVoice: UPI Payment Announcement App for Shops (Android, Kotlin)
+# PayVoice — Open-Source UPI Payment Announcer for Android (Android, Kotlin)
 
 PayVoice is an open-source Android app (Kotlin, Jetpack Compose) that reads Google Pay UPI payment notifications and announces each payment aloud to the shop owner and paired employees.
 
